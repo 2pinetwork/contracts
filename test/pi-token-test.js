@@ -67,5 +67,71 @@ describe('PiToken', () => {
         initialOwnerBalance - 150
       )
     })
+
+    it('Should emit transfer event after transfers', async () => {
+      expect(await piToken.transfer(bob.address, 100)).to.emit(
+        piToken, 'Transfer'
+      ).withArgs(owner.address, bob.address, 100)
+    })
+  })
+
+  describe('Allowance', () => {
+    it('Should update allowance after approve', async () => {
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
+
+      await piToken.approve(bob.address, 50)
+
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(50)
+    })
+
+    it('Should use allowance to transfer on behalf of', async () => {
+      const initialOwnerBalance = await piToken.balanceOf(owner.address)
+
+      await expect(
+        piToken.transferFrom(owner.address, bob.address, 1)
+      ).to.be.revertedWith('ERC20: transfer amount exceeds allowance')
+
+      await piToken.approve(bob.address, 1)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
+
+      expect(
+        await piToken.connect(bob).transferFrom(owner.address, alice.address, 1)
+      ).to.emit(
+        piToken, 'Transfer'
+      ).withArgs(owner.address, alice.address, 1)
+
+      expect(await piToken.balanceOf(alice.address)).to.equal(1)
+      expect(await piToken.balanceOf(owner.address)).to.equal(
+        initialOwnerBalance - 1
+      )
+    })
+
+    it('Should increase allowance and emit approval event', async () => {
+      expect(
+        await piToken.increaseAllowance(bob.address, 1)
+      ).to.emit(
+        piToken, 'Approval'
+      ).withArgs(owner.address, bob.address, 1)
+
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
+
+      await piToken.increaseAllowance(bob.address, 1)
+
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(2)
+    })
+
+    it('Should decrease allowance and emit approval event', async () => {
+      await piToken.increaseAllowance(bob.address, 1)
+
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
+
+      expect(
+        await piToken.decreaseAllowance(bob.address, 1)
+      ).to.emit(
+        piToken, 'Approval'
+      ).withArgs(owner.address, bob.address, 0)
+
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
+    })
   })
 })
