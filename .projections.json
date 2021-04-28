@@ -1,0 +1,13 @@
+{
+  "contracts/*.sol": {
+    "type": "contract",
+    "dispatch": "npx hardhat test test/{snakecase|hyphenate}-test.js",
+    "alternate": "test/{snakecase|hyphenate}-test.js"
+  },
+
+  "test/*-test.js": {
+    "type": "test",
+    "dispatch": "npx hardhat test test/{}-test.js",
+    "alternate": "contracts/{camelcase|capitalize}.sol"
+  }
+}
