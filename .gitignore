@@ -3,3 +3,8 @@ node_modules
 #Hardhat files
 cache
 artifacts
+.accounts
+
+# utils
+addresses
+yarn.lock
