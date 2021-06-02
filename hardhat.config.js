@@ -30,7 +30,7 @@ module.exports = {
   },
   networks: {
     polygon: {
-      url: "https://rpc-mainnet.maticvigil.com/",
+      url: 'https://rpc-mainnet.maticvigil.com/',
       accounts: [process.env.DEPLOYER || accounts[0]],
       network_id: 137,
       gas: 5e6, // gas estimate fails sometimes
