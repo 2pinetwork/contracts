@@ -1,4 +1,5 @@
 require('@nomiclabs/hardhat-waffle')
+require('@tenderly/hardhat-tenderly')
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -10,12 +11,43 @@ task('accounts', 'Prints the list of accounts', async () => {
   }
 })
 
-// You need to export an object to set up your config
-// Go to https://hardhat.org/config/ to learn more
+const fs = require('fs')
+const accounts = JSON.parse(fs.readFileSync('.accounts'))
 
-/**
- * @type import('hardhat/config').HardhatUserConfig
- */
 module.exports = {
-  solidity: '0.8.4'
+  tenderly: {
+     project: process.env.TENDERLY_PROJECT,
+     username: process.env.TENDERLY_USER
+  },
+  solidity: {
+    version: '0.8.3',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 10000
+      }
+    }
+  },
+  networks: {
+    polygon: {
+      url: 'https://rpc-mainnet.maticvigil.com/',
+      accounts: [process.env.DEPLOYER || accounts[0]],
+      network_id: 137,
+      gas: 5e6, // gas estimate fails sometimes
+      confirmations: 2,
+      timeoutBlocks: 200,
+      skipDryRun: true
+    },
+    mumbai: {
+      url: 'https://rpc-mumbai.maticvigil.com/',
+      // url: 'https://matic-mumbai.chainstacklabs.com',
+      // url: 'https://matic-testnet-archive-rpc.bwarelabs.com',
+      accounts: accounts,
+      network_id: 80001,
+      gas: 5500000,
+      confirmations: 2,
+      timeoutBlocks: 200,
+      skipDryRun: true
+    }
+  }
 }
