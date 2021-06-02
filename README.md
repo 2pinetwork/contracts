@@ -6,7 +6,7 @@ This repo contains the contracts deployed for our vaults and strategies.
 Consist in 3 parts: vault <=> controller <=> strategy
 
 - Vault that receive the funds from users, and then send them to the controller.
-- Controller manage what is the currenct active strategy for a given token and it's the link between vault and the strategy
+- Controller manage what is the current active strategy for a given token and it's the link between vault and the strategy
 - Strategy is who really invests the tokens in pools, make swaps, add liquidity, etc.
 
 `build/` dir contains the "merged" all in one file contracts.
