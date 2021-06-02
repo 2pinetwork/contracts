@@ -9,12 +9,42 @@ Consist in 3 parts: vault <=> controller <=> strategy
 - Controller manage what is the current active strategy for a given token and it's the link between vault and the strategy
 - Strategy is who really invests the tokens in pools, make swaps, add liquidity, etc.
 
-`build/` dir contains the "merged" all in one file contracts.
+## Aave strategy
 
-NOTE: Vault and VaultMatic are mostly the same with the difference that VaultMatic can
-      receive Matic (polygon network currency) and wrap/unwrap to deposit in the wmatic pool.
+#### Deposit
+In our Aave strategy first the contract deposits into the  pool the corresponding token.
+Then we loop a few times in a borrow and re-deposit logic in the same pool.
+Each iteration borrows a little less than the maximum permitted amount to keep a good health factor,
+that helps when someone wants to withdraw his tokens.  With this borrow-deposit loop we increase the
+current APY thanks to the WMATIC rewards.
 
-## Contracts in Polygon network (Chain: 137)
+#### Withdraw
+In the withdraw process the strategy withdraws a calculated
+amount of tokens to keep at least a 1.05 health factor. Then repay a percentage of the withdrawn amount,
+and repeat this process a few times until the needed withdraw amount is reached.
+
+#### Withdraw All
+In the withdraw all process (deleverage) the strategy withdraws a calculated
+amount of tokens to keep at least a 1.05 health factor (same as simple withdraw), but instead of
+just pay a part of the debt, repay is called with the total withdrawn amount. This process is
+repeated until the debt is paid, and then the strategy withdraw what was left deposited.
+
+
+## Vault and VaultMatic
+Vault and VaultMatic are mostly the same with the difference that VaultMatic can
+receive Matic (polygon network currency) and wrap/unwrap to deposit in the wmatic pool.
+
+### Directories
+- `contracts/` dir contains all the individual contracts.
+- `interfaces/` dir contains all the used interfaces for our or vendor contracts.
+- `build/` dir contains the "merged" all in one file contracts.
+
+### Dependencies
+- `@openzeppelin/contracts` v4.0.0
+- Aave interfaces (implemented in `interfaces/` directory)
+- Uniswap V2 Router interface (implemented in `interfaces/` directory) [Currently using sushiswap contract]
+
+## Deployed Contracts in Polygon network (Chain: 137)
 ```json
 {
   "MATIC": {
