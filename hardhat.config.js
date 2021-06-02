@@ -12,7 +12,7 @@ task('accounts', 'Prints the list of accounts', async () => {
 })
 
 const fs = require('fs')
-const accounts = JSON.parse(fs.readFileSync(".accounts"));
+const accounts = JSON.parse(fs.readFileSync('.accounts'))
 
 module.exports = {
   tenderly: {
