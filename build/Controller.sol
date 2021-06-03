@@ -76,7 +76,6 @@ interface IERC20 {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-// SPDX-License-Identifier: MIT
 /**
  * @dev Collection of functions related to the address type
  */
@@ -263,7 +262,6 @@ library Address {
     }
 }
 
-// SPDX-License-Identifier: MIT
 /**
  * @title SafeERC20
  * @dev Wrappers around ERC20 operations that throw on failure (when the token
@@ -335,7 +333,6 @@ library SafeERC20 {
     }
 }
 
-// SPDX-License-Identifier: MIT
 /*
  * @dev Provides information about the current execution context, including the
  * sender of the transaction and its data. While these are generally available
@@ -357,7 +354,6 @@ abstract contract Context {
     }
 }
 
-// SPDX-License-Identifier: MIT
 /**
  * @dev Contract module which provides a basic access control mechanism, where
  * there is an account (an owner) that can be granted exclusive access to
@@ -422,7 +418,6 @@ abstract contract Ownable is Context {
     }
 }
 
-// SPDX-License-Identifier: MIT
 // CAUTION
 // This version of SafeMath should only be used with Solidity 0.8 or later,
 // because it relies on the compiler's built in overflow checks.
@@ -637,7 +632,6 @@ library SafeMath {
     }
 }
 
-// SPDX-License-Identifier: MIT
 interface IStrategy {
     function want() external view returns (address);
 
@@ -650,7 +644,6 @@ interface IStrategy {
     function balanceOf() external view returns (uint256);
 }
 
-// SPDX-License-Identifier: MIT
 contract Controller is Ownable {
     using SafeERC20 for IERC20;
     using Address for address;
