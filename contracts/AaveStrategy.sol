@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "./CommonContract.sol";
 
@@ -13,6 +13,7 @@ contract AaveStrategy is CommonContract {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint;
+    using SafeMath for uint8;
 
     address public constant wmatic = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
 
@@ -57,6 +58,10 @@ contract AaveStrategy is CommonContract {
         address _controller,
         address _exchange
     ) {
+        require(_want != address(0), "want zero address");
+        require(_controller != address(0), "controller zero address");
+        require(IController(_controller).vaults(_want) != address(0), "Controller vault zero address");
+
         want = _want;
         borrowRate = _borrowRate;
         borrowRateMax = _borrowRateMax;
@@ -78,10 +83,6 @@ contract AaveStrategy is CommonContract {
         _;
     }
 
-    function setController(address _controller) external onlyOwner {
-        controller = _controller;
-    }
-
     function setTreasury(address _treasury) external onlyOwner {
         treasury = _treasury;
     }
@@ -94,6 +95,7 @@ contract AaveStrategy is CommonContract {
         IERC20(wmatic).safeApprove(exchange, type(uint).max);
     }
 
+    // `withdrawFee` can't be more than 1%
     function setWithdrawFee(uint _fee) external onlyOwner {
         require(_fee <= MAX_WITHDRAW_FEE, "!cap");
 
@@ -123,6 +125,7 @@ contract AaveStrategy is CommonContract {
             return;
         }
 
+        // Borrow & deposit strategy
         for (uint i = 0; i < borrowDepth; i++) {
             _amount = _amount.mul(borrowRate).div(100);
 
@@ -271,14 +274,21 @@ contract AaveStrategy is CommonContract {
         );
     }
 
-    function harvest() public {
+    // _maticToWantRatio is a pre-calculated ratio to prevent
+    // sandwich attacks
+    function harvest(uint _maticToWantRatio) public {
+        require(
+            _msgSender() == owner() || _msgSender() == controller,
+            "Owner or controller only"
+        );
+
         uint _before = wantBalance();
 
         claimRewards();
 
         // only need swap when is different =)
         if (want != wmatic) {
-            swapRewards();
+            swapRewards(_maticToWantRatio);
         }
 
         uint harvested = wantBalance().sub(_before);
@@ -291,12 +301,28 @@ contract AaveStrategy is CommonContract {
         }
     }
 
-    function swapRewards() internal {
+    function swapRewards(uint _maticToWantRatio) internal {
         uint balance = IERC20(wmatic).balanceOf(address(this));
 
         if (balance > 0) {
+            // _maticToWantRatio is a 9 decimals ratio number calculated by the
+            // caller before call harvest to get the minimum amount of want-tokens.
+            // So the balance is multiplied by the ratio and then divided by 9 decimals
+            // to get the same "precision". Then the result should be divided for the
+            // decimal diff between tokens.
+            // E.g want is USDT with  only 6 decimals:
+            // _maticToWantRatio = 1_522_650_000 (1.52265 USDT/MATIC)
+            // balance = 1e18 (1.0 MATIC)
+            // tokenDiffPrecision = 1e12 (1e18 MATIC decimals / 1e6 USDT decimals)
+            // expected = 1522650 (1e18 * 1_522_650_000 / 1e9 / 1e12) [1.52 in USDT decimals]
+
+            uint tokenDiffPrecision = ERC20(wmatic).decimals().div(
+                ERC20(want).decimals()
+            );
+            uint expected = balance.mul(_maticToWantRatio).div(1e9).div(tokenDiffPrecision);
+
             IUniswapRouter(exchange).swapExactTokensForTokens(
-                balance, 1, wmaticToWantRoute, address(this), block.timestamp.add(60)
+                balance, expected, wmaticToWantRoute, address(this), block.timestamp.add(60)
             );
         }
     }
@@ -351,10 +377,11 @@ contract AaveStrategy is CommonContract {
     }
 
     // called as part of strat migration. Sends all the available funds back to the vault.
-    function retireStrat() external onlyController {
+    function retireStrat(uint _maticToWantRatio) external onlyController {
         _pause();
         _fullDeleverage();
-        harvest();
+
+        harvest(_maticToWantRatio);
 
         IERC20(want).transfer(vault(), wantBalance());
 
