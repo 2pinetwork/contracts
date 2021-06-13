@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -46,12 +46,12 @@ contract Controller is Ownable {
         approvedStrategies[_token][_strategy] = false;
     }
 
-    function setStrategy(address _token, address _strategy) public onlyStrategist {
+    function setStrategy(address _token, address _strategy, uint _maticToWantRatio) public onlyStrategist {
         require(approvedStrategies[_token][_strategy] == true, "!approved");
 
         address _current = strategies[_token];
         if (_current != address(0)) {
-            IStrategy(_current).retireStrat();
+            IStrategy(_current).retireStrat(_maticToWantRatio);
         }
         strategies[_token] = _strategy;
     }
