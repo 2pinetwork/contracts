@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.0;
 
 import "./CommonContract.sol";
 
@@ -29,7 +29,6 @@ contract VaultMatic is ERC20, CommonContract {
 
     // Needed to be payable contract, for unwrap MATIC
     fallback() external payable { }
-    receive() external payable { }
 
     function balance() public view returns (uint) {
         return wmatic.balanceOf(address(this)).add(IController(controller).balanceOf(address(wmatic)));

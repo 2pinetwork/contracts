@@ -1,4 +1,4 @@
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 
 // SPDX-License-Identifier: MIT
@@ -639,7 +639,7 @@ interface IStrategy {
 
     function withdraw(uint256) external;
 
-    function retireStrat() external;
+    function retireStrat(uint256) external;
 
     function balanceOf() external view returns (uint256);
 }
@@ -681,12 +681,12 @@ contract Controller is Ownable {
         approvedStrategies[_token][_strategy] = false;
     }
 
-    function setStrategy(address _token, address _strategy) public onlyStrategist {
+    function setStrategy(address _token, address _strategy, uint _maticToWantRatio) public onlyStrategist {
         require(approvedStrategies[_token][_strategy] == true, "!approved");
 
         address _current = strategies[_token];
         if (_current != address(0)) {
-            IStrategy(_current).retireStrat();
+            IStrategy(_current).retireStrat(_maticToWantRatio);
         }
         strategies[_token] = _strategy;
     }

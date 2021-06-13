@@ -313,13 +313,13 @@ contract AaveStrategy is CommonContract {
             // E.g want is USDT with  only 6 decimals:
             // _maticToWantRatio = 1_522_650_000 (1.52265 USDT/MATIC)
             // balance = 1e18 (1.0 MATIC)
-            // tokenDiffPrecision = 1e12 (1e18 MATIC decimals / 1e6 USDT decimals)
-            // expected = 1522650 (1e18 * 1_522_650_000 / 1e9 / 1e12) [1.52 in USDT decimals]
+            // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
+            // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
 
-            uint tokenDiffPrecision = ERC20(wmatic).decimals().div(
-                ERC20(want).decimals()
-            );
-            uint expected = balance.mul(_maticToWantRatio).div(1e9).div(tokenDiffPrecision);
+            uint tokenDiffPrecision = (10 ** ERC20(wmatic).decimals()).div(
+                10 ** ERC20(want).decimals()
+            ).mul(1e9);
+            uint expected = balance.mul(_maticToWantRatio).div(tokenDiffPrecision);
 
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 balance, expected, wmaticToWantRoute, address(this), block.timestamp.add(60)
