@@ -1,14 +1,14 @@
 const { expect } = require('chai')
 
-describe('PiVault', () => {
+describe.skip('PiVault', () => {
   let owner
   let PiToken
   let piToken
-	let PiVault
-	let piVault
+  let PiVault
+  let piVault
 
-	beforeEach(async () => {
-		[owner] = await ethers.getSigners()
+  beforeEach(async () => {
+    [owner] = await ethers.getSigners()
     PiToken = await ethers.getContractFactory('PiToken')
     piToken = await PiToken.deploy(10000)
     PiVault = await ethers.getContractFactory('PiVault')
