@@ -15,6 +15,15 @@ task('accounts', 'Prints the list of accounts', async () => {
 const fs = require('fs')
 const accounts = JSON.parse(fs.readFileSync('.accounts'))
 
+const url = [
+  'https://rpc-mainnet.matic.network',
+  'https://rpc-mainnet.maticvigil.com',
+  'https://rpc-mainnet.matic.quiknode.pro',
+  'https://matic-mainnet.chainstacklabs.com'
+][
+  parseInt(process.env.PROVIDER_INDEX) || 0
+]
+
 module.exports = {
   etherscan: {
     apiKey: process.env.POLYGON_API_KEY
@@ -34,13 +43,14 @@ module.exports = {
   },
   networks: {
     polygon: {
-      url: 'https://rpc-mainnet.maticvigil.com/',
+      url: url,
       accounts: [process.env.DEPLOYER || accounts[0]],
       network_id: 137,
       gas: 5e6, // gas estimate fails sometimes
       confirmations: 2,
       timeoutBlocks: 200,
-      skipDryRun: true
+      skipDryRun: true,
+      timeout: parseInt(process.env.TIMEOUT, 10) || 60000
     },
     mumbai: {
       url: 'https://rpc-mumbai.matic.today',

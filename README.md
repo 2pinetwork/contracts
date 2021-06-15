@@ -79,3 +79,11 @@ receive Matic (polygon network currency) and wrap/unwrap to deposit in the wmati
   }
 }
 ```
+
+### Utils
+`scripts/provider_health_check.js` check RPC connectivity with hardhat timeout.
+Example:
+```bash
+export PROVIDER_INDEX=1
+TIMEOUT=4000 npx hardhat --network polygon run scripts/provider_health_check.js && npx hardhat --network polygon run scripts/other_script.js
+```
