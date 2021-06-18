@@ -16,6 +16,7 @@ describe('PiToken', () => {
   let MAX_SUPPLY
 
   beforeEach(async () => {
+    console.log(await ethers.provider.getBlockNumber())
     [owner, bob, alice] = await ethers.getSigners()
 
     PiToken = await ethers.getContractFactory('PiToken')
