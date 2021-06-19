@@ -13,6 +13,14 @@ contract PiToken is ERC20Capped, AccessControl {
     uint public MAX_SUPPLY = 1e25; // 10M tokens
     uint public INITIAL_SUPPLY = 35000e18; // 10k airdrop + 25k for liquidity
 
+    // Be sure that the mint supply never be more than 2 days of rewards
+    // ANTI-FlashLoan mechanism
+    //  2 * 24 * 3600 / (2.1 blocks/s) => 82285 blocks
+    // Community reward per block => 0.233e18
+    // Treasury reward per block => 0.033e18
+    // Max reward 21887,81 tokens
+    uint public constant MAX_MINT_REWARD = 21917.8e18
+
     constructor() ERC20("2pi", "2PI") ERC20Capped(MAX_SUPPLY) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -30,9 +38,13 @@ contract PiToken is ERC20Capped, AccessControl {
         _setupRole(MINTER_ROLE, newMinter);
     }
 
-    function mint(uint supply) external {
+    function mint(uint _supply) external {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
-        _mint(msg.sender, supply);
+        // Esto solo para 1 sola llamada
+        // Mejor metemos un limite de minteo por bloque
+        require(_supply < MAX_MINT_REWARD, "Can't mint more than entire days of rewards");
+
+        _mint(msg.sender, _supply);
     }
 
     // For future use, just in case
