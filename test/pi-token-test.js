@@ -16,7 +16,7 @@ describe('PiToken', () => {
   let MAX_SUPPLY
 
   beforeEach(async () => {
-    console.log(await ethers.provider.getBlockNumber())
+    // console.log(await ethers.provider.getBlockNumber())
     [owner, bob, alice] = await ethers.getSigners()
 
     PiToken = await ethers.getContractFactory('PiToken')
@@ -175,10 +175,10 @@ describe('PiToken', () => {
       expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
 
       await expect(
-        piToken.connect(alice).mint(1)
+        piToken.connect(alice).mint(alice.address, 1)
       ).to.be.revertedWith('Only minters')
 
-      await piToken.connect(bob).mint(toNumber(100e18))
+      await piToken.connect(bob).mint(alice.address, toNumber(100e18))
 
       expect(await piToken.totalSupply()).to.equal(
         toNumber(INITIAL_SUPPLY + 100e18)
@@ -187,6 +187,7 @@ describe('PiToken', () => {
 
     it('Should only mint until MAX SUPPLY', async () => {
       await piToken.connect(bob).mint(
+        bob.address,
         toNumber(MAX_SUPPLY - INITIAL_SUPPLY)
       )
 
@@ -195,7 +196,7 @@ describe('PiToken', () => {
       )
 
       await expect(
-        piToken.connect(bob).mint(1)
+        piToken.connect(bob).mint(bob.address, 1)
       ).to.be.revertedWith('ERC20Capped: cap exceeded')
     })
   })

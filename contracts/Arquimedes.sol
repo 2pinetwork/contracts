@@ -3,10 +3,10 @@
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+// import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "./PiToken.sol";
@@ -21,8 +21,15 @@ interface IReferral {
 // Note that it's ownable and the owner wields tremendous power. The ownership
 // will be transferred to a governance smart contract once PiToken is sufficiently
 // distributed and the community can show to govern itself.
-//
 // Have fun reading it. Hopefully it's bug-free. God bless.
+
+interface IStrategy {
+    function totalSupply() external view returns (uint);
+    function farm() external view returns (address);
+    function deposit(address _depositor, uint _amount) external returns (uint);
+    function withdraw(address _depositor, uint _shares) external;
+}
+
 contract Arquimedes is Ownable, ReentrancyGuard {
     using Address for address;
     // using SafeMath for uint;
@@ -51,9 +58,11 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         uint weighing;           // How much weighing assigned to this pool. PIes to distribute per block.
         uint lastRewardBlock;    // Last block number that PIes distribution occurs.
         uint accPiTokenPerShare; // Accumulated PIes per share, times SHARE_PRECISION. See below.
+        address strategy;        // Token strategy
     }
 
     PiToken public piToken;
+    address public treasuryAddress;
 
     // Used to made multiplications and divitions over shares
     uint public constant SHARE_PRECISION = 1e18;
@@ -107,9 +116,10 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     }
 
     // Add a new want token to the pool. Can only be called by the owner.
-    function add(IERC20 _want, uint _weighing) external onlyOwner nonDuplicated(_want) {
+    function addNewPool(IERC20 _want, address _strat, uint _weighing) external onlyOwner {
         require(address(_want) != address(0), "Address zero not allowed");
         require(poolExistence[_want] <= 0, "nonDuplicated: duplicated");
+        require(IStrategy(_strat).farm() == address(this), "Not a farm strategy");
 
         uint lastRewardBlock = block.number > startBlock ? block.number : startBlock;
 
@@ -122,12 +132,13 @@ contract Arquimedes is Ownable, ReentrancyGuard {
             want: _want,
             weighing: _weighing,
             lastRewardBlock: lastRewardBlock,
-            accPiTokenPerShare: 0
+            accPiTokenPerShare: 0,
+            strategy: _strat
         }));
     }
 
     // Update the given pool's PI allocation point and deposit fee. Can only be called by the owner.
-    function set(uint _pid, uint _weighing) external onlyOwner {
+    function changePoolWeighing(uint _pid, uint _weighing) external onlyOwner {
         totalWeighing = (totalWeighing - poolInfo[_pid].weighing) + _weighing;
         poolInfo[_pid].weighing = _weighing;
     }
@@ -147,7 +158,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][_user];
 
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
-        uint sharesTotal = IStrategy(pool.strat).sharesTotal();
+        uint sharesTotal = IStrategy(pool.strategy).totalSupply();
 
         if (block.number > pool.lastRewardBlock && sharesTotal > 0) {
             uint multiplier = getMultiplier(pool.lastRewardBlock, block.number);
@@ -171,7 +182,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
         if (block.number <= pool.lastRewardBlock) { return; }
 
-        uint sharesTotal = IStrategy(pool.strat).sharesTotal();
+        uint sharesTotal = IStrategy(pool.strategy).totalSupply();
 
         if (sharesTotal <= 0 || pool.weighing <= 0) {
             pool.lastRewardBlock = block.number;
@@ -246,15 +257,17 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
         // uint _before = balance(pool);
         pool.want.safeTransferFrom(msg.sender, address(this), _amount);
-        pool.want.safeTransferFrom(address(this), pool.strategy, _amount);
+        // pool.want.safeTransferFrom(address(this), pool.strategy, _amount);
 
         // Esto no pasa asi derecho hay que arreglarlo
+
+        pool.want.safeIncreaseAllowance(pool.strategy, _amount);
         uint shares = IStrategy(pool.strategy).deposit(msg.sender, _amount);
 
         // This could be changed by Strategy(pool.strategy).balanceOf(msg.sender)
-        user.shares += shares
+        user.shares += shares;
         // This is to "save" like the new amount of shares was paid
-        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION);
+        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
 
         emit Deposit(msg.sender, _pid, _amount);
     }
@@ -281,24 +294,24 @@ contract Arquimedes is Ownable, ReentrancyGuard {
             // Esto no pasa asi derecho hay que arreglarlo
             user.shares -= _shares;
 
-            uint _before = pool.want.balanceOf();
+            uint _before = wantBalance(pool);
             // this should burn shares and control the amount
             IStrategy(pool.strategy).withdraw(msg.sender, _shares);
 
             // Como que para esto no deberia haber NADA
-            uint wantBalance = pool.want.balanceOf() - _before;
-            pool.want.safeTransfer(address(msg.sender), wantBalance);
+            uint _wantBalance = wantBalance(pool) - _before;
+            pool.want.safeTransfer(address(msg.sender), _wantBalance);
         }
 
         // This is to "save" like the new amount of shares was paid
-        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION);
+        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
 
         emit Withdraw(msg.sender, _pid, _shares);
     }
 
     //
     function withdrawAll(uint _pid) external nonReentrant {
-        without(_pid, userInfo[_pid][msg.sender].shares);
+        withdraw(_pid, userInfo[_pid][msg.sender].shares);
     }
 
     // Claim rewards for a pool
@@ -323,7 +336,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         }
     }
 
-    function harvestAll(uint _pid) external nonReentrant {
+    function harvestAll() external nonReentrant {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid);
@@ -335,21 +348,24 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
 
-        uint shares = user.shares;
+        uint _shares = user.shares;
 
         user.shares = 0;
         user.paidReward = 0;
 
         // HACER EL CALCULO DEL WITHDRAW
-        uint _before = pool.want.balanceOf();
+        uint _before = wantBalance(pool);
         // this should burn shares and control the amount
         IStrategy(pool.strategy).withdraw(msg.sender, _shares);
 
-        // Como que para esto no deberia haber NADA
-        uint wantBalance = pool.want.balanceOf() - _before;
-        pool.want.safeTransfer(address(msg.sender), wantBalance);
+        uint _wantBalance = wantBalance(pool) - _before;
+        pool.want.safeTransfer(address(msg.sender), _wantBalance);
 
-        emit EmergencyWithdraw(msg.sender, _pid, amount);
+        emit EmergencyWithdraw(msg.sender, _pid, _shares);
+    }
+
+    function wantBalance(PoolInfo memory _pool) internal view returns (uint) {
+        return _pool.want.balanceOf(address(this));
     }
 
     // Safe piToken transfer function, just in case if rounding error causes pool to not have enough PI.
@@ -381,7 +397,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     function payReferralCommission(address _user, uint _pending) internal {
         if (address(referral) != address(0) && referralCommissionRate > 0) {
             address referrer = referral.getReferrer(_user);
-            uint commissionAmount = _pending.mul(referralCommissionRate).div(10000);
+            uint commissionAmount = (_pending * referralCommissionRate) / 10000;
 
             if (referrer != address(0) && commissionAmount > 0) {
                 piToken.mint(referrer, commissionAmount);
