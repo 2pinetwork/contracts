@@ -1027,34 +1027,11 @@ abstract contract CommonContract is Ownable, Pausable {
 
 // SPDX-License-Identifier: MIT
 interface IAaveIncentivesController {
-
-  event RewardsAccrued(address indexed user, uint amount);
-
-  event RewardsClaimed(
-    address indexed user,
-    address indexed to,
-    uint amount
-  );
-
-  event RewardsClaimed(
-    address indexed user,
-    address indexed to,
-    address indexed claimer,
-    uint amount
-  );
-
-  function getRewardsBalance(address[] calldata assets, address user)
-    external
-    view
-    returns (uint);
-
   function claimRewards(
     address[] calldata assets,
     uint amount,
     address to
   ) external returns (uint);
-
-  function getUserUnclaimedRewards(address user) external view returns (uint);
 }
 
 interface IAaveLendingPool {
@@ -1081,7 +1058,6 @@ interface IAaveLendingPool {
         uint ltv,
         uint healthFactor
     );
-
 }
 
 // SPDX-License-Identifier: MIT

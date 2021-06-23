@@ -13,16 +13,17 @@ contract PiToken is ERC20Capped, AccessControl {
     uint public MAX_SUPPLY = 1e25; // 10M tokens
     uint public INITIAL_SUPPLY = 35000e18; // 10k airdrop + 25k for liquidity
 
-    // Be sure that the mint supply never be more than 2 days of rewards
-    // ANTI-FlashLoan mechanism
-    //  2 * 24 * 3600 / (2.1 blocks/s) => 82285 blocks
+    // Be sure that the mint supply never be more than the expected per block
+    // mechanism to avoid any "hack" or problem with mint/minter
     // Community reward per block => 0.233e18
     // Treasury reward per block => 0.033e18
-    // Max reward 21887,81 tokens
-    uint public constant MAX_MINT_REWARD = 21917.8e18
+    // Max reward per block => 0.27e18
+    uint public constant MAX_MINT_PER_BLOCK = 0.27e18;
+    // uint private immutable deployedBlock;
 
     constructor() ERC20("2pi", "2PI") ERC20Capped(MAX_SUPPLY) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        // deployedBlock = block.number + 2 days  ;
     }
 
     // After deploy initialize the supply token & revoke owner minter role
@@ -38,13 +39,19 @@ contract PiToken is ERC20Capped, AccessControl {
         _setupRole(MINTER_ROLE, newMinter);
     }
 
-    function mint(uint _supply) external {
+    function mint(address _receiver, uint _supply) external {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
-        // Esto solo para 1 sola llamada
-        // Mejor metemos un limite de minteo por bloque
-        require(_supply < MAX_MINT_REWARD, "Can't mint more than entire days of rewards");
+        require(_receiver != address(0), "Can't mint to zero address");
+        require(_supply > 0, "Insufficient supply");
 
-        _mint(msg.sender, _supply);
+        // doble check for mint
+        // uint _maxMintableSupply = (
+        //     (block.number - deployedBlock) * MAX_MINT_PER_BLOCK
+        // ) - (totalSupply() - INITIAL_SUPPLY);
+
+        // require(_supply < _maxMintableSupply, "Can't mint more than expected");
+
+        _mint(_receiver, _supply);
     }
 
     // For future use, just in case
