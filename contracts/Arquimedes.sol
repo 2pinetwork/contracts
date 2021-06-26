@@ -25,6 +25,7 @@ interface IReferral {
 
 interface IStrategy {
     function totalSupply() external view returns (uint);
+    function balanceOf() external view returns (uint);
     function farm() external view returns (address);
     function deposit(address _depositor, uint _amount) external returns (uint);
     function withdraw(address _depositor, uint _shares) external;
@@ -127,7 +128,6 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
         poolExistence[_want] = 1;
 
-        // CHECK this shouldn't be first initialized as storage?
         poolInfo.push(PoolInfo({
             want: _want,
             weighing: _weighing,
@@ -309,8 +309,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         emit Withdraw(msg.sender, _pid, _shares);
     }
 
-    //
-    function withdrawAll(uint _pid) external nonReentrant {
+    function withdrawAll(uint _pid) external {
         withdraw(_pid, userInfo[_pid][msg.sender].shares);
     }
 
@@ -409,5 +408,13 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     // View functions
     function poolLength() external view returns (uint) {
         return poolInfo.length;
+    }
+
+    function getPricePerFullShare(uint _pid) public view returns (uint) {
+        IStrategy strat = IStrategy(poolInfo[_pid].strategy);
+
+        uint _totalSupply = strat.totalSupply();
+
+        return _totalSupply == 0 ? 1e18 : ((strat.balanceOf() * 1e18) / _totalSupply);
     }
 }

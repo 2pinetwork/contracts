@@ -1,0 +1,56 @@
+{
+  "MATIC": {
+    "weighing": 10,
+    "aave_rate_max": 50,
+    "rate": 48,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889",
+    "strategy": "0xe078f1867affa601ec05f8e21a4f553358a2a69c"
+  },
+  "ETH": {
+    "weighing": 5,
+    "aave_rate_max": 80,
+    "rate": 78,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x3C68CE8504087f89c640D02d133646d98e64ddd9",
+    "strategy": "0xC2664bDE5bdA4d420FE072D722f803635c4AD467"
+  },
+  "BTC": {
+    "weighing": 5,
+    "aave_rate_max": 70,
+    "rate": 68,
+    "depth": 8,
+    "min_leverage": 1000000,
+    "token": "0x0d787a4a1548f673ed375445535a6c7A1EE56180",
+    "strategy": "0x631a653ff7ff70c07681a438d657d49e71360a10"
+  },
+  "DAI": {
+    "weighing": 5,
+    "aave_rate_max": 75,
+    "rate": 73,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F",
+    "strategy": "0x004fbe504e686f884accfec13bcb5de431aa39e6"
+  },
+  "USDC": {
+    "weighing": 5,
+    "aave_rate_max": 80,
+    "rate": 78,
+    "depth": 8,
+    "min_leverage": 10000,
+    "token": "0x2058A9D7613eEE744279e3856Ef0eAda5FCbaA7e",
+    "strategy": "0x0e53036b69055590794c094a45ffd0e494f28676"
+  },
+  "USDT": {
+    "weighing": 5,
+    "aave_rate_max": 0,
+    "rate": 0,
+    "depth": 0,
+    "min_leverage": 0,
+    "token": "0xBD21A10F619BE90d6066c941b04e340841F1F989",
+    "strategy": "0x0e1e986e2fee3a9b12ff5f1b15afc9c2ed6d4117"
+  }
+}

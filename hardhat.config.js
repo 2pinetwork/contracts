@@ -43,8 +43,9 @@ module.exports = {
       skipDryRun: true
     },
     mumbai: {
-      url: 'https://rpc-mumbai.matic.today',
-      // url: 'https://matic-mumbai.chainstacklabs.com',
+      // url: 'https://rpc-mumbai.maticvigil.com',
+      // url: 'https://rpc-mumbai.matic.today',
+      url: 'https://matic-mumbai.chainstacklabs.com',
       // url: 'https://matic-testnet-archive-rpc.bwarelabs.com',
       accounts: accounts,
       network_id: 80001,
