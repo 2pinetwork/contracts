@@ -1,0 +1,62 @@
+{
+  "MATIC": {
+    "aave_rate_max": 50,
+    "rate": 48,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889",
+    "vault": "0xB2Da9B9f7A66653ed520810788dc9438120F5558",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0x3DA2E23fDeF9DE1819CB8320a05FC6040788714c"
+  },
+  "ETH": {
+    "aave_rate_max": 80,
+    "rate": 78,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x3C68CE8504087f89c640D02d133646d98e64ddd9",
+    "vault": "0x13Ab96148bc493fC7fD43E75Ed0601749a61091F",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0x394456FA64248cCE414161fBb5D17Ee4Cbb226cC"
+  },
+  "BTC": {
+    "aave_rate_max": 70,
+    "rate": 68,
+    "depth": 8,
+    "min_leverage": 1000000,
+    "token": "0x0d787a4a1548f673ed375445535a6c7A1EE56180",
+    "vault": "0xBA885248b300b4441b2E5d1635a8A3a16d9cE4dc",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0x95298Ac3779101500578E3dEf1852Ff964360f66"
+  },
+  "DAI": {
+    "aave_rate_max": 75,
+    "rate": 73,
+    "depth": 8,
+    "min_leverage": 1000000000000000,
+    "token": "0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F",
+    "vault": "0x460154cA0e6e8FB4e996408792272aE96082eB8e",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0x52C5b0afFAE9842Cd233E813543239C0c6b82f81"
+  },
+  "USDC": {
+    "aave_rate_max": 80,
+    "rate": 78,
+    "depth": 8,
+    "min_leverage": 10000,
+    "token": "0x2058A9D7613eEE744279e3856Ef0eAda5FCbaA7e",
+    "vault": "0xf7C1a3Ae2a51339FeaA2d158994b0fe896772Ea8",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0x672b7BBe8a6c1fC12e4618c0445869E031b5BcD0"
+  },
+  "USDT": {
+    "aave_rate_max": 0,
+    "rate": 0,
+    "depth": 0,
+    "min_leverage": 0,
+    "token": "0xBD21A10F619BE90d6066c941b04e340841F1F989",
+    "vault": "0xf410B1CA4e7531485f01E2D7814d6E69EC9073c7",
+    "controller": "0x2189c98f3Fa1098734B40BDb6d05d98b58F58d55",
+    "strategy": "0xA9FFE988300Bc051CAA886F7d8699318aBCd91dE"
+  }
+}
