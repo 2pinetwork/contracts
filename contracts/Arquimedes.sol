@@ -26,6 +26,7 @@ interface IReferral {
 interface IStrategy {
     function totalSupply() external view returns (uint);
     function balanceOf() external view returns (uint);
+    function decimals() external view returns (uint);
     function farm() external view returns (address);
     function deposit(address _depositor, uint _amount) external returns (uint);
     function withdraw(address _depositor, uint _shares) external;
@@ -335,7 +336,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         }
     }
 
-    function harvestAll() external nonReentrant {
+    function harvestAll() external {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid);
@@ -352,7 +353,6 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         user.shares = 0;
         user.paidReward = 0;
 
-        // HACER EL CALCULO DEL WITHDRAW
         uint _before = wantBalance(pool);
         // this should burn shares and control the amount
         IStrategy(pool.strategy).withdraw(msg.sender, _shares);
@@ -410,11 +410,22 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         return poolInfo.length;
     }
 
+    // old vault functions
     function getPricePerFullShare(uint _pid) public view returns (uint) {
         IStrategy strat = IStrategy(poolInfo[_pid].strategy);
 
         uint _totalSupply = strat.totalSupply();
 
         return _totalSupply == 0 ? 1e18 : ((strat.balanceOf() * 1e18) / _totalSupply);
+    }
+
+    function decimals(uint _pid) public view returns (uint) {
+        return IStrategy(poolInfo[_pid].strategy).decimals();
+    }
+    function balance(uint _pid) public view returns (uint) {
+        return IStrategy(poolInfo[_pid].strategy).balanceOf();
+    }
+    function balanceOf(uint _pid, address _user) public view returns (uint) {
+        return userInfo[_pid][_user].shares;
     }
 }
