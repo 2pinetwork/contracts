@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
@@ -16,10 +15,10 @@ interface Farm {
     function piToken() external view returns (address);
 }
 
-contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
+contract ArquimedesAaveStratMumbai is ERC20, Pausable {
     using SafeERC20 for IERC20;
 
-    bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
+    mapping(address => bool) public harvesters;
 
     // Address of Arquimedes
     address public constant farm = address(0xcDe4a51587856dAFC7Cb289a98796CEb3985dF2a);
@@ -57,6 +56,8 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
     uint constant public MAX_WITHDRAW_FEE = 100; // 1%
     uint public withdrawFee = 10; // 0.1%
 
+    address public immutable owner;
+
     constructor(
         address _want,
         uint _borrowRate,
@@ -80,13 +81,12 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
         exchange = _exchange;
         treasury = _treasury;
 
+        owner = msg.sender;
         wmaticToWantRoute = [wmatic, want];
 
         (aToken,,debtToken) = IDataProvider(dataProvider).getReserveTokensAddresses(want);
 
         _giveAllowances();
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, address(this));
     }
 
     modifier onlyFarm() {
@@ -95,7 +95,7 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
     }
 
     modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "!admin");
+        require(owner == msg.sender, "!admin");
         _;
     }
 
@@ -122,8 +122,11 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
         wmaticToWantRoute = _route;
     }
 
-    function addHarvester(address newHarvester) external onlyAdmin {
-        _setupRole(HARVEST_ROLE, newHarvester);
+    function addHarvester(address _harvester) external onlyAdmin {
+        harvesters[_harvester] = true;
+    }
+    function removeHarvester(address _harvester) external onlyAdmin {
+        harvesters[_harvester] = false;
     }
 
     function wantBalance() public view returns (uint) {
@@ -195,16 +198,6 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
         if (supplyBal > 0) {
             IAaveLendingPool(pool).withdraw(want, type(uint).max, address(this));
         }
-    }
-
-    function increaseHealthFactor() external onlyAdmin {
-        (uint supplyBal,) = supplyAndBorrow();
-
-        // Only withdraw the 10% of the max withdraw
-        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 100) / 10;
-
-        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
-        IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin {
@@ -318,7 +311,7 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
     // _maticToWantRatio is a pre-calculated ratio to prevent
     // sandwich attacks
     function harvest(uint _maticToWantRatio) public {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only admin can initialize");
+        require(harvesters[msg.sender] || msg.sender == address(this), "!harvester");
         uint _before = wantBalance();
 
         claimRewards();
@@ -411,22 +404,24 @@ contract ArquimedesAaveStratMumbai is ERC20, AccessControl, Pausable {
         return healthFactor;
     }
 
-    // called as part of strat migration. Sends all the available funds back to the vault.
-    // function retireStrat(uint _maticToWantRatio) external onlyController {
-    //     _pause();
-    //     _fullDeleverage();
+    function increaseHealthFactor() external onlyAdmin {
+        (uint supplyBal,) = supplyAndBorrow();
 
-    //     harvest(_maticToWantRatio);
+        // Only withdraw the 10% of the max withdraw
+        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 100) / 10;
 
-    //     IERC20(want).transfer(vault(), wantBalance());
-
-    //     _removeAllowances();
-    // }
+        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+        IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+    }
 
     // pauses deposits and withdraws all funds from third party systems.
-    function panic() public onlyAdmin {
+    function panic(uint _maticToWantRatio) external onlyAdmin {
+        _pause();
         _fullDeleverage();
-        pause();
+
+        harvest(_maticToWantRatio);
+
+        _removeAllowances();
     }
 
     function pause() public onlyAdmin {
