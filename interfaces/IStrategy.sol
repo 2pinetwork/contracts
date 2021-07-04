@@ -7,9 +7,9 @@ interface IStrategy {
 
     function deposit() external;
 
-    function withdraw(uint256) external;
+    function withdraw(uint) external;
 
-    function retireStrat(uint256) external;
+    function retireStrat() external;
 
     function balanceOf() external view returns (uint256);
 }

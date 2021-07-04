@@ -46,12 +46,12 @@ contract Controller is Ownable {
         approvedStrategies[_token][_strategy] = false;
     }
 
-    function setStrategy(address _token, address _strategy, uint _maticToWantRatio) public onlyStrategist {
+    function setStrategy(address _token, address _strategy) public onlyStrategist {
         require(approvedStrategies[_token][_strategy] == true, "!approved");
 
         address _current = strategies[_token];
         if (_current != address(0)) {
-            IStrategy(_current).retireStrat(_maticToWantRatio);
+            IStrategy(_current).retireStrat();
         }
         strategies[_token] = _strategy;
     }

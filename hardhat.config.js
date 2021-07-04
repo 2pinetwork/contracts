@@ -16,8 +16,8 @@ const fs = require('fs')
 const accounts = JSON.parse(fs.readFileSync('.accounts'))
 
 const url = [
-  'https://rpc-mainnet.matic.network',
   'https://rpc-mainnet.maticvigil.com',
+  'https://rpc-mainnet.matic.network',
   'https://rpc-mainnet.matic.quiknode.pro',
   'https://matic-mainnet.chainstacklabs.com'
 ][
