@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/utils/Address.sol";
 // import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-import "./PiToken.sol";
+import "../interfaces/IPiToken.sol";
 
 interface IReferral {
     function recordReferral(address user, address referrer) external;
@@ -63,7 +63,8 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         address strategy;        // Token strategy
     }
 
-    PiToken public piToken;
+    IPiToken public piToken;
+    bytes txData = new bytes(0);
     address public treasuryAddress;
 
     // Used to made multiplications and divitions over shares
@@ -104,7 +105,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     event ReferralCommissionPaid(address indexed user, address indexed referrer, uint commissionAmount);
 
     constructor(
-        PiToken _piToken,
+        IPiToken _piToken,
         uint _startBlock,
         address _treasury
     ) {
@@ -212,7 +213,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
             if (treasuryAmount > 0) {
                 treasuryLeftToMint -= treasuryAmount;
-                piToken.mint(treasuryAddress, treasuryAmount);
+                piToken.mint(treasuryAddress, treasuryAmount, txData);
             }
         }
 
@@ -224,7 +225,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
             }
 
             communityLeftToMint -= piTokenReward;
-            piToken.mint(address(this), piTokenReward);
+            piToken.mint(address(this), piTokenReward, txData);
 
             pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
@@ -399,7 +400,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
             uint commissionAmount = (_pending * referralCommissionRate) / 10000;
 
             if (referrer != address(0) && commissionAmount > 0) {
-                piToken.mint(referrer, commissionAmount);
+                piToken.mint(referrer, commissionAmount, txData);
                 emit ReferralCommissionPaid(_user, referrer, commissionAmount);
             }
         }

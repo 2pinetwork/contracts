@@ -1,6 +1,7 @@
 require('@nomiclabs/hardhat-waffle')
 require('@tenderly/hardhat-tenderly')
 require("@nomiclabs/hardhat-etherscan");
+require("@nomiclabs/hardhat-truffle5");
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -43,9 +44,10 @@ module.exports = {
       skipDryRun: true
     },
     mumbai: {
-      // url: 'https://rpc-mumbai.maticvigil.com',
+      url: 'https://rpc-mumbai.maticvigil.com',
       // url: 'https://rpc-mumbai.matic.today',
-      url: 'https://matic-mumbai.chainstacklabs.com',
+      // url: 'https://matic-mumbai.chainstacklabs.com',
+      // url: 'https://rpc-endpoints.superfluid.dev/mumbai',
       // url: 'https://matic-testnet-archive-rpc.bwarelabs.com',
       accounts: accounts,
       network_id: 80001,
