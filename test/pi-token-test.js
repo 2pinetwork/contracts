@@ -1,10 +1,20 @@
-/* global ethers, describe, beforeEach, it */
+/* global ethers, web3, describe, before, beforeEach, it */
+const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
+const { Framework } = require('@superfluid-finance/js-sdk');
+const {
+  builtTruffleContractLoader
+} = require('@superfluid-finance/ethereum-contracts/scripts/utils');
+
 const { expect } = require('chai')
 
 const toNumber = function (value) {
   // Needed for BigNumber lib
   return value.toLocaleString('fullwide', { useGrouping: false })
 }
+
+const errorHandler = err => {
+  if (err) throw err;
+};
 
 describe('PiToken', () => {
   let PiToken
@@ -14,42 +24,51 @@ describe('PiToken', () => {
   let alice
   let INITIAL_SUPPLY
   let MAX_SUPPLY
+  let sf
+  let superTokenFactory
+  const txData = 0x0
 
-  beforeEach(async () => {
-    // console.log(await ethers.provider.getBlockNumber())
+  // Global setup
+  before(async () => {
     [owner, bob, alice] = await ethers.getSigners()
 
-    PiToken = await ethers.getContractFactory('PiToken')
-    piToken = await PiToken.deploy()
+    await deployFramework(errorHandler, { web3: web3, from: owner.address });
+
+    sf = new Framework({
+      web3:           web3,
+      version:        'test',
+      contractLoader: builtTruffleContractLoader
+    });
+
+    await sf.initialize()
+
+    superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
+      await sf.host.getSuperTokenFactory.call()
+    );
+  })
+
+  beforeEach(async () => {
+    PiToken = await ethers.getContractFactory('PiToken');
+    piToken = await PiToken.deploy();
+    await piToken.deployed();
+
+    await superTokenFactory.initializeCustomSuperToken(piToken.address);
+    piToken = await ethers.getContractAt('IPiToken', piToken.address)
 
     INITIAL_SUPPLY = parseInt(await piToken.INITIAL_SUPPLY(), 10)
     MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
-  })
 
-  describe('Deployment', () => {
-    it('Deployment should assign max supply of tokens', async () => {
-      expect(await piToken.totalSupply()).to.equal(0)
-      expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
-    })
-  })
+    expect(await piToken.totalSupply()).to.equal(0)
+    expect(await piToken.balanceOf(owner.address)).to.equal(0)
+    expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
 
-  describe('Initialize', () => {
-    it('InitialSupply should mint & assign supply of tokens to owner', async () => {
-      expect(await piToken.totalSupply()).to.equal(0)
-      expect(await piToken.balanceOf(owner.address)).to.equal(0)
+    await (await piToken.init()).wait()
 
-      await piToken.initialSupply()
-
-      expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
-      expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
-    })
+    expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
+    expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
   })
 
   describe('Transactions', () => {
-    beforeEach(async () => {
-      await piToken.initialSupply()
-    })
-
     it('Should transfer tokens between accounts', async () => {
       // Transfer 50 tokens from owner to bob
       await piToken.transfer(bob.address, 50)
@@ -67,7 +86,7 @@ describe('PiToken', () => {
       // `require` will evaluate false and revert the transaction.
       await expect(
         piToken.connect(bob).transfer(owner.address, 1)
-      ).to.be.revertedWith('ERC20: transfer amount exceeds balance')
+      ).to.be.revertedWith('SuperfluidToken: move amount exceeds balance')
 
       // Owner balance shouldn't have changed.
       expect(await piToken.balanceOf(owner.address)).to.equal(
@@ -101,10 +120,6 @@ describe('PiToken', () => {
   })
 
   describe('Allowance', () => {
-    beforeEach(async () => {
-      await piToken.initialSupply()
-    })
-
     it('Should update allowance after approve', async () => {
       expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
 
@@ -116,9 +131,16 @@ describe('PiToken', () => {
     it('Should use allowance to transfer on behalf of', async () => {
       const initialOwnerBalance = (await piToken.balanceOf(owner.address)) / 1e18
 
+      // own transfers works directyl
+      expect(await piToken.transferFrom(owner.address, bob.address, 1)).to.emit(
+        piToken, 'Transfer'
+      ).withArgs(owner.address, bob.address, 1)
+
       await expect(
-        piToken.transferFrom(owner.address, bob.address, 1)
-      ).to.be.revertedWith('ERC20: transfer amount exceeds allowance')
+        piToken.connect(bob).transferFrom(owner.address, alice.address, 1)
+      ).to.be.revertedWith(
+        'SuperToken: transfer amount exceeds allowance'
+      )
 
       await piToken.approve(bob.address, 1e18.toString())
       expect(await piToken.allowance(owner.address, bob.address)).to.equal(1e18.toString())
@@ -166,29 +188,59 @@ describe('PiToken', () => {
   })
 
   describe('Minting', () => {
+    let block
+
     beforeEach(async () => {
-      await piToken.initialSupply()
       await piToken.addMinter(bob.address)
+      block = await ethers.provider.send('eth_blockNumber');
     })
 
     it('Should only mint for minters', async () => {
+      await piToken.initRewardsOn(block - 5)
+
       expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
 
       await expect(
-        piToken.connect(alice).mint(alice.address, 1)
+        piToken.connect(alice).mint(alice.address, 1, txData)
       ).to.be.revertedWith('Only minters')
 
-      await piToken.connect(bob).mint(alice.address, toNumber(100e18))
+      // let toMint = '1' + ('0' * 18)
+      await piToken.connect(bob).mint(alice.address, toNumber(1e10), txData)
 
       expect(await piToken.totalSupply()).to.equal(
-        toNumber(INITIAL_SUPPLY + 100e18)
+        toNumber(INITIAL_SUPPLY + 1e10)
       )
     })
 
-    it('Should only mint until MAX SUPPLY', async () => {
+    it('Should only mint if startRewardsBlock is initialized', async () => {
+      await expect(
+        piToken.connect(bob).mint(bob.address, 1, txData)
+      ).to.be.revertedWith('Rewards not initialized')
+    })
+
+    it('Should only mint until max mint per block', async () => {
+      const MAX_MINT_PER_BLOCK = 0.27e18
+
+      await piToken.initRewardsOn(block - 5)
+
+      // 5 + 1 per initRewardsOn call + 1 per current block
+      let n  = toNumber(7 * MAX_MINT_PER_BLOCK)
+
+      await piToken.connect(bob).mint(bob.address, n, txData)
+
+      // 1 more than max per block
+      n = toNumber(MAX_MINT_PER_BLOCK).replace(/\d$/, '1')
+
+      await expect(
+        piToken.connect(bob).mint(bob.address, n, txData)
+      ).to.be.revertedWith("Can't mint more than expected")
+    })
+
+    it.skip('Should only mint until MAX SUPPLY', async () => {
       await piToken.connect(bob).mint(
         bob.address,
-        toNumber(MAX_SUPPLY - INITIAL_SUPPLY)
+        toNumber(MAX_SUPPLY - INITIAL_SUPPLY),
+        txData
       )
 
       expect(await piToken.totalSupply()).to.equal(
@@ -196,14 +248,13 @@ describe('PiToken', () => {
       )
 
       await expect(
-        piToken.connect(bob).mint(bob.address, 1)
-      ).to.be.revertedWith('ERC20Capped: cap exceeded')
+        piToken.connect(bob).mint(bob.address, 1, txData)
+      ).to.be.revertedWith('Mint capped to 10M')
     })
   })
 
   describe('Burning', () => {
     beforeEach(async () => {
-      await piToken.initialSupply()
       await piToken.addBurner(bob.address)
     })
 
@@ -211,16 +262,16 @@ describe('PiToken', () => {
       expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
 
       await expect(
-        piToken.connect(alice).burn(1)
+        piToken.connect(alice).burn(1, txData)
       ).to.be.revertedWith('Only burners')
 
       await expect(
-        piToken.connect(bob).burn(1)
-      ).to.be.revertedWith('ERC20: burn amount exceeds balance')
+        piToken.connect(bob).burn(1, txData)
+      ).to.be.revertedWith('SuperfluidToken: burn amount exceeds balance')
 
       await piToken.transfer(bob.address, toNumber(100e18))
 
-      await piToken.connect(bob).burn(toNumber(100e18))
+      await piToken.connect(bob).burn(toNumber(100e18), txData)
 
       // Rest has an overflow (?)
       let expected = (INITIAL_SUPPLY / 1e18) - 100

@@ -8,3 +8,8 @@ artifacts
 # utils
 addresses
 yarn.lock
+
+# Ignore tmp or utils
+scripts/
+build/
+utils/
