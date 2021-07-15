@@ -941,7 +941,7 @@ interface IReferral {
     function getReferrer(address user) external view returns (address);
 }
 
-// Arquimedes is the master of PiToken. He can make PiToken and he is a fair guy.
+// Archimedes is the master of PiToken. He can make PiToken and he is a fair guy.
 //
 // Note that it's ownable and the owner wields tremendous power. The ownership
 // will be transferred to a governance smart contract once PiToken is sufficiently
@@ -956,7 +956,7 @@ interface IStrategy {
     function withdraw(address _depositor, uint _shares) external;
 }
 
-contract Arquimedes is Ownable, ReentrancyGuard {
+contract Archimedes is Ownable, ReentrancyGuard {
     using Address for address;
     // using SafeMath for uint;
     using SafeERC20 for IERC20;
@@ -1158,7 +1158,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         pool.lastRewardBlock = block.number;
     }
 
-    // Deposit want token to Arquimedes for PI allocation.
+    // Deposit want token to Archimedes for PI allocation.
     function deposit(uint _pid, uint _amount, address _referrer) public nonReentrant {
         require(_amount > 0, "Insufficient deposit");
 
@@ -1198,7 +1198,7 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         emit Deposit(msg.sender, _pid, _amount);
     }
 
-    // Withdraw want token from Arquimedes.
+    // Withdraw want token from Archimedes.
     function withdraw(uint _pid, uint _shares) public nonReentrant {
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.shares >= _shares, "withdraw: not sufficient founds");

@@ -62,7 +62,9 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
         require(_supply <= _maxMintableSupply, "Can't mint more than expected");
 
-        self().selfMint(_receiver, _supply, data);
+        // selfMint directly to receiver requires that receiver has been registered in ERC1820
+        self().selfMint(address(this), _supply, data);
+        self().transfer(_receiver, _supply);
     }
 
     // For future use, just in case

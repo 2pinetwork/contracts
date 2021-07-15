@@ -2,7 +2,7 @@ const hre = require("hardhat");
 const fs = require("fs");
 
 async function main() {
-  const deployed = JSON.parse(fs.readFileSync('./utils/arquimedes-deploy.80001.json', 'utf8'))
+  const deployed = JSON.parse(fs.readFileSync('./utils/archimedes-deploy.80001.json', 'utf8'))
   // const currency = process.env.CURRENCY
   const decimals = {
     'USDT': 6,
@@ -10,7 +10,7 @@ async function main() {
     'BTC': 8
   }
 
-  const Strategy = await hre.ethers.getContractFactory("ArquimedesAaveStratMumbai")
+  const Strategy = await hre.ethers.getContractFactory("ArchimedesAaveStratMumbai")
 
   for (let currency in deployed) {
     let strategy = await Strategy.attach(deployed[currency].strategy);
