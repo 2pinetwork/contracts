@@ -5,7 +5,7 @@ async function verify(name, address) {
   await hre.tenderly.verify({name: name, address: address})
 }
 
-const deployed = JSON.parse(fs.readFileSync('./utils/arquimedes-deploy.80001.json', 'utf8'))
+const deployed = JSON.parse(fs.readFileSync('./utils/archimedes-deploy.80001.json', 'utf8'))
 async function main() {
     deployer = (await hre.ethers.getSigners())[0]
 
@@ -13,13 +13,13 @@ async function main() {
     // await token.deployed()
   // await verify('PiToken', token.address)
 
-    // arquimedes = await (await hre.ethers.getContractFactory("Arquimedes")).deploy(
+    // archimedes = await (await hre.ethers.getContractFactory("Archimedes")).deploy(
     //   "0xa8B9901E37D379af2649899Ab7fF73F758160728",
     //   (await ethers.provider.getBlockNumber()) + 100,
     //   (await hre.ethers.getSigners())[0].address
     // )
-    // await arquimedes.deployed()
-  // await verify('Arquimedes', arquimedes.address)
+    // await archimedes.deployed()
+  // await verify('Archimedes', archimedes.address)
 
 
   for (let currency in deployed) {
@@ -27,7 +27,7 @@ async function main() {
       continue
     }
 
-    strat = await (await hre.ethers.getContractFactory("ArquimedesAaveStratMumbai")).deploy(
+    strat = await (await hre.ethers.getContractFactory("ArchimedesAaveStratMumbai")).deploy(
       deployed[currency].token,
       deployed[currency].rate,
       deployed[currency].aave_rate_max,
@@ -39,7 +39,7 @@ async function main() {
 
     await strat.deployed()
     console.log(currency)
-    await verify('ArquimedesAaveStratMumbai', strat.address)
+    await verify('ArchimedesAaveStratMumbai', strat.address)
 
     // approve wanted from user
 

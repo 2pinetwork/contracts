@@ -27,7 +27,11 @@ const url = [
 
 module.exports = {
   etherscan: {
-    apiKey: process.env.POLYGON_API_KEY
+    apiKey: process.env.POLYGON_API_KEY,
+    optimizer: {
+      enabled: true,
+      runs: 10000
+    }
   },
   tenderly: {
      project: process.env.TENDERLY_PROJECT,

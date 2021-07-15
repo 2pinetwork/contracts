@@ -13,10 +13,16 @@ import "../interfaces/IPiToken.sol";
 
 interface IReferral {
     function recordReferral(address user, address referrer) external;
+    function referralPaid(address user, uint amount) external;
     function getReferrer(address user) external view returns (address);
 }
 
-// Arquimedes is the master of PiToken. He can make PiToken and he is a fair guy.
+interface IWMATIC is IERC20 {
+    function deposit() external payable;
+    function withdraw(uint wad) external;
+}
+
+// Archimedes is the master of PiToken. He can make PiToken and he is a fair guy.
 //
 // Note that it's ownable and the owner wields tremendous power. The ownership
 // will be transferred to a governance smart contract once PiToken is sufficiently
@@ -32,10 +38,13 @@ interface IStrategy {
     function withdraw(address _depositor, uint _shares) external;
 }
 
-contract Arquimedes is Ownable, ReentrancyGuard {
+contract Archimedes is Ownable, ReentrancyGuard {
     using Address for address;
     // using SafeMath for uint;
     using SafeERC20 for IERC20;
+
+    IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
+    // IWMATIC public constant wmatic = IWMATIC(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // Polygon
 
     // Info of each user.
     struct UserInfo {
@@ -89,19 +98,18 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     // The block number when PI mining starts.
     uint public startBlock;
 
-    // BATUDDO ALL YOURS
     // PiToken referral contract address.
-    IReferral public referral;
+    IReferral public referralMgr;
     // Referral commission rate in basis points.
-    uint16 public referralCommissionRate = 200;
+    uint16 public referralCommissionRate = 10; // 1%
     // Max referral commission rate: 5%.
-    uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 500;
+    uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 50; // 5%
+    uint16 public constant COMMISSION_RATE_PRECISION = 1000;
 
     event Deposit(address indexed user, uint indexed pid, uint amount);
     event Withdraw(address indexed user, uint indexed pid, uint amount);
     event EmergencyWithdraw(address indexed user, uint indexed pid, uint amount);
     event SetReferralAddress(address indexed user, IReferral indexed newAddress);
-    // BATUDO
     event ReferralCommissionPaid(address indexed user, address indexed referrer, uint commissionAmount);
 
     constructor(
@@ -118,17 +126,19 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         treasuryAddress = _treasury;
     }
 
+    receive() external payable { }
+
     // Add a new want token to the pool. Can only be called by the owner.
     function addNewPool(IERC20 _want, address _strat, uint _weighing) external onlyOwner {
         require(address(_want) != address(0), "Address zero not allowed");
-        require(poolExistence[_want] <= 0, "nonDuplicated: duplicated");
+        require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // Esto lo podriamos sacar para meter el mismo token con varios pools
         require(IStrategy(_strat).farm() == address(this), "Not a farm strategy");
 
         uint lastRewardBlock = block.number > startBlock ? block.number : startBlock;
 
         totalWeighing += _weighing;
 
-        poolExistence[_want] = 1;
+        poolExistence[_want] = 1; // Esto lo podriamos sacar para meter el mismo token con varios pools
 
         poolInfo.push(PoolInfo({
             want: _want,
@@ -141,6 +151,8 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
     // Update the given pool's PI allocation point and deposit fee. Can only be called by the owner.
     function changePoolWeighing(uint _pid, uint _weighing) external onlyOwner {
+        updatePool(_pid);
+
         totalWeighing = (totalWeighing - poolInfo[_pid].weighing) + _weighing;
         poolInfo[_pid].weighing = _weighing;
     }
@@ -234,74 +246,75 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         pool.lastRewardBlock = block.number;
     }
 
-    // Deposit want token to Arquimedes for PI allocation.
+    function depositMATIC(uint _pid, address _referrer) external payable {
+        uint _amount = msg.value;
+        require(_amount > 0, "Insufficient deposit");
+        require(address(poolInfo[_pid].want) == address(wmatic), "Only MATIC pool");
+
+        // Update pool rewards
+        updatePool(_pid);
+
+        // Record referral if it's needed
+        _recordReferral(_pid, _referrer);
+
+        // Pay rewards
+        calcPendingAndPayRewards(_pid);
+
+        // With that Archimedes already has the wmatics
+        wmatic.deposit{value: _amount}();
+
+        // Deposit in the strategy
+        _depositInStrategy(_pid, _amount);
+    }
+
+    // Deposit want token to Archimedes for PI allocation.
     function deposit(uint _pid, uint _amount, address _referrer) public nonReentrant {
         require(_amount > 0, "Insufficient deposit");
 
+        // Update pool rewards
         updatePool(_pid);
 
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        // Record referral if it's needed
+        _recordReferral(_pid, _referrer);
 
-        // BATUDO
-        if (address(referral) != address(0) && _referrer != address(0) && _referrer != msg.sender) {
-            referral.recordReferral(msg.sender, _referrer);
-        }
+        // Pay rewards
+        calcPendingAndPayRewards(_pid);
 
-        if (user.shares > 0) {
-            uint pending = ((user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
-            if (pending > 0) {
-                safePiTokenTransfer(msg.sender, pending);
-                // BATUDO
-                // payReferralCommission(msg.sender, pending);
-            }
-        }
+        // Transfer from user => Archimedes
+        poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
 
-        // uint _before = balance(pool);
-        pool.want.safeTransferFrom(msg.sender, address(this), _amount);
-        // pool.want.safeTransferFrom(address(this), pool.strategy, _amount);
-
-        // Esto no pasa asi derecho hay que arreglarlo
-
-        pool.want.safeIncreaseAllowance(pool.strategy, _amount);
-        uint shares = IStrategy(pool.strategy).deposit(msg.sender, _amount);
-
-        // This could be changed by Strategy(pool.strategy).balanceOf(msg.sender)
-        user.shares += shares;
-        // This is to "save" like the new amount of shares was paid
-        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
-
-        emit Deposit(msg.sender, _pid, _amount);
+        // Deposit in the strategy
+        _depositInStrategy(_pid, _amount);
     }
 
-    // Withdraw want token from Arquimedes.
+    // Withdraw want token from Archimedes.
     function withdraw(uint _pid, uint _shares) public nonReentrant {
+        require(_shares > 0, "0 shares");
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.shares >= _shares, "withdraw: not sufficient founds");
 
         updatePool(_pid);
 
+        // Pay rewards
+        calcPendingAndPayRewards(_pid);
+
         PoolInfo storage pool = poolInfo[_pid];
 
-        uint pending = ((user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
+        // Esto no pasa asi derecho hay que arreglarlo
+        user.shares -= _shares;
 
-        if (pending > 0) {
-            safePiTokenTransfer(msg.sender, pending);
-            // BATUDO
-            // payReferralCommission(msg.sender, pending);
-        }
+        uint _before = wantBalance(pool);
+        // this should burn shares and control the amount
+        IStrategy(pool.strategy).withdraw(msg.sender, _shares);
 
-        // WIthdraw with _shares in 0 is for harvest ??????
-        if (_shares > 0) {
-            // Esto no pasa asi derecho hay que arreglarlo
-            user.shares -= _shares;
+        uint _wantBalance = wantBalance(pool) - _before;
 
-            uint _before = wantBalance(pool);
-            // this should burn shares and control the amount
-            IStrategy(pool.strategy).withdraw(msg.sender, _shares);
+        // In case we have wmatic we unwrap to matic
+        if (address(pool.want) == address(wmatic)) {
+            wmatic.withdraw(_wantBalance);
 
-            // Como que para esto no deberia haber NADA
-            uint _wantBalance = wantBalance(pool) - _before;
+            payable(msg.sender).transfer(_wantBalance);
+        } else {
             pool.want.safeTransfer(address(msg.sender), _wantBalance);
         }
 
@@ -323,17 +336,10 @@ contract Arquimedes is Ownable, ReentrancyGuard {
 
         updatePool(_pid);
 
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        uint pending = calcPendingAndPayRewards(_pid);
 
-        if (user.shares > 0) {
-            uint pending = ((user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
-            if (pending > 0) {
-                safePiTokenTransfer(msg.sender, pending);
-                // BATUDO
-                // payReferralCommission(msg.sender, pending);
-                user.paidReward += pending;
-            }
+        if (pending > 0) {
+            userInfo[_pid][msg.sender].paidReward += pending;
         }
     }
 
@@ -368,6 +374,48 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         return _pool.want.balanceOf(address(this));
     }
 
+    // Record referral in referralMgr contract if needed
+    function _recordReferral(uint _pid, address _referrer) internal {
+        if (
+            userInfo[_pid][msg.sender].shares > 0 && // only if it's the first deposit
+                _referrer != address(0) &&
+                    _referrer != msg.sender &&
+                        address(referralMgr) != address(0)) {
+
+            referralMgr.recordReferral(msg.sender, _referrer);
+        }
+    }
+
+    function _depositInStrategy(uint _pid, uint _amount) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+
+        // Archimedes => strategy transfer & deposit
+        pool.want.safeIncreaseAllowance(pool.strategy, _amount);
+        uint shares = IStrategy(pool.strategy).deposit(msg.sender, _amount);
+
+        // This could be changed by Strategy(pool.strategy).balanceOf(msg.sender)
+        user.shares += shares;
+        // This is to "save" like the new amount of shares was paid
+        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
+
+        emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    // Pay rewards
+    function calcPendingAndPayRewards(uint _pid) internal returns (uint pending) {
+        UserInfo storage user = userInfo[_pid][msg.sender];
+
+        if (user.shares > 0) {
+            pending = ((user.shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
+
+            if (pending > 0) {
+                safePiTokenTransfer(msg.sender, pending);
+                payReferralCommission(pending);
+            }
+        }
+    }
+
     // Safe piToken transfer function, just in case if rounding error causes pool to not have enough PI.
     function safePiTokenTransfer(address _to, uint _amount) internal {
         uint piTokenBal = piToken.balanceOf(address(this));
@@ -380,11 +428,10 @@ contract Arquimedes is Ownable, ReentrancyGuard {
         require(transferSuccess, "safePiTokenTransfer: Transfer failed");
     }
 
-    // BATUDO
     // Update the referral contract address by the owner
-    function setReferralAddress(IReferral _referral) external onlyOwner {
-        referral = _referral;
-        emit SetReferralAddress(msg.sender, _referral);
+    function setReferralAddress(IReferral _newReferral) external onlyOwner {
+        referralMgr = _newReferral;
+        emit SetReferralAddress(msg.sender, referralMgr);
     }
 
     // Update referral commission rate by the owner
@@ -394,14 +441,15 @@ contract Arquimedes is Ownable, ReentrancyGuard {
     }
 
     // Pay referral commission to the referrer who referred this user.
-    function payReferralCommission(address _user, uint _pending) internal {
-        if (address(referral) != address(0) && referralCommissionRate > 0) {
-            address referrer = referral.getReferrer(_user);
-            uint commissionAmount = (_pending * referralCommissionRate) / 10000;
+    function payReferralCommission(uint _pending) internal {
+        if (address(referralMgr) != address(0) && referralCommissionRate > 0) {
+            address referrer = referralMgr.getReferrer(msg.sender);
+            uint commissionAmount = (_pending * referralCommissionRate) / COMMISSION_RATE_PRECISION;
 
             if (referrer != address(0) && commissionAmount > 0) {
                 piToken.mint(referrer, commissionAmount, txData);
-                emit ReferralCommissionPaid(_user, referrer, commissionAmount);
+                referralMgr.referralPaid(referrer, commissionAmount); // sum paid
+                emit ReferralCommissionPaid(msg.sender, referrer, commissionAmount);
             }
         }
     }
