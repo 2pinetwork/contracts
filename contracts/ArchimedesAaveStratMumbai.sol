@@ -21,7 +21,7 @@ contract ArchimedesAaveStratMumbai is ERC20, Pausable {
     mapping(address => bool) public harvesters;
 
     // Address of Archimedes
-    address public constant farm = address(0xc26948768EE50eB70E7EBA7CD847b925A5d6eEF0);
+    address public constant farm = address(0x94F1257FF7e4d5a5B0c1570e661bEc8cb4C14ff9);
 
     address public constant wmatic = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889);
 
