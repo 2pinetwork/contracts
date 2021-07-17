@@ -2,12 +2,24 @@
 pragma solidity 0.8.4;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+// import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
+import "hardhat/console.sol";
+interface ERC20Mintable {
+    function _mint(address account, uint256 amount) external;
+}
 
 contract PiToken is NativeSuperTokenProxy, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+
+    bytes32 internal constant ERC777Recipient_HASH = keccak256("ERC777TokensRecipient");
+
+    IERC1820Registry constant internal _ERC1820_REGISTRY =
+        IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
+
 
     uint public MAX_SUPPLY = 1e25; // 10M tokens
     // 10k airdrop + 25k for liquidity
@@ -35,6 +47,13 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
             '2Pi'
         );
 
+        _ERC1820_REGISTRY.setInterfaceImplementer(
+            address(this),
+            ERC777Recipient_HASH,
+            address(this)
+        );
+
+
         ISuperToken(address(this)).selfMint(msg.sender, INITIAL_SUPPLY, new bytes(0));
     }
 
@@ -46,6 +65,14 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     function addMinter(address newMinter) external {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
         _setupRole(MINTER_ROLE, newMinter);
+        // console.log("Agregado al rol ahora registrando...");
+
+        // _ERC1820_REGISTRY.setInterfaceImplementer(
+        //     address(this),
+        //     ERC777Recipient_HASH,
+        //     newMinter
+        // );
+        // console.log("Registrado...");
     }
 
     function mint(address _receiver, uint _supply, bytes calldata data) external {
@@ -63,9 +90,26 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(_supply <= _maxMintableSupply, "Can't mint more than expected");
 
         // selfMint directly to receiver requires that receiver has been registered in ERC1820
+        console.log('Por mintear');
         self().selfMint(address(this), _supply, data);
+        // console.log("Viene el mint");
+        // ERC20Mintable(address(this))._mint(_receiver, _supply);
+        // console.log("Paso el mint");
+        console.log('Por transferir');
         self().transfer(_receiver, _supply);
     }
+
+    function tokensReceived(
+        address /*operator*/,
+        address /*from*/,
+        address /*to*/,
+        uint256 /*amount*/,
+        bytes calldata /*userData*/,
+        bytes calldata /*operatorData*/
+    ) external view {
+        require(msg.sender == address(this), "Invalid token");
+    }
+
 
     // For future use, just in case
     function addBurner(address newBurner) external {

@@ -1,29 +1,26 @@
 {
-  "PiToken": "0xd7841c3595E172da36874C24750C07567243e00A",
-  "Arquimedes": "0xc26948768EE50eB70E7EBA7CD847b925A5d6eEF0",
-  "Referral": "0xb0954E472B4d0f6769169157aBf1Df40D68631EF",
   "MATIC": {
-    "strategy": "0x07987EE510810557A906FA68b2382f47a559a59F",
+    "strategy": "0x0380e6C974B355b86843eeE1eb19EbeB616C4d03",
     "pid": 0
   },
   "DAI": {
-    "strategy": "0xD1929B82A6F8c8286BB817AB657709A1343c51dc",
+    "strategy": "0xB1c4ddc494695884A8c2bce1e348fB4336800f78",
     "pid": 1
   },
   "USDT": {
-    "strategy": "0x54f25070Da6d51C2de1Fe8396D50c7bA3D4BDa41",
+    "strategy": "0x91A47A8155daF681722e0b2AEbc2f5389C6f5982",
     "pid": 2
   },
   "USDC": {
-    "strategy": "0xD94bA078Fcb5fF602f130ac5221a13F7c8653eb6",
+    "strategy": "0xbabe873DB2c8A56b32ebd9AfE8D1Aa23B781C67a",
     "pid": 3
   },
   "ETH": {
-    "strategy": "0xF765E5113c13D5E7525a3F19Cc97fC2442C12ff8",
+    "strategy": "0x53B50817fa9405afAA84f8990Fe788D7Af97736A",
     "pid": 4
   },
   "BTC": {
-    "strategy": "0xe21dd559a1B508Cec8a0C57B1954538De1Db5221",
+    "strategy": "0x489E4337b0212138b80392e868f7B547420F83D0",
     "pid": 5
   }
 }

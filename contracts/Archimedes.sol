@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../interfaces/IPiToken.sol";
+import "hardhat/console.sol";
 
 interface IReferral {
     function recordReferral(address user, address referrer) external;
@@ -272,17 +273,22 @@ contract Archimedes is Ownable, ReentrancyGuard {
         require(_amount > 0, "Insufficient deposit");
 
         // Update pool rewards
+        console.log("update");
         updatePool(_pid);
 
+        console.log("ref");
         // Record referral if it's needed
         _recordReferral(_pid, _referrer);
 
+        console.log("calcReward");
         // Pay rewards
         calcPendingAndPayRewards(_pid);
 
+        console.log("transfer");
         // Transfer from user => Archimedes
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
 
+        console.log("deposit");
         // Deposit in the strategy
         _depositInStrategy(_pid, _amount);
     }
@@ -477,4 +483,21 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function balanceOf(uint _pid, address _user) public view returns (uint) {
         return userInfo[_pid][_user].shares;
     }
+    // 777
+    function tokensReceived(
+            address /*operator*/,
+            address from,
+            address /*to*/,
+            uint256 amount,
+            bytes calldata /*userData*/,
+            bytes calldata /*operatorData*/
+    ) external  {
+                console.log("Entro al tokens received:", from);
+                console.log("Entro al tokens received:", amount);
+                // require(msg.sender == address(this), "Invalid token");
+
+                // like approve + transferFrom, but only one tx
+                // _balances[from] += amount;
+            }
+
 }

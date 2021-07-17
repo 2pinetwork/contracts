@@ -1,30 +1,14 @@
-/* global ethers, web3, describe, before, beforeEach, it */
-const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
-const { Framework } = require('@superfluid-finance/js-sdk');
-const {
-  builtTruffleContractLoader
-} = require('@superfluid-finance/ethereum-contracts/scripts/utils');
-
+/* global ethers, describe, before, beforeEach, it */
 const { expect } = require('chai')
-
-const toNumber = function (value) {
-  // Needed for BigNumber lib
-  return value.toLocaleString('fullwide', { useGrouping: false })
-}
-
-const errorHandler = err => {
-  if (err) throw err;
-};
+const { toNumber, initSuperFluid, createPiToken } = require('./helpers')
 
 describe('PiToken', () => {
-  let PiToken
   let piToken
   let owner
   let bob
   let alice
   let INITIAL_SUPPLY
   let MAX_SUPPLY
-  let sf
   let superTokenFactory
   const txData = 0x0
 
@@ -32,37 +16,14 @@ describe('PiToken', () => {
   before(async () => {
     [owner, bob, alice] = await ethers.getSigners()
 
-    await deployFramework(errorHandler, { web3: web3, from: owner.address });
-
-    sf = new Framework({
-      web3:           web3,
-      version:        'test',
-      contractLoader: builtTruffleContractLoader
-    });
-
-    await sf.initialize()
-
-    superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
-      await sf.host.getSuperTokenFactory.call()
-    );
+    superTokenFactory = await initSuperFluid(owner);
   })
 
   beforeEach(async () => {
-    PiToken = await ethers.getContractFactory('PiToken');
-    piToken = await PiToken.deploy();
-    await piToken.deployed();
-
-    await superTokenFactory.initializeCustomSuperToken(piToken.address);
-    piToken = await ethers.getContractAt('IPiToken', piToken.address)
+    piToken = await createPiToken(owner, superTokenFactory)
 
     INITIAL_SUPPLY = parseInt(await piToken.INITIAL_SUPPLY(), 10)
     MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
-
-    expect(await piToken.totalSupply()).to.equal(0)
-    expect(await piToken.balanceOf(owner.address)).to.equal(0)
-    expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
-
-    await (await piToken.init()).wait()
 
     expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
     expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
