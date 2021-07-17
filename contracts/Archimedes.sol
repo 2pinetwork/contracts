@@ -492,8 +492,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
             bytes calldata /*userData*/,
             bytes calldata /*operatorData*/
     ) external  {
-                console.log("Entro al tokens received:", from);
-                console.log("Entro al tokens received:", amount);
+                console.log("received:", from);
+                console.log("received:", amount);
                 // require(msg.sender == address(this), "Invalid token");
 
                 // like approve + transferFrom, but only one tx
