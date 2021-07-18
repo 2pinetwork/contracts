@@ -29,6 +29,22 @@ const erc1820 = async () => {
   );
 }
 
+const waitFor = async (fn) => {
+  let w = await fn
+
+  await w.wait()
+
+  return w
+}
+
+const deploy = async (name, ...args) => {
+  const contract = await (await ethers.getContractFactory(name)).deploy(...args)
+
+  await contract.deployed()
+
+  return contract
+}
+
 const initSuperFluid = async (owner) => {
   await deployFramework(errorHandler, { web3: web3, from: owner.address });
   const sf = new Framework({ web3: web3, version: 'test' });
@@ -42,8 +58,8 @@ const initSuperFluid = async (owner) => {
 }
 
 const createPiToken = async (owner, superTokenFactory) => {
-  let piToken = await (await ethers.getContractFactory('PiToken')).deploy();
-  await piToken.deployed();
+  let piToken = await deploy('PiToken');
+  // await piToken.deployed();
 
   await superTokenFactory.initializeCustomSuperToken(piToken.address);
   piToken = await ethers.getContractAt('IPiToken', piToken.address)
@@ -59,7 +75,9 @@ const createPiToken = async (owner, superTokenFactory) => {
   return piToken
 }
 
+const zeroAddress = '0x' + '0'.repeat(40)
+
 module.exports = {
   toNumber, initSuperFluid, erc1820, getBlock, mineNTimes,
-  createPiToken
+  createPiToken, waitFor, deploy, zeroAddress
 }
