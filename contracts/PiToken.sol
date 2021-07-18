@@ -2,20 +2,15 @@
 pragma solidity 0.8.4;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-// import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
-
-interface ERC20Mintable {
-    function _mint(address account, uint256 amount) external;
-}
 
 contract PiToken is NativeSuperTokenProxy, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
-    bytes32 internal constant ERC777Recipient_HASH = keccak256("ERC777TokensRecipient");
+    bytes32 internal constant ERC777Recipient = keccak256("ERC777TokensRecipient");
 
     IERC1820Registry constant internal _ERC1820_REGISTRY =
         IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
@@ -49,7 +44,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
         _ERC1820_REGISTRY.setInterfaceImplementer(
             address(this),
-            ERC777Recipient_HASH,
+            ERC777Recipient,
             address(this)
         );
 
@@ -65,14 +60,13 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     function addMinter(address newMinter) external {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
         _setupRole(MINTER_ROLE, newMinter);
-        // console.log("Agregado al rol ahora registrando...");
 
+        // This part is under investigation to make Archimedes a recipient
         // _ERC1820_REGISTRY.setInterfaceImplementer(
         //     address(this),
         //     ERC777Recipient_HASH,
         //     newMinter
         // );
-        // console.log("Registrado...");
     }
 
     function mint(address _receiver, uint _supply, bytes calldata data) external {
@@ -91,7 +85,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
         // selfMint directly to receiver requires that receiver has been registered in ERC1820
         self().selfMint(address(this), _supply, data);
-        self().transfer(_receiver, _supply);
+        require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
     }
 
     function tokensReceived(

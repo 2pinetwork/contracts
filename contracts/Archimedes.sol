@@ -5,7 +5,7 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
+// import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../interfaces/IPiToken.sol";
@@ -38,8 +38,7 @@ interface IStrategy {
 }
 
 contract Archimedes is Ownable, ReentrancyGuard {
-    using Address for address;
-    // using SafeMath for uint;
+    // using Address for address;
     using SafeERC20 for IERC20;
 
     IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
@@ -72,7 +71,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     IPiToken public piToken;
-    bytes txData = new bytes(0);
+    bytes txData = new bytes(0); // just to support SuperToken mint
     address public treasuryAddress;
 
     // Used to made multiplications and divitions over shares
@@ -89,7 +88,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Pool existence mapping to prevent duplication
-    mapping(IERC20 => uint) public poolExistence;
+    // mapping(IERC20 => uint) public poolExistence; // anti duplication?
     // Info of each user that stakes tokens.
     mapping(uint => mapping(address => UserInfo)) public userInfo;
     // Total weighing. Must be the sum of all pools weighing.
@@ -130,14 +129,14 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Add a new want token to the pool. Can only be called by the owner.
     function addNewPool(IERC20 _want, address _strat, uint _weighing) external onlyOwner {
         require(address(_want) != address(0), "Address zero not allowed");
-        require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // Esto lo podriamos sacar para meter el mismo token con varios pools
+        // require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // anti duplication?
         require(IStrategy(_strat).farm() == address(this), "Not a farm strategy");
 
         uint lastRewardBlock = block.number > startBlock ? block.number : startBlock;
 
         totalWeighing += _weighing;
 
-        poolExistence[_want] = 1; // Esto lo podriamos sacar para meter el mismo token con varios pools
+        // poolExistence[_want] = 1; // Anti duplication?
 
         poolInfo.push(PoolInfo({
             want: _want,
@@ -245,7 +244,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
         pool.lastRewardBlock = block.number;
     }
 
-    function depositMATIC(uint _pid, address _referrer) external payable {
+    // Direct MATIC (native) deposit
+    function depositMATIC(uint _pid, address _referrer) external payable nonReentrant {
         uint _amount = msg.value;
         require(_amount > 0, "Insufficient deposit");
         require(address(poolInfo[_pid].want) == address(wmatic), "Only MATIC pool");
@@ -466,7 +466,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         return _totalSupply == 0 ? 1e18 : ((strat.balanceOf() * 1e18) / _totalSupply);
     }
-
     function decimals(uint _pid) public view returns (uint) {
         return IStrategy(poolInfo[_pid].strategy).decimals();
     }
@@ -476,19 +475,19 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function balanceOf(uint _pid, address _user) public view returns (uint) {
         return userInfo[_pid][_user].shares;
     }
-    // 777
+
+    // 777 not working yet
     function tokensReceived(
-            address /*operator*/,
-            address from,
-            address /*to*/,
-            uint256 amount,
-            bytes calldata /*userData*/,
-            bytes calldata /*operatorData*/
+        address /*operator*/,
+        address from,
+        address /*to*/,
+        uint256 amount,
+        bytes calldata /*userData*/,
+        bytes calldata /*operatorData*/
     ) external  {
-                // require(msg.sender == address(this), "Invalid token");
+            // require(msg.sender == address(this), "Invalid token");
 
-                // like approve + transferFrom, but only one tx
-                // _balances[from] += amount;
-            }
-
+            // like approve + transferFrom, but only one tx
+            // _balances[from] += amount;
+        }
 }
