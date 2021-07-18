@@ -6,11 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-// import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 import "../interfaces/IPiToken.sol";
-import "hardhat/console.sol";
 
 interface IReferral {
     function recordReferral(address user, address referrer) external;
@@ -273,22 +271,17 @@ contract Archimedes is Ownable, ReentrancyGuard {
         require(_amount > 0, "Insufficient deposit");
 
         // Update pool rewards
-        console.log("update");
         updatePool(_pid);
 
-        console.log("ref");
         // Record referral if it's needed
         _recordReferral(_pid, _referrer);
 
-        console.log("calcReward");
         // Pay rewards
         calcPendingAndPayRewards(_pid);
 
-        console.log("transfer");
         // Transfer from user => Archimedes
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
 
-        console.log("deposit");
         // Deposit in the strategy
         _depositInStrategy(_pid, _amount);
     }
@@ -383,7 +376,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Record referral in referralMgr contract if needed
     function _recordReferral(uint _pid, address _referrer) internal {
         if (
-            userInfo[_pid][msg.sender].shares > 0 && // only if it's the first deposit
+            userInfo[_pid][msg.sender].shares <= 0 && // only if it's the first deposit
                 _referrer != address(0) &&
                     _referrer != msg.sender &&
                         address(referralMgr) != address(0)) {
@@ -450,8 +443,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function payReferralCommission(uint _pending) internal {
         if (address(referralMgr) != address(0) && referralCommissionRate > 0) {
             address referrer = referralMgr.getReferrer(msg.sender);
-            uint commissionAmount = (_pending * referralCommissionRate) / COMMISSION_RATE_PRECISION;
 
+            uint commissionAmount = (_pending * referralCommissionRate) / COMMISSION_RATE_PRECISION;
             if (referrer != address(0) && commissionAmount > 0) {
                 piToken.mint(referrer, commissionAmount, txData);
                 referralMgr.referralPaid(referrer, commissionAmount); // sum paid
@@ -492,8 +485,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
             bytes calldata /*userData*/,
             bytes calldata /*operatorData*/
     ) external  {
-                console.log("received:", from);
-                console.log("received:", amount);
                 // require(msg.sender == address(this), "Invalid token");
 
                 // like approve + transferFrom, but only one tx

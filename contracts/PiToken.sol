@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
-import "hardhat/console.sol";
+
 interface ERC20Mintable {
     function _mint(address account, uint256 amount) external;
 }
@@ -90,12 +90,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(_supply <= _maxMintableSupply, "Can't mint more than expected");
 
         // selfMint directly to receiver requires that receiver has been registered in ERC1820
-        console.log('Por mintear');
         self().selfMint(address(this), _supply, data);
-        // console.log("Viene el mint");
-        // ERC20Mintable(address(this))._mint(_receiver, _supply);
-        // console.log("Paso el mint");
-        console.log('Por transferir');
         self().transfer(_receiver, _supply);
     }
 
