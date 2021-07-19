@@ -1,26 +1,26 @@
 {
   "MATIC": {
-    "strategy": "0x0380e6C974B355b86843eeE1eb19EbeB616C4d03",
+    "strategy": "0xedCf68c00AaD89Ee90498A74f33dE2fd99B7390a",
     "pid": 0
   },
   "DAI": {
-    "strategy": "0xB1c4ddc494695884A8c2bce1e348fB4336800f78",
+    "strategy": "0xc992A8783C1ED3670e2c28F948D33B70726C65B9",
     "pid": 1
   },
   "USDT": {
-    "strategy": "0x91A47A8155daF681722e0b2AEbc2f5389C6f5982",
+    "strategy": "0x34ffaae803283Ed8e183f14aDf672Ad5395756B7",
     "pid": 2
   },
   "USDC": {
-    "strategy": "0xbabe873DB2c8A56b32ebd9AfE8D1Aa23B781C67a",
+    "strategy": "0x1f98A06180dBca63a825Fb630D08e535AC82f695",
     "pid": 3
   },
   "ETH": {
-    "strategy": "0x53B50817fa9405afAA84f8990Fe788D7Af97736A",
+    "strategy": "0xbE02D523a328d2eb66252f977089a115309E4FdD",
     "pid": 4
   },
   "BTC": {
-    "strategy": "0x489E4337b0212138b80392e868f7B547420F83D0",
+    "strategy": "0x81cDD2482D54815BF17da35961D6D129119122A0",
     "pid": 5
   }
 }
