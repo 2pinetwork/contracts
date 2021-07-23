@@ -15,20 +15,42 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     IERC1820Registry constant internal _ERC1820_REGISTRY =
         IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
 
+    uint public MAX_SUPPLY = 62.8e25; // 62.8M tokens (~ 2 * pi)
+    uint public INITIAL_SUPPLY = (
+        3140000 +  // Airdrop + incentives
+         628000 +  // Exchange
+        1570000    // Future rounds (investors)
+    ) * (10 ** 18);
 
-    uint public MAX_SUPPLY = 1e25; // 10M tokens
-    // 10k airdrop + 25k for liquidity
-    uint public INITIAL_SUPPLY = 35000e18;
+    uint public currentTranche = 0; // first month rate
 
-    // Be sure that the mint supply never be more than the expected per block
-    // mechanism to avoid any "hack" or problem with mint/minter
-    // Community reward per block => 0.233e18
-    // Treasury reward per block => 0.033e18
-    // Max reward per block => 0.27e18
-    uint public constant MAX_MINT_PER_BLOCK = 0.27e18;
-    uint private startRewardsBlock;
+    // Rates to mint per block
+    uint[] public TRANCHES_COMMUNITY_MINT_PER_BLOCK;
+
+    uint[] public EXPECTED_MINTED_PER_TRANCHE;
+    uint public INVESTORS_MINT_RATIO = 0.41819e18; // 6.28M in 1 year
+    uint public FOUNDERS_MINT_RATIO =  0.31364e18; // 9.42M in 2 years
+
+    // variable to keep track in which block the current tranche
+    // was initialized.
+    uint private tranchesBlock;
 
     constructor() {
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[0] = 0.25439e18; // for 1 month
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[1] = 0.50879e18; // for 2 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[2] = 0.63599e18; // for 6 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[3] = 1.09027e18; // for 3 months, first year =D
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[4] = 1.09027e18; // for 4 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[5] = 1.58998e18; // for 8 months until the end
+
+        // ACCUMULATED TOKENS for minting everything
+        EXPECTED_MINTED_PER_TRANCHE[0] =  1229833e18 + INITIAL_SUPPLY; // for 1 month
+        EXPECTED_MINTED_PER_TRANCHE[1] =  4317500e18 + INITIAL_SUPPLY; // for 2 months
+        EXPECTED_MINTED_PER_TRANCHE[2] = 14522500e18 + INITIAL_SUPPLY; // for 6 months
+        EXPECTED_MINTED_PER_TRANCHE[3] = 21307142e18 + INITIAL_SUPPLY; // for 3 months
+        EXPECTED_MINTED_PER_TRANCHE[4] = 28260000e18 + INITIAL_SUPPLY; // for 4 months until the end
+        EXPECTED_MINTED_PER_TRANCHE[5] = 47100000e18 + INITIAL_SUPPLY; // for 8 months until the end
+
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
@@ -48,13 +70,25 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
             address(this)
         );
 
-
         ISuperToken(address(this)).selfMint(msg.sender, INITIAL_SUPPLY, new bytes(0));
     }
 
     function initRewardsOn(uint _blockNumber) external {
-        require(startRewardsBlock <= 0, "Already set");
-        startRewardsBlock = _blockNumber;
+        require(tranchesBlock <= 0, "Already set");
+        tranchesBlock = _blockNumber;
+    }
+
+    // will be changed only when the entire amount for the period has been minted
+    function increaseCurrentRate() external {
+        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
+        require(
+            EXPECTED_MINTED_PER_TRANCHE[currentTranche] < self().totalSupply(),
+            "not yet"
+        );
+        require(currentTranche < 6, "Mint is finished");
+
+        currentTranche += 1;
+        tranchesBlock = block.number;
     }
 
     function addMinter(address newMinter) external {
@@ -73,14 +107,22 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
-        require(startRewardsBlock > 0, "Rewards not initialized");
+        require(tranchesBlock > 0, "Rewards not initialized");
+        require(tranchesBlock < block.number, "Still waiting for rewards block");
         require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 10M");
 
         // double check for mint
-        uint _maxMintableSupply = (
-            (block.number - startRewardsBlock) * MAX_MINT_PER_BLOCK
-        ) - (self().totalSupply() - INITIAL_SUPPLY);
+        uint _maxMintableSupply = self().totalSupply();
 
+        // If the current trance is the first one we don't need to rest the expected minted
+        // but if it's greater than 0, we have to rest the expected minted to have
+        // the maximum amount to mint for the current block.
+        if (currentTranche > 0) {
+            _maxMintableSupply -= EXPECTED_MINTED_PER_TRANCHE[currentTranche - 1];
+        }
+
+        // Get the mintPerBlock for the current tranche
+        _maxMintableSupply -= (block.number - tranchesBlock) * totalMintPerBlock();
         require(_supply <= _maxMintableSupply, "Can't mint more than expected");
 
         // selfMint directly to receiver requires that receiver has been registered in ERC1820
@@ -120,4 +162,26 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     function cap() external view returns (uint) {
         return MAX_SUPPLY;
     }
+
+    function communityMintPerBlock() public view returns (uint) {
+        if (self().totalSupply() < MAX_SUPPLY) {
+            return TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche];
+        } else {
+            return 0;
+        }
+    }
+
+    function totalMintPerBlock() internal view returns (uint) {
+        if (self().totalSupply() < MAX_SUPPLY) {
+            uint perBlock = TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche] + FOUNDERS_MINT_RATIO;
+
+            // 0, 1, 2, 3 is the first year so it has to include investors ratio
+            if (currentTranche < 4) { perBlock += INVESTORS_MINT_RATIO; }
+
+            return perBlock;
+        } else {
+            return 0;
+        }
+    }
+
 }
