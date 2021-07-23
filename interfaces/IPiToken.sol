@@ -11,5 +11,6 @@ interface IPiToken is ISuperToken {
     function INITIAL_SUPPLY() external view returns(uint);
     function MAX_SUPPLY() external view returns(uint);
     function cap() external view returns(uint);
+    function communityMintPerBlock() external view returns(uint);
     function init() external;
 }

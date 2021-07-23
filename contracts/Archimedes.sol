@@ -41,6 +41,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // using Address for address;
     using SafeERC20 for IERC20;
 
+    // Used for MATIC (native token) deposits/withdraws
     IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
     // IWMATIC public constant wmatic = IWMATIC(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // Polygon
 
@@ -72,18 +73,12 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     IPiToken public piToken;
     bytes txData = new bytes(0); // just to support SuperToken mint
-    address public treasuryAddress;
 
     // Used to made multiplications and divitions over shares
     uint public constant SHARE_PRECISION = 1e18;
 
-    // PI tokens created per block for community, 7M minted in ~2 years
-    uint public piTokenPerBlock = 0.233067e18;
-    uint public communityLeftToMint = 7000000e18;
-
-    // PI tokens created per block for treasury, advisors, etc, 1M minted in ~2 years
-    uint public treasuryTokensPerCommunity = 7;
-    uint public treasuryLeftToMint = 1000000e18;
+    // PI tokens created per block for community, 31.4M minted in 2 years
+    uint public communityLeftToMint = 3.14e25; // :sunglasses:
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
@@ -121,7 +116,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         piToken = _piToken;
         startBlock = _startBlock;
-        treasuryAddress = _treasury;
     }
 
     receive() external payable { }
@@ -162,9 +156,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // View function to see pending PIes on frontend.
     function pendingPiToken(uint _pid, address _user) external view returns (uint) {
-        if (communityLeftToMint <= 0) {
-            return 0;
-        }
+        if (communityLeftToMint <= 0) { return 0; }
 
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
@@ -174,7 +166,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         if (block.number > pool.lastRewardBlock && sharesTotal > 0) {
             uint multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-            uint piTokenReward = (multiplier * piTokenPerBlock * pool.weighing) / totalWeighing;
+            uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
         return ((user.shares * accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
@@ -192,7 +184,10 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function updatePool(uint _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
 
+        // If same block as last update return
         if (block.number <= pool.lastRewardBlock) { return; }
+        // If community Mint is already finished
+        if (communityLeftToMint <= 0) { return; }
 
         uint sharesTotal = IStrategy(pool.strategy).totalSupply();
 
@@ -200,10 +195,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
             pool.lastRewardBlock = block.number;
             return;
         }
-        if (treasuryLeftToMint <= 0 && communityLeftToMint <= 0) { return; }
 
         uint multiplier = getMultiplier(pool.lastRewardBlock, block.number);
-        uint piTokenReward = (multiplier * piTokenPerBlock * pool.weighing) / totalWeighing;
+        uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
 
         // No rewards =( update lastRewardBlock
         if (piTokenReward <= 0) {
@@ -211,36 +205,15 @@ contract Archimedes is Ownable, ReentrancyGuard {
             return;
         }
 
-        // Tokens bounded for treasury
-        if (treasuryLeftToMint > 0) {
-            // 7 treasury tokens per 1 reward token
-            uint treasuryAmount = piTokenReward / treasuryTokensPerCommunity;
-
-            // If the amount is greater than the left to mint
-            if (treasuryAmount > treasuryLeftToMint) {
-                treasuryAmount = treasuryLeftToMint;
-            }
-
-            if (treasuryAmount > 0) {
-                treasuryLeftToMint -= treasuryAmount;
-                piToken.mint(treasuryAddress, treasuryAmount, txData);
-            }
+        // If the reward is greater than the left to mint
+        if (piTokenReward > communityLeftToMint) {
+            piTokenReward = communityLeftToMint;
         }
 
-        // Community rewards for the pool
-        if (communityLeftToMint > 0) {
-            // If the reward is greater than the left to mint
-            if (piTokenReward > communityLeftToMint) {
-                piTokenReward = communityLeftToMint;
-            }
+        communityLeftToMint -= piTokenReward;
+        piToken.mint(address(this), piTokenReward, txData);
 
-            communityLeftToMint -= piTokenReward;
-            piToken.mint(address(this), piTokenReward, txData);
-
-            pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
-        }
-
-        // in case that treasury was minted but not the community (weird)
+        pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         pool.lastRewardBlock = block.number;
     }
 
@@ -310,6 +283,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         // In case we have wmatic we unwrap to matic
         if (address(pool.want) == address(wmatic)) {
+            // Unwrap WMATIC => MATIC
             wmatic.withdraw(_wantBalance);
 
             payable(msg.sender).transfer(_wantBalance);
@@ -477,17 +451,19 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // 777 not working yet
-    function tokensReceived(
-        address /*operator*/,
-        address from,
-        address /*to*/,
-        uint256 amount,
-        bytes calldata /*userData*/,
-        bytes calldata /*operatorData*/
-    ) external  {
-            // require(msg.sender == address(this), "Invalid token");
+    // function tokensReceived(
+    //     address /*operator*/,
+    //     address from,
+    //     address /*to*/,
+    //     uint256 /*amount*/,
+    //     bytes calldata /*userData*/,
+    //     bytes calldata /*operatorData*/
+    // ) external view {
+    //     require(from == address(piToken), "Invalid token");
+    // }
 
-            // like approve + transferFrom, but only one tx
-            // _balances[from] += amount;
-        }
+    function piTokenPerBlock() internal view returns (uint) {
+        // Skip 1% of minting per block for Referrals
+        return piToken.communityMintPerBlock() * 99 / 100;
+    }
 }
