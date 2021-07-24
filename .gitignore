@@ -8,6 +8,8 @@ artifacts
 # utils
 addresses
 yarn.lock
+coverage/
+coverage.json
 
 # Ignore tmp or utils
 scripts/

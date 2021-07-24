@@ -1,7 +1,20 @@
 /* global ethers, describe, before, beforeEach, it */
 const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
-const { toNumber, initSuperFluid, createPiToken } = require('./helpers')
+const {
+  toNumber, initSuperFluid, createPiToken, expectedOnlyAdmin,
+  waitFor, getBlock, sleep, zeroAddress
+} = require('./helpers')
+
+const MINT_DATA = [
+  { community: 0.25439e18, expected: (new BigNumber( 1229833e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.25e6},
+  { community: 0.50879e18, expected: (new BigNumber( 4317500e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 3.8e6 },
+  { community: 0.63599e18, expected: (new BigNumber(14522500e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.2e7 },
+  { community: 1.09027e18, expected: (new BigNumber(21307142e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.6e7 },
+  { community: 1.09027e18, expected: (new BigNumber(28260000e18)), founders: 0.31364e18, investors: 0         , blocks: 2.1e7 },
+  { community: 1.58998e18, expected: (new BigNumber(47100000e18)), founders: 0.31364e18, investors: 0         , blocks: 3.5e7 }
+]
+
 
 describe('PiToken', () => {
   let piToken
@@ -9,7 +22,6 @@ describe('PiToken', () => {
   let bob
   let alice
   let INITIAL_SUPPLY
-  let MAX_SUPPLY
   let superTokenFactory
   const txData = 0x0
 
@@ -24,10 +36,46 @@ describe('PiToken', () => {
     piToken = await createPiToken(owner, superTokenFactory)
 
     INITIAL_SUPPLY = parseInt(await piToken.INITIAL_SUPPLY(), 10)
-    MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
 
     expect(await piToken.totalSupply()).to.equal(toNumber(INITIAL_SUPPLY))
     expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
+  })
+
+  describe('init', () => {
+    it('Should revert for non admins', async () => {
+      expectedOnlyAdmin(piToken.connect(bob).init)
+    })
+
+    it('Should revert second call', async () => {
+      expect(piToken.init()).to.be.revertedWith('Initializable: contract is already initialized')
+    })
+  })
+
+  describe('initRewardsOn', () => {
+    it('Should revert for non admins', async () => {
+      expectedOnlyAdmin(piToken.connect(bob).initRewardsOn, 3)
+    })
+
+    it('Should revert for if already set', async () => {
+      await piToken.initRewardsOn(2)
+
+      expect(
+        piToken.initRewardsOn(3)
+      ).to.be.revertedWith('Already set')
+    })
+  })
+
+  describe('increaseCurrentTranche', () => {
+    it('Should revert for non admins', async () => {
+      await expectedOnlyAdmin(piToken.connect(alice).increaseCurrentTranche)
+    })
+
+
+    it('Should revert while totalSupply is less than expected', async () => {
+      expect(
+        piToken.increaseCurrentTranche()
+      ).to.be.revertedWith('not yet')
+    })
   })
 
   describe('Transactions', () => {
@@ -157,6 +205,10 @@ describe('PiToken', () => {
       block = await ethers.provider.send('eth_blockNumber');
     })
 
+    it('Should revert for non admins', async () => {
+      expectedOnlyAdmin(piToken.connect(bob).addMinter, bob.address)
+    })
+
     it('Should only mint for minters', async () => {
       await piToken.initRewardsOn(block - 5)
 
@@ -174,10 +226,31 @@ describe('PiToken', () => {
       )
     })
 
+    it('Should revert for zero address receiver', async () => {
+      expect(piToken.connect(bob).mint(zeroAddress, 1, txData)).to.be.revertedWith(
+        "Can't mint to zero address"
+      )
+    })
+
+    it('Should revert with zero amount', async () => {
+      expect(piToken.connect(bob).mint(owner.address, 0, txData)).to.be.revertedWith(
+        'Insufficient supply'
+      )
+    })
+
     it('Should only mint if startRewardsBlock is initialized', async () => {
       await expect(
         piToken.connect(bob).mint(bob.address, 1, txData)
       ).to.be.revertedWith('Rewards not initialized')
+    })
+
+
+    it('Should revert for future rewards block', async () => {
+      await piToken.initRewardsOn(block + 6);
+
+      expect(piToken.connect(bob).mint(owner.address, 1, txData)).to.be.revertedWith(
+        'Still waiting for rewards block'
+      )
     })
 
     it('Should only mint until max mint per block', async () => {
@@ -196,22 +269,6 @@ describe('PiToken', () => {
       await expect(
         piToken.connect(bob).mint(bob.address, n, txData)
       ).to.be.revertedWith("Can't mint more than expected")
-    })
-
-    it.skip('Should only mint until MAX SUPPLY', async () => {
-      await piToken.connect(bob).mint(
-        bob.address,
-        toNumber(MAX_SUPPLY - INITIAL_SUPPLY),
-        txData
-      )
-
-      expect(await piToken.totalSupply()).to.equal(
-        toNumber(MAX_SUPPLY)
-      )
-
-      await expect(
-        piToken.connect(bob).mint(bob.address, 1, txData)
-      ).to.be.revertedWith('Mint capped to 10M')
     })
   })
 
