@@ -13,9 +13,9 @@ contract PiVault is ERC20 {
     IERC20 public token;
 
     /**
-     * @dev Sets the value of {token} to the token that the vault will
-     * hold as underlying value.
-     * @param _token the token to maximize.
+     * @dev Sets the address of 2pi token, the one that the vault will hold
+     * as underlying value.
+     * @param _token the 2pi token.
      * @param _name the name of the vault token.
      * @param _symbol the symbol of the vault token.
      */
@@ -32,11 +32,8 @@ contract PiVault is ERC20 {
 
     /**
      * @dev It calculates the total underlying value of {token} held by the system.
-     * It takes into account the vault contract balance, the strategy contract balance
-     * and the balance deployed in other contracts as part of the strategy.
      */
     function balance() public view returns (uint) {
-        // We should add here the strategy balance
         return token.balanceOf(address(this));
     }
 
@@ -59,7 +56,7 @@ contract PiVault is ERC20 {
 
     /**
      * @dev The entrypoint of funds into the system. People deposit with this function
-     * into the vault. The vault is then in charge of sending funds into the strategy.
+     * into the vault.
      */
     function deposit(uint _amount) public {
         uint shares = 0;
@@ -87,8 +84,7 @@ contract PiVault is ERC20 {
     }
 
     /**
-     * @dev Function to exit the system. The vault will withdraw the required tokens
-     * from the strategy and pay up the token holder.
+     * @dev Function to exit the system. The vault will pay up the token holder.
      */
     function withdraw(uint _amount) public {
         require(_amount <= balanceOf(msg.sender), "Can't withdraw more than available");
