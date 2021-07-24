@@ -2,7 +2,7 @@
 const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
 const {
-  toNumber, initSuperFluid, createPiToken, getBlock, mineNTimes,
+  toNumber, createPiToken, getBlock, mineNTimes,
   waitFor, deploy, zeroAddress
 } = require('./helpers')
 
@@ -16,8 +16,6 @@ describe('Archimedes', () => {
 
   before(async () => {
     [owner, bob, alice] = await ethers.getSigners()
-
-    superTokenFactory = await initSuperFluid(owner);
   })
 
   beforeEach(async () => {

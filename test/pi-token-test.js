@@ -2,7 +2,7 @@
 const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
 const {
-  toNumber, initSuperFluid, createPiToken, expectedOnlyAdmin,
+  toNumber, createPiToken, expectedOnlyAdmin,
   getBlock, zeroAddress
 } = require('./helpers')
 
@@ -18,8 +18,6 @@ describe('PiToken', () => {
   // Global setup
   before(async () => {
     [owner, bob, alice] = await ethers.getSigners()
-
-    superTokenFactory = await initSuperFluid(owner);
   })
 
   beforeEach(async () => {

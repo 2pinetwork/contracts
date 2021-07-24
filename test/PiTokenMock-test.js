@@ -1,7 +1,7 @@
 /* global ethers, describe, before, beforeEach, it */
 const { expect } = require('chai')
 const {
-  toNumber, initSuperFluid, createPiToken,
+  toNumber, createPiToken,
   waitFor
 } = require('./helpers')
 const { MINT_DATA } = require('./contract_constants')
@@ -18,8 +18,6 @@ describe('PiTokenMock', () => {
   // Global setup
   before(async () => {
     [owner, bob] = await ethers.getSigners()
-
-    superTokenFactory = await initSuperFluid(owner);
   })
 
   beforeEach(async () => {

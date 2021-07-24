@@ -1,5 +1,5 @@
 const { expect } = require('chai')
-const { createPiToken, initSuperFluid, waitFor } = require('./helpers')
+const { createPiToken, waitFor } = require('./helpers')
 
 describe('PiVault', () => {
   let owner
@@ -9,8 +9,6 @@ describe('PiVault', () => {
 
   before(async () => {
     [owner, bob, alice] = await ethers.getSigners()
-
-    superTokenFactory = await initSuperFluid(owner)
   })
 
   beforeEach(async () => {
