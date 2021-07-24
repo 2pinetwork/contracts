@@ -86,10 +86,12 @@ contract PiVault is ERC20 {
     /**
      * @dev Function to exit the system. The vault will pay up the token holder.
      */
-    function withdraw(uint _amount) public {
-        require(_amount <= balanceOf(msg.sender), "Can't withdraw more than available");
+    function withdraw(uint _shares) public {
+        require(_shares <= balanceOf(msg.sender), "Can't withdraw more than available");
 
-        _burn(msg.sender, _amount);
-        token.safeTransfer(msg.sender, _amount);
+        uint r = (balance().mul(_shares)).div(totalSupply());
+
+        _burn(msg.sender, _shares);
+        token.safeTransfer(msg.sender, r);
     }
 }
