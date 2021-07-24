@@ -6,7 +6,6 @@ const {
 } = require('./helpers')
 const { MINT_DATA } = require('./contract_constants')
 
-
 describe('PiTokenMock', () => {
   let piToken
   let owner

@@ -1,4 +1,4 @@
-/* global hre, web3, artifacts, ethers, expect, network */
+/* global hre, web3, artifacts, ethers, expect, network, Promise */
 const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
 const { Framework } = require('@superfluid-finance/js-sdk');
 
@@ -83,7 +83,6 @@ const expectedOnlyAdmin = async (fn, ...args) => {
 }
 
 const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));
-
 
 module.exports = {
   toNumber, initSuperFluid, erc1820, getBlock, mineNTimes,
