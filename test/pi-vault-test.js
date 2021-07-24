@@ -1,16 +1,20 @@
 const { expect } = require('chai')
+const { createPiToken, initSuperFluid, waitFor } = require('./helpers')
 
-describe.skip('PiVault', () => {
+describe('PiVault', () => {
   let owner
-  let PiToken
   let piToken
   let PiVault
   let piVault
 
+  before(async () => {
+    [owner, bob, alice] = await ethers.getSigners()
+
+    superTokenFactory = await initSuperFluid(owner)
+  })
+
   beforeEach(async () => {
-    [owner] = await ethers.getSigners()
-    PiToken = await ethers.getContractFactory('PiToken')
-    piToken = await PiToken.deploy(10000)
+    piToken = await createPiToken(owner, superTokenFactory)
     PiVault = await ethers.getContractFactory('PiVault')
     piVault = await PiVault.deploy(
       piToken.address,
@@ -27,11 +31,17 @@ describe.skip('PiVault', () => {
 
   describe('Deposits', () => {
     it('Should deposit', async () => {
-      await piToken.approve(piVault.address, 10)
+      await piToken.approve(piVault.address, 20)
       await piVault.deposit(10)
 
       expect(await piVault.balance()).to.equal(10)
       expect(await piVault.available()).to.equal(10)
+
+      // We should deposit again to test the second flow
+      await piVault.deposit(5)
+
+      expect(await piVault.balance()).to.equal(15)
+      expect(await piVault.available()).to.equal(15)
     })
 
     it('Should deposit all', async () => {
@@ -58,7 +68,7 @@ describe.skip('PiVault', () => {
       await piVault.withdraw(5)
 
       expect(await piVault.balance()).to.equal(5)
-      expect(await piToken.balanceOf(owner.address)).to.equal(+initialOwnerBalance + 5)
+      expect(await piToken.balanceOf(owner.address)).to.equal(initialOwnerBalance.add(5))
     })
 
     it('Should withdraw all', async () => {
@@ -67,7 +77,7 @@ describe.skip('PiVault', () => {
       await piVault.withdrawAll()
 
       expect(await piVault.balance()).to.equal(0)
-      expect(await piToken.balanceOf(owner.address)).to.equal(+initialOwnerBalance + 10)
+      expect(await piToken.balanceOf(owner.address)).to.equal(initialOwnerBalance.add(10))
     })
   })
 })
