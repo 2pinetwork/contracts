@@ -1,4 +1,4 @@
-/* global ethers, describe, beforeEach, it, network, before */
+/* global ethers, describe, beforeEach, it, before */
 const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
 const {
@@ -35,15 +35,7 @@ describe('Archimedes', () => {
 
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
-
     await waitFor(piToken.addMinter(archimedes.address))
-
-    // await erc1820.setInterfaceImplementer(
-    //   piToken.address,
-    //   web3.utils.soliditySha3("ERC777TokensRecipient"),
-    //   archimedes.address,
-    //   { from: piToken.address }
-    // );
   })
 
   describe('Deployment', () => {
@@ -52,6 +44,62 @@ describe('Archimedes', () => {
       expect(await archimedes.poolLength()).to.equal(0)
     })
   })
+
+  describe('addNewPool', () => {
+    it('Should reverse with zero address want', async () => {
+      const strategy = await deploy('StratMock', archimedes.address)
+      await strategy.deployed()
+
+      expect(
+        archimedes.addNewPool(zeroAddress, strategy.address, 1)
+      ).to.be.revertedWith('Address zero not allowed')
+    })
+
+    it('Should reverse with non-farm strategy', async () => {
+      const strategy = await deploy('StratMock', owner.address)
+      await strategy.deployed()
+
+      expect(
+        archimedes.addNewPool(piToken.address, strategy.address, 1)
+      ).to.be.revertedWith('Not a farm strategy')
+    })
+  })
+  describe('changePoolWeighing', () => {
+    it('Should reverse with zero address want', async () => {
+      const strategy = await deploy('StratMock', archimedes.address)
+      await strategy.deployed()
+      await archimedes.addNewPool(piToken.address, strategy.address, 1)
+
+      expect(await archimedes.totalWeighing()).to.be.equal(1)
+
+      await waitFor(archimedes.changePoolWeighing(0, 5))
+
+      expect(await archimedes.totalWeighing()).to.be.equal(5)
+
+      await waitFor(archimedes.changePoolWeighing(0, 0))
+
+      expect(await archimedes.totalWeighing()).to.be.equal(0)
+    })
+  })
+
+  describe('massUpdatePools', () => {
+    it('Should reverse with zero address want', async () => {
+      const strategy = await deploy('StratMock', archimedes.address)
+      await strategy.deployed()
+      await archimedes.addNewPool(piToken.address, strategy.address, 1)
+
+      expect(await archimedes.totalWeighing()).to.be.equal(1)
+
+      await waitFor(archimedes.changePoolWeighing(0, 5))
+
+      expect(await archimedes.totalWeighing()).to.be.equal(5)
+
+      await waitFor(archimedes.changePoolWeighing(0, 0))
+
+      expect(await archimedes.totalWeighing()).to.be.equal(0)
+    })
+  })
+
 
   describe('FullFlow', () => {
     it('Full flow with 2 accounts && just 1 referral', async () => {
@@ -194,6 +242,56 @@ describe('Archimedes', () => {
       // Just to be sure that the referal is not paid
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
+
+      // just call the fn to get it covered
+      await (await archimedes.massUpdatePools()).wait()
+    })
+  })
+
+  describe('depositMATIC', () => {
+    it('Should get wmatic shares and then withdraw', async () => {
+      // Not change signer because if the deployer/nonce changes
+      // the deployed address will change too
+      // All signers have 10k ETH
+      const wmaticOwner = (await ethers.getSigners())[5]
+      const balance = new BigNumber(10000e18)
+
+      expect(
+        await ethers.provider.getBalance(wmaticOwner.address)
+      ).to.be.equal(balance.toFixed())
+
+      const wmatic = await (await ethers.getContractFactory('WETHMock')).connect(wmaticOwner).deploy()
+      await wmatic.deployed()
+
+      expect(wmatic.address).to.be.equal('0x0116686E2291dbd5e317F47faDBFb43B599786Ef')
+
+      const strategy = await deploy('StratMock', archimedes.address)
+      await strategy.deployed()
+      await (await archimedes.addNewPool(wmatic.address, strategy.address, 1)).wait()
+
+      await waitFor(archimedes.depositMATIC(0, zeroAddress, { value: toNumber(1e18) }))
+      expect(await strategy.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
+
+      // This is because eth is the main token and every transaction has fees
+      let currentBalance = Math.floor(
+        (await ethers.provider.getBalance(wmaticOwner.address)) / 1e18
+      )
+
+      expect(currentBalance).to.be.equal(
+        Math.floor(balance.div(1e18).toNumber()) - 1
+      )
+
+      await waitFor(archimedes.withdraw(0, toNumber(1e18)))
+
+      currentBalance = Math.floor(
+        (await ethers.provider.getBalance(wmaticOwner.address)) / 1e18
+      )
+
+      // original value
+      // TODO: STRATEGY CURRENTLY NOT TRANSFER NEIGHTHER RECEIVE ANYTHING
+      // expect(currentBalance).to.be.equal(
+      //   Math.floor(balance.div(1e18).toNumber())
+      // )
     })
   })
 })

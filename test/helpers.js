@@ -1,10 +1,5 @@
 /* global hre, web3, artifacts, ethers, expect, network, Promise */
-const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
-const { Framework } = require('@superfluid-finance/js-sdk');
-
-const errorHandler = err => {
-  if (err) throw err;
-};
+// const { Framework } = require('@superfluid-finance/js-sdk');
 
 const toNumber = function (value) {
   // Needed for BigNumber lib
@@ -45,16 +40,16 @@ const deploy = async (name, ...args) => {
   return contract
 }
 
-const initSuperFluid = async (owner) => {
-  await deployFramework(errorHandler, { web3: web3, from: owner.address });
-  const sf = new Framework({ web3: web3, version: 'test' });
-  await sf.initialize()
+const initSuperFluid = async (_a) => {
+//   const sf = new Framework({ web3: web3, version: 'test' });
+//   await sf.initialize()
 
-  const superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
-    await sf.host.getSuperTokenFactory.call()
-  );
+//   const superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
+//     await sf.host.getSuperTokenFactory.call()
+//   );
 
-  return superTokenFactory
+//   return superTokenFactory
+  return hre.SuperTokenFactory
 }
 
 const createPiToken = async (owner, superTokenFactory, mocked) => {

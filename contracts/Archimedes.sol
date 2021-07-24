@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-
+import "hardhat/console.sol";
 import { IPiToken } from "../interfaces/IPiToken.sol";
 
 interface IReferral {
@@ -41,7 +41,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Used for MATIC (native token) deposits/withdraws
-    IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
+    IWMATIC public constant wmatic = IWMATIC(0x0116686E2291dbd5e317F47faDBFb43B599786Ef); // test
+    // IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
     // IWMATIC public constant wmatic = IWMATIC(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // Polygon
 
     // Info of each user.
