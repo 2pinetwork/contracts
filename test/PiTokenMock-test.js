@@ -1,19 +1,10 @@
 /* global ethers, describe, before, beforeEach, it */
-const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
 const {
-  toNumber, initSuperFluid, createPiToken, expectedOnlyAdmin,
-  waitFor, getBlock, sleep, zeroAddress
+  toNumber, initSuperFluid, createPiToken,
+  waitFor
 } = require('./helpers')
-
-const MINT_DATA = [
-  { community: 0.25439e18, expected: (new BigNumber( 1229833e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.25e6},
-  { community: 0.50879e18, expected: (new BigNumber( 4317500e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 3.8e6 },
-  { community: 0.63599e18, expected: (new BigNumber(14522500e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.2e7 },
-  { community: 1.09027e18, expected: (new BigNumber(21307142e18)), founders: 0.31364e18, investors: 0.41819e18, blocks: 1.6e7 },
-  { community: 1.09027e18, expected: (new BigNumber(28260000e18)), founders: 0.31364e18, investors: 0         , blocks: 2.1e7 },
-  { community: 1.58998e18, expected: (new BigNumber(47100000e18)), founders: 0.31364e18, investors: 0         , blocks: 3.5e7 }
-]
+const { MINT_DATA } = require('./contract_constants')
 
 
 describe('PiTokenMock', () => {
@@ -44,19 +35,23 @@ describe('PiTokenMock', () => {
 
   describe('increaseCurrentTranche', () => {
     it('Should increase the current tranche', async () => {
-      const totalPerBlock = await piToken.totalMintPerBlock()
+      let tranche = MINT_DATA[0]
+      let expectedRatio = tranche.community + tranche.investors + tranche.founders
 
-      expect(totalPerBlock).to.be.equal(toNumber(0.98622e18))
+      const totalPerBlock = parseInt(await piToken.totalMintPerBlock(), 10)
+
+      expect(totalPerBlock).to.be.equal(expectedRatio)
 
       await waitFor(piToken.addMinter(owner.address))
       await waitFor(piToken.initRewardsOn(1))
 
-      const expected = 1229833e18;
-      const neededBlocks = Math.ceil(expected / totalPerBlock)
+      const neededBlocks = Math.ceil(
+        tranche.expected.div(totalPerBlock).toNumber()
+      )
 
       await piToken.setBlockNumber(neededBlocks);
 
-      await waitFor(piToken.mint(owner.address, toNumber(expected - totalPerBlock), txData));
+      await waitFor(piToken.mint(owner.address, tranche.expected.minus(totalPerBlock).toFixed(), txData));
 
       expect(
         piToken.increaseCurrentTranche()
@@ -67,15 +62,20 @@ describe('PiTokenMock', () => {
 
       await piToken.increaseCurrentTranche();
 
+      tranche = MINT_DATA[1]
+      expectedRatio = toNumber(tranche.community + tranche.investors + tranche.founders)
+
       expect(
         await piToken.totalMintPerBlock()
-      ).to.be.equal(toNumber(1.24062e18))
+      ).to.be.equal(
+        expectedRatio
+      )
 
       await piToken.setBlockNumber(neededBlocks + 2);
 
-      await waitFor(piToken.mint(owner.address, toNumber(1.24062e18), txData));
+      await waitFor(piToken.mint(owner.address, expectedRatio, txData));
       await expect(
-        piToken.mint(owner.address, toNumber(1.24062e18), txData)
+        piToken.mint(owner.address, expectedRatio, txData)
       ).to.be.revertedWith("Can't mint more than expected");
 
       await expect(

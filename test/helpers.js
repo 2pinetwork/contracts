@@ -82,8 +82,8 @@ const expectedOnlyAdmin = async (fn, ...args) => {
   await expect(fn(...args)).to.be.revertedWith('Only admin');
 }
 
-
 const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));
+
 
 module.exports = {
   toNumber, initSuperFluid, erc1820, getBlock, mineNTimes,
