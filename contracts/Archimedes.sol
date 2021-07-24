@@ -462,7 +462,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     //     require(from == address(piToken), "Invalid token");
     // }
 
-    function piTokenPerBlock() internal view returns (uint) {
+    function piTokenPerBlock() public view returns (uint) {
         // Skip 1% of minting per block for Referrals
         return piToken.communityMintPerBlock() * 99 / 100;
     }
