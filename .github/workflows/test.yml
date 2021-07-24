@@ -2,6 +2,9 @@ name: Test
 
 on: push
 
+env:
+  DEPLOYER: ${{ secrets.DEPLOYER }}
+
 jobs:
   build:
     name: Test
@@ -19,10 +22,6 @@ jobs:
 
     - name: Dependencies
       run: yarn install
-
-    - name: Accounts
-      run: |
-        echo '["invalid"]' > .accounts
 
     - name: Test
       run: yarn test
