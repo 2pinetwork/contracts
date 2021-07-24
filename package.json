@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "2pi Smart Contracts",
   "scripts": {
+    "coverage": "rm -Rf coverage.json coverage/ cache/ && npx hardhat coverage",
     "test": "npx hardhat test",
     "build-contracts": "sol-merger \"./contracts/*.sol\" ./build"
   },
