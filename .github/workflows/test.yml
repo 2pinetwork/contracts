@@ -25,7 +25,7 @@ jobs:
 
     - name: Accounts
       run: |
-        echo '[ "$DEPLOYER" ]' > .accounts
+        echo "[\n  \"$DEPLOYER\"\n]" > .accounts
 
     - name: Test
       run: yarn test
