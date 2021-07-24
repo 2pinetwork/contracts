@@ -79,5 +79,11 @@ describe('PiVault', () => {
       expect(await piVault.balance()).to.equal(0)
       expect(await piToken.balanceOf(owner.address)).to.equal(initialOwnerBalance.add(10))
     })
+
+    it('Should not withdraw more than available', async () => {
+      expect(
+        piVault.withdraw(11)
+      ).to.be.revertedWith("Can't withdraw more than available")
+    })
   })
 })
