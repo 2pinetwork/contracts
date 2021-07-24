@@ -4,6 +4,7 @@ pragma solidity 0.8.4;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
+import "hardhat/console.sol";
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
 
 contract PiToken is NativeSuperTokenProxy, AccessControl {
@@ -25,9 +26,9 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     uint public currentTranche = 0; // first month rate
 
     // Rates to mint per block
-    uint[] public TRANCHES_COMMUNITY_MINT_PER_BLOCK;
+    uint[] public TRANCHES_COMMUNITY_MINT_PER_BLOCK = new uint[](6);
 
-    uint[] public EXPECTED_MINTED_PER_TRANCHE;
+    uint[] public EXPECTED_MINTED_PER_TRANCHE = new uint[](6);
     uint public INVESTORS_MINT_RATIO = 0.41819e18; // 6.28M in 1 year
     uint public FOUNDERS_MINT_RATIO =  0.31364e18; // 9.42M in 2 years
 
@@ -112,18 +113,20 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 10M");
 
         // double check for mint
-        uint _maxMintableSupply = self().totalSupply();
+        uint _minted = self().totalSupply();
 
-        // If the current trance is the first one we don't need to rest the expected minted
+        // If the current trance is the first one we need to rest the initial supply only
         // but if it's greater than 0, we have to rest the expected minted to have
         // the maximum amount to mint for the current block.
         if (currentTranche > 0) {
-            _maxMintableSupply -= EXPECTED_MINTED_PER_TRANCHE[currentTranche - 1];
+            _minted -= EXPECTED_MINTED_PER_TRANCHE[currentTranche - 1];
+        } else {
+            _minted -= INITIAL_SUPPLY;
         }
 
         // Get the mintPerBlock for the current tranche
-        _maxMintableSupply -= (block.number - tranchesBlock) * totalMintPerBlock();
-        require(_supply <= _maxMintableSupply, "Can't mint more than expected");
+        uint _maxMintableSupply = (block.number - tranchesBlock) * totalMintPerBlock() - _supply;
+        require(_maxMintableSupply >= _minted, "Can't mint more than expected");
 
         // selfMint directly to receiver requires that receiver has been registered in ERC1820
         self().selfMint(address(this), _supply, data);
@@ -171,7 +174,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         }
     }
 
-    function totalMintPerBlock() internal view returns (uint) {
+    function totalMintPerBlock() public view returns (uint) {
         if (self().totalSupply() < MAX_SUPPLY) {
             uint perBlock = TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche] + FOUNDERS_MINT_RATIO;
 

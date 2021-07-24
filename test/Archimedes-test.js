@@ -82,7 +82,6 @@ describe('Archimedes', () => {
       expect(rewardBlock).to.be.greaterThan(currentBlock)
       expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
 
-      // console.log(`Mining ${rewardBlock - currentBlock} times...`)
       await mineNTimes(rewardBlock - currentBlock)
 
       // This should mint a reward of 0.23~ for the first block

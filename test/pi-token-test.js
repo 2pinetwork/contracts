@@ -1,4 +1,5 @@
 /* global ethers, describe, before, beforeEach, it */
+const BigNumber = require('bignumber.js')
 const { expect } = require('chai')
 const { toNumber, initSuperFluid, createPiToken } = require('./helpers')
 
@@ -169,7 +170,7 @@ describe('PiToken', () => {
       await piToken.connect(bob).mint(alice.address, toNumber(1e10), txData)
 
       expect(await piToken.totalSupply()).to.equal(
-        toNumber(INITIAL_SUPPLY + 1e10)
+        (new BigNumber(INITIAL_SUPPLY)).plus(1e10).toFixed()
       )
     })
 
@@ -180,7 +181,7 @@ describe('PiToken', () => {
     })
 
     it('Should only mint until max mint per block', async () => {
-      const MAX_MINT_PER_BLOCK = 0.27e18
+      const MAX_MINT_PER_BLOCK = await piToken.totalMintPerBlock()
 
       await piToken.initRewardsOn(block - 5)
 

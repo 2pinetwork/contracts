@@ -58,6 +58,7 @@ const initSuperFluid = async (owner) => {
 }
 
 const createPiToken = async (owner, superTokenFactory) => {
+
   let piToken = await deploy('PiToken');
   // await piToken.deployed();
 
