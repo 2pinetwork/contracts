@@ -20,5 +20,9 @@ jobs:
     - name: Dependencies
       run: yarn install
 
+    - name: Accounts
+      run: |
+        echo '["invalid"]' > .accounts
+
     - name: Test
       run: yarn test
