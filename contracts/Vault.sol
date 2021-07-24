@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.4;
 
 import "./CommonContract.sol";
 
@@ -10,7 +10,6 @@ import "../interfaces/IController.sol";
 contract Vault is ERC20, CommonContract {
     using SafeERC20 for IERC20;
     using Address for address;
-    using SafeMath for uint;
 
     IERC20 public token;
 
@@ -24,7 +23,7 @@ contract Vault is ERC20, CommonContract {
     }
 
     function balance() public view returns (uint) {
-        return token.balanceOf(address(this)).add(IController(controller).balanceOf(address(token)));
+        return token.balanceOf(address(this)) + IController(controller).balanceOf(address(token));
     }
 
     function setController(address _controller) external onlyOwner {
@@ -52,13 +51,13 @@ contract Vault is ERC20, CommonContract {
         earn();
 
         uint _after = balance();
-        _amount = _after.sub(_pool); // Additional check for deflationary tokens
+        _amount = _after - _pool; // Additional check for deflationary tokens
 
         uint shares = 0;
         if (totalSupply() == 0) {
             shares = _amount;
         } else {
-            shares = (_amount.mul(totalSupply())).div(_pool);
+            shares = _amount * totalSupply() / _pool;
         }
         _mint(msg.sender, shares);
     }
@@ -68,18 +67,18 @@ contract Vault is ERC20, CommonContract {
     }
 
     function withdraw(uint _shares) public {
-        uint r = (balance().mul(_shares)).div(totalSupply());
+        uint r = balance() * _shares / totalSupply();
         _burn(msg.sender, _shares);
 
         // Check balance
         uint b = token.balanceOf(address(this));
         if (b < r) {
-            uint _withdraw = r.sub(b);
+            uint _withdraw = r - b;
             IController(controller).withdraw(address(token), _withdraw);
             uint _after = token.balanceOf(address(this));
-            uint _diff = _after.sub(b);
+            uint _diff = _after - b;
             if (_diff < _withdraw) {
-                r = b.add(_diff);
+                r = b + _diff;
             }
         }
 
@@ -87,6 +86,6 @@ contract Vault is ERC20, CommonContract {
     }
 
     function getPricePerFullShare() public view returns (uint) {
-        return totalSupply() == 0 ? 1e18 : balance().mul(1e18).div(totalSupply());
+        return totalSupply() == 0 ? 1e18 : balance() * 1e18 / totalSupply();
     }
 }
