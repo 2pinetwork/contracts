@@ -16,11 +16,12 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     IERC1820Registry constant internal _ERC1820_REGISTRY =
         IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
 
-    uint public MAX_SUPPLY = 62.8e25; // 62.8M tokens (~ 2 * pi)
+    uint public MAX_SUPPLY = 6.28e25; // (2 * pi) 62.8M tokens
     uint public INITIAL_SUPPLY = (
         3140000 +  // Airdrop + incentives
-         628000 +  // Exchange
-        1570000    // Future rounds (investors)
+         942000 +  // Exchange
+        7536000 +  // Future rounds (investors)
+        4082000    // Advisors // this should be minted with founders?
     ) * (10 ** 18);
 
     uint public currentTranche = 0; // first month rate
@@ -55,9 +56,12 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    function init() external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin can initialize");
+    modifier onlyAdmin() {
+        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
+        _;
+    }
 
+    function init() external onlyAdmin {
         ISuperToken(address(this)).initialize(
             IERC20(address(0x0)),
             18, // shouldn't matter if there's no wrapped token
@@ -74,34 +78,25 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         ISuperToken(address(this)).selfMint(msg.sender, INITIAL_SUPPLY, new bytes(0));
     }
 
-    function initRewardsOn(uint _blockNumber) external {
+    function initRewardsOn(uint _blockNumber) external onlyAdmin {
         require(tranchesBlock <= 0, "Already set");
         tranchesBlock = _blockNumber;
     }
 
-    // will be changed only when the entire amount for the period has been minted
-    function increaseCurrentRate() external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
+    // will be changed only when the entire amount for the tranche has been minted
+    function increaseCurrentTranche() external onlyAdmin {
         require(
-            EXPECTED_MINTED_PER_TRANCHE[currentTranche] < self().totalSupply(),
+            EXPECTED_MINTED_PER_TRANCHE[currentTranche] <= self().totalSupply(),
             "not yet"
         );
-        require(currentTranche < 6, "Mint is finished");
+        require(currentTranche < 5, "Mint is finished");
 
         currentTranche += 1;
-        tranchesBlock = block.number;
+        tranchesBlock = blockNumber();
     }
 
-    function addMinter(address newMinter) external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
+    function addMinter(address newMinter) external onlyAdmin {
         _setupRole(MINTER_ROLE, newMinter);
-
-        // This part is under investigation to make Archimedes a recipient
-        // _ERC1820_REGISTRY.setInterfaceImplementer(
-        //     address(this),
-        //     ERC777Recipient_HASH,
-        //     newMinter
-        // );
     }
 
     function mint(address _receiver, uint _supply, bytes calldata data) external {
@@ -109,8 +104,8 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
         require(tranchesBlock > 0, "Rewards not initialized");
-        require(tranchesBlock < block.number, "Still waiting for rewards block");
-        require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 10M");
+        require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
+        require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.5M");
 
         // double check for mint
         uint _minted = self().totalSupply();
@@ -125,10 +120,9 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         }
 
         // Get the mintPerBlock for the current tranche
-        uint _maxMintableSupply = (block.number - tranchesBlock) * totalMintPerBlock() - _supply;
+        uint _maxMintableSupply = (blockNumber() - tranchesBlock) * totalMintPerBlock() - _supply;
         require(_maxMintableSupply >= _minted, "Can't mint more than expected");
 
-        // selfMint directly to receiver requires that receiver has been registered in ERC1820
         self().selfMint(address(this), _supply, data);
         require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
     }
@@ -146,8 +140,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
 
     // For future use, just in case
-    function addBurner(address newBurner) external {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
+    function addBurner(address newBurner) external onlyAdmin {
         _setupRole(BURNER_ROLE, newBurner);
     }
 
@@ -187,4 +180,8 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         }
     }
 
+    // Implemented to be mocked in tests
+    function blockNumber() internal view virtual returns (uint) {
+        return block.number;
+    }
 }

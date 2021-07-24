@@ -57,13 +57,13 @@ const initSuperFluid = async (owner) => {
   return superTokenFactory
 }
 
-const createPiToken = async (owner, superTokenFactory) => {
-
-  let piToken = await deploy('PiToken');
+const createPiToken = async (owner, superTokenFactory, mocked) => {
+  const contractName = mocked ? 'PiTokenMock' : 'PiToken'
+  let piToken = await deploy(contractName);
   // await piToken.deployed();
 
   await superTokenFactory.initializeCustomSuperToken(piToken.address);
-  piToken = await ethers.getContractAt('IPiToken', piToken.address)
+  piToken = await ethers.getContractAt('IPiTokenMocked', piToken.address)
 
   const MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
 
@@ -78,7 +78,15 @@ const createPiToken = async (owner, superTokenFactory) => {
 
 const zeroAddress = '0x' + '0'.repeat(40)
 
+const expectedOnlyAdmin = async (fn, ...args) => {
+  await expect(fn(...args)).to.be.revertedWith('Only admin');
+}
+
+
+const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));
+
 module.exports = {
   toNumber, initSuperFluid, erc1820, getBlock, mineNTimes,
-  createPiToken, waitFor, deploy, zeroAddress
+  createPiToken, waitFor, deploy, zeroAddress, expectedOnlyAdmin,
+  sleep
 }
