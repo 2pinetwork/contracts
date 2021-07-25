@@ -12,8 +12,6 @@ import "../interfaces/IUniswapRouter.sol";
 contract AaveStrategy is CommonContract {
     using SafeERC20 for IERC20;
     using Address for address;
-    using SafeMath for uint;
-    using SafeMath for uint8;
 
     address public constant wmatic = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
 
@@ -127,7 +125,7 @@ contract AaveStrategy is CommonContract {
 
         // Borrow & deposit strategy
         for (uint i = 0; i < borrowDepth; i++) {
-            _amount = _amount.mul(borrowRate).div(100);
+            _amount = _amount * borrowRate / 100;
 
             IAaveLendingPool(pool).borrow(want, _amount, INTEREST_RATE_MODE, 0, address(this));
             IAaveLendingPool(pool).deposit(want, _amount, address(this), 0);
@@ -161,7 +159,7 @@ contract AaveStrategy is CommonContract {
         (uint supplyBal,) = supplyAndBorrow();
 
         // Only withdraw the 10% of the max withdraw
-        uint toWithdraw = maxWithdrawFromSupply(supplyBal).mul(100).div(10);
+        uint toWithdraw = maxWithdrawFromSupply(supplyBal) * 100 / 10;
 
         IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
         IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
@@ -187,11 +185,7 @@ contract AaveStrategy is CommonContract {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
-        return _supply.sub(
-            _supply.mul(1e6).div(
-                currentHealthFactor().div(1e12).sub(0.05e6)
-            )
-        );
+        return _supply - _supply * 1e6 / (currentHealthFactor() / 1e12 - 0.05e6);
     }
 
     function _partialDeleverage(uint _needed) internal {
@@ -217,7 +211,7 @@ contract AaveStrategy is CommonContract {
             // for depth == 0
             if (borrowBal > 0) {
                 // Only repay the just amount
-                toRepay = toWithdraw.mul(borrowRate).div(100);
+                toRepay = toWithdraw * borrowRate / 100;
                 IAaveLendingPool(pool).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
             }
         }
@@ -231,10 +225,10 @@ contract AaveStrategy is CommonContract {
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
             // will looping for ever.
-            if (_amount.mul(2) >= balanceOfPool()) {
+            if (_amount * 2 >= balanceOfPool()) {
                 _fullDeleverage();
             } else {
-                _partialDeleverage(_amount.sub(balance));
+                _partialDeleverage(_amount - balance);
             }
         }
 
@@ -242,8 +236,8 @@ contract AaveStrategy is CommonContract {
             // Yield balancer
             IERC20(want).safeTransfer(vault(), _amount);
         } else {
-            uint withdrawalFee = _amount.mul(withdrawFee).div(FEE_MAX);
-            IERC20(want).safeTransfer(vault(), _amount.sub(withdrawalFee));
+            uint withdrawalFee = _amount * withdrawFee / FEE_MAX;
+            IERC20(want).safeTransfer(vault(), _amount - withdrawalFee);
             IERC20(want).safeTransfer(treasury, withdrawalFee);
         }
 
@@ -253,13 +247,13 @@ contract AaveStrategy is CommonContract {
     }
 
     function balanceOf() public view returns (uint) {
-        return wantBalance().add(balanceOfPool());
+        return wantBalance() + balanceOfPool();
     }
 
     // it calculates how much 'want' the strategy has working in the farm.
     function balanceOfPool() public view returns (uint) {
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
-        return supplyBal.sub(borrowBal);
+        return supplyBal - borrowBal;
     }
 
 
@@ -291,7 +285,7 @@ contract AaveStrategy is CommonContract {
             swapRewards(_maticToWantRatio);
         }
 
-        uint harvested = wantBalance().sub(_before);
+        uint harvested = wantBalance() - _before;
 
         chargeFees(harvested);
 
@@ -316,13 +310,13 @@ contract AaveStrategy is CommonContract {
             // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
             // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
 
-            uint tokenDiffPrecision = (10 ** ERC20(wmatic).decimals()).div(
+            uint tokenDiffPrecision = (10 ** ERC20(wmatic).decimals()) / (
                 10 ** ERC20(want).decimals()
-            ).mul(1e9);
-            uint expected = balance.mul(_maticToWantRatio).div(tokenDiffPrecision);
+            ) * 1e9;
+            uint expected = balance * _maticToWantRatio / tokenDiffPrecision;
 
             IUniswapRouter(exchange).swapExactTokensForTokens(
-                balance, expected, wmaticToWantRoute, address(this), block.timestamp.add(60)
+                balance, expected, wmaticToWantRoute, address(this), block.timestamp + 60
             );
         }
     }
@@ -331,7 +325,7 @@ contract AaveStrategy is CommonContract {
      * @dev Takes out 3.5% performance fee.
      */
     function chargeFees(uint _harvested) internal {
-        uint performanceFee = _harvested.mul(PERFORMANCE_FEE).div(FEE_MAX); // 3%
+        uint performanceFee = _harvested * PERFORMANCE_FEE / FEE_MAX; // 3%
 
         if (performanceFee > 0) {
             // Pay to treasury 3.5% of the total reward claimed

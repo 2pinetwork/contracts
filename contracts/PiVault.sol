@@ -4,11 +4,9 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract PiVault is ERC20 {
     using SafeERC20 for IERC20;
-    using SafeMath for uint256;
 
     IERC20 public token;
 
@@ -65,12 +63,12 @@ contract PiVault is ERC20 {
         token.safeTransferFrom(msg.sender, address(this), _amount);
 
         uint _after = balance();
-        _amount = _after.sub(_pool); // Additional check for deflationary tokens
+        _amount = _after - _pool; // Additional check for deflationary tokens
 
         if (totalSupply() == 0) {
             shares = _amount;
         } else {
-            shares = (_amount.mul(totalSupply())).div(_pool);
+            shares = _amount * totalSupply() / _pool;
         }
 
         _mint(msg.sender, shares);
@@ -89,7 +87,7 @@ contract PiVault is ERC20 {
     function withdraw(uint _shares) public {
         require(_shares <= balanceOf(msg.sender), "Can't withdraw more than available");
 
-        uint r = (balance().mul(_shares)).div(totalSupply());
+        uint r = balance() * _shares / totalSupply();
 
         _burn(msg.sender, _shares);
         token.safeTransfer(msg.sender, r);
