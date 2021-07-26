@@ -1,10 +1,22 @@
-// import "../Archimedes.sol";
+//SPDX-License-Identifier: MIT
+pragma solidity 0.8.4;
 
-contract ArchimedesMock {
+import { Archimedes, IPiToken } from "../Archimedes.sol";
+
+contract ArchimedesMock is Archimedes {
+    constructor(
+        IPiToken _piToken,
+        uint _startBlock,
+        address _treasury
+    ) Archimedes(_piToken, _startBlock, _treasury) { }
+
+    uint private mockedBlockNumber;
+
+    function setBlockNumber(uint _n) public {
+        mockedBlockNumber = _n;
+    }
+
+    function blockNumber() internal view override returns (uint) {
+        return mockedBlockNumber == 0 ? block.number : mockedBlockNumber;
+    }
 }
-//     IWMATIC public wmatic;
-
-//     function setWMATIC(address _wmatic) external {
-//         wmatic = IWMATIC(_wmatic);
-//     }
-// }

@@ -1,25 +1,22 @@
-/* global ethers, describe, beforeEach, it, before */
-const BigNumber = require('bignumber.js')
-const { expect } = require('chai')
 const {
   toNumber, createPiToken, getBlock, mineNTimes,
   waitFor, deploy, zeroAddress
 } = require('./helpers')
+const { MINT_DATA } = require('./contract_constants')
 
 describe('Archimedes', () => {
-  let owner, bob, alice
+  let bob, alice
   let piToken
   let archimedes
   let rewardsBlock
   let refMgr
-  let superTokenFactory
 
   before(async () => {
-    [owner, bob, alice] = await ethers.getSigners()
+    [_, bob, alice] = await ethers.getSigners()
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(owner, superTokenFactory)
+    piToken = await createPiToken()
     rewardsBlock = (await getBlock()) + 20
 
     archimedes = await deploy(
@@ -36,14 +33,14 @@ describe('Archimedes', () => {
     await waitFor(piToken.addMinter(archimedes.address))
   })
 
-  describe('Deployment', () => {
+  describe('Deployment', async () => {
     it('Initial deployment should have a zero balance', async () => {
       expect(await archimedes.piToken()).to.equal(piToken.address)
       expect(await archimedes.poolLength()).to.equal(0)
     })
   })
 
-  describe('addNewPool', () => {
+  describe('addNewPool', async () => {
     it('Should reverse with zero address want', async () => {
       const strategy = await deploy('StratMock', archimedes.address)
       await strategy.deployed()
@@ -62,7 +59,7 @@ describe('Archimedes', () => {
       ).to.be.revertedWith('Not a farm strategy')
     })
   })
-  describe('changePoolWeighing', () => {
+  describe('changePoolWeighing', async () => {
     it('Should reverse with zero address want', async () => {
       const strategy = await deploy('StratMock', archimedes.address)
       await strategy.deployed()
@@ -80,7 +77,7 @@ describe('Archimedes', () => {
     })
   })
 
-  describe('massUpdatePools', () => {
+  describe('massUpdatePools', async () => {
     it('Should reverse with zero address want', async () => {
       const strategy = await deploy('StratMock', archimedes.address)
       await strategy.deployed()
@@ -98,8 +95,27 @@ describe('Archimedes', () => {
     })
   })
 
+  describe('pendingPiToken', async () => {
+    beforeEach(async () => {
+      const strategy = await deploy('StratMock', archimedes.address)
+      await strategy.deployed()
+      await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
+      expect(await archimedes.poolLength()).to.be.equal(1)
+    })
 
-  describe('FullFlow', () => {
+    it('should return 0 for future block', async () => {
+      expect(await archimedes.startBlock()).to.be.above(await getBlock())
+      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+    })
+
+    it('should return 0 for unknown user', async () => {
+      mineNTimes((await archimedes.startBlock()) - (await getBlock()))
+
+      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+    })
+  })
+
+  describe('FullFlow', async () => {
     it('Full flow with 2 accounts && just 1 referral', async () => {
       // Create Strategy
       const strategy = await deploy('StratMock', archimedes.address)
@@ -241,12 +257,13 @@ describe('Archimedes', () => {
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
 
+      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
       // just call the fn to get it covered
       await (await archimedes.massUpdatePools()).wait()
     })
   })
 
-  describe('depositMATIC', () => {
+  describe('depositMATIC', async () => {
     it('Should get wmatic shares and then withdraw', async () => {
       // Not change signer because if the deployer/nonce changes
       // the deployed address will change too
@@ -290,6 +307,11 @@ describe('Archimedes', () => {
       // expect(currentBalance).to.be.equal(
       //   Math.floor(balance.div(1e18).toNumber())
       // )
+    })
+  })
+  describe('getPricePerFullShare', async () => {
+    it('', async () => {
+
     })
   })
 })

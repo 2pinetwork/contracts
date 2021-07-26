@@ -1,6 +1,3 @@
-/* global ethers, describe, before, beforeEach, it */
-const BigNumber = require('bignumber.js')
-const { expect } = require('chai')
 const {
   toNumber, createPiToken, expectedOnlyAdmin,
   getBlock, zeroAddress
@@ -29,7 +26,7 @@ describe('PiToken', () => {
     expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
   })
 
-  describe('init', () => {
+  describe('init', async () => {
     it('Should revert for non admins', async () => {
       expectedOnlyAdmin(piToken.connect(bob).init)
     })
@@ -39,7 +36,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('initRewardsOn', () => {
+  describe('initRewardsOn', async () => {
     it('Should revert for non admins', async () => {
       expectedOnlyAdmin(piToken.connect(bob).initRewardsOn, 3)
     })
@@ -53,7 +50,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('increaseCurrentTranche', () => {
+  describe('increaseCurrentTranche', async () => {
     it('Should revert for non admins', async () => {
       await expectedOnlyAdmin(piToken.connect(alice).increaseCurrentTranche)
     })
@@ -66,7 +63,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('Transactions', () => {
+  describe('Transactions', async () => {
     it('Should transfer tokens between accounts', async () => {
       // Transfer 50 tokens from owner to bob
       await piToken.transfer(bob.address, 50)
@@ -117,7 +114,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('Allowance', () => {
+  describe('Allowance', async () => {
     it('Should update allowance after approve', async () => {
       expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
 
@@ -185,7 +182,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('Minting', () => {
+  describe('Minting', async () => {
     let block
 
     beforeEach(async () => {
@@ -259,7 +256,7 @@ describe('PiToken', () => {
     })
   })
 
-  describe('Burning', () => {
+  describe('Burning', async () => {
     beforeEach(async () => {
       await piToken.addBurner(bob.address)
     })

@@ -111,7 +111,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         address _treasury
     ) {
         require(address(_piToken) != address(0), "Pi address can't be zero address");
-        require(_startBlock > block.number, "StartBlock should be in the future");
+        require(_startBlock > blockNumber(), "StartBlock should be in the future");
         require(_treasury != address(0), "Treasury address can't be zero address");
 
         piToken = _piToken;
@@ -126,7 +126,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         // require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // anti duplication?
         require(IStrategy(_strat).farm() == address(this), "Not a farm strategy");
 
-        uint lastRewardBlock = block.number > startBlock ? block.number : startBlock;
+        uint lastRewardBlock = blockNumber() > startBlock ? blockNumber() : startBlock;
 
         totalWeighing += _weighing;
 
@@ -164,8 +164,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
         uint sharesTotal = IStrategy(pool.strategy).totalSupply();
 
-        if (block.number > pool.lastRewardBlock && sharesTotal > 0) {
-            uint multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+        if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0) {
+            uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
             uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
@@ -185,23 +185,24 @@ contract Archimedes is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
 
         // If same block as last update return
-        if (block.number <= pool.lastRewardBlock) { return; }
+        if (blockNumber() <= pool.lastRewardBlock) { return; }
         // If community Mint is already finished
         if (communityLeftToMint <= 0) { return; }
 
         uint sharesTotal = IStrategy(pool.strategy).totalSupply();
 
         if (sharesTotal <= 0 || pool.weighing <= 0) {
-            pool.lastRewardBlock = block.number;
+            pool.lastRewardBlock = blockNumber();
             return;
         }
 
-        uint multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+        uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
         uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
+
 
         // No rewards =( update lastRewardBlock
         if (piTokenReward <= 0) {
-            pool.lastRewardBlock = block.number;
+            pool.lastRewardBlock = blockNumber();
             return;
         }
 
@@ -214,7 +215,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         piToken.mint(address(this), piTokenReward, txData);
 
         pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
-        pool.lastRewardBlock = block.number;
+        pool.lastRewardBlock = blockNumber();
     }
 
     // Direct MATIC (native) deposit
@@ -453,5 +454,10 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function piTokenPerBlock() public view returns (uint) {
         // Skip 1% of minting per block for Referrals
         return piToken.communityMintPerBlock() * 99 / 100;
+    }
+
+    // Implemented to be mocked in
+    function blockNumber() internal view virtual returns (uint) {
+        return block.number;
     }
 }

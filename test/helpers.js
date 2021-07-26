@@ -1,7 +1,9 @@
-/* global hre, web3, ethers, expect, network, Promise, before */
 const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
 const { Framework } = require('@superfluid-finance/js-sdk');
 
+const { expect } = require('chai')
+global.BigNumber = require('bignumber.js')
+global.expect = expect
 
 // Global setup for all the test-set
 before(async () => {
@@ -10,7 +12,7 @@ before(async () => {
   const errorHandler = err => {
     if (err) throw err;
   };
-  await deployFramework(errorHandler, { web3: web3, from: global.owner.address });
+  await deployFramework(errorHandler, { web3: web3, from: owner.address });
   const sf = new Framework({ web3: web3, version: 'test' });
   await sf.initialize()
 
@@ -51,12 +53,12 @@ const deploy = async (name, ...args) => {
   return contract
 }
 
-const createPiToken = async (owner, superTokenFactory, mocked) => {
+const createPiToken = async (mocked) => {
   const contractName = mocked ? 'PiTokenMock' : 'PiToken'
   let piToken = await deploy(contractName);
   await piToken.deployed();
 
-  await global.superTokenFactory.initializeCustomSuperToken(piToken.address);
+  await superTokenFactory.initializeCustomSuperToken(piToken.address);
   piToken = await ethers.getContractAt('IPiTokenMocked', piToken.address)
 
   const MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)

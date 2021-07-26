@@ -1,5 +1,3 @@
-/* global ethers, describe, before, beforeEach, it */
-const { expect } = require('chai')
 const {
   toNumber, createPiToken,
   waitFor
@@ -30,7 +28,7 @@ describe('PiTokenMock', () => {
     expect(await piToken.balanceOf(owner.address)).to.equal(toNumber(INITIAL_SUPPLY))
   })
 
-  describe('increaseCurrentTranche', () => {
+  describe('increaseCurrentTranche', async () => {
     it('Should increase the current tranche', async () => {
       let tranche = MINT_DATA[0]
       let expectedRatio = tranche.community + tranche.investors + tranche.founders
