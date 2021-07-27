@@ -2,7 +2,6 @@ const {
   toNumber, createPiToken, getBlock, mineNTimes,
   waitFor, deploy, zeroAddress
 } = require('./helpers')
-const { MINT_DATA } = require('./contract_constants')
 
 describe('Archimedes', () => {
   let bob, alice
@@ -12,7 +11,7 @@ describe('Archimedes', () => {
   let refMgr
 
   before(async () => {
-    [_, bob, alice] = await ethers.getSigners()
+    [, bob, alice] = await ethers.getSigners()
   })
 
   beforeEach(async () => {

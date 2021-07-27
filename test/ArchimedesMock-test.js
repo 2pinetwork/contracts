@@ -13,7 +13,7 @@ describe('ArchimedesMock', () => {
   let bob
 
   beforeEach(async () => {
-    [_, bob] = await ethers.getSigners()
+    [, bob] = await ethers.getSigners()
     piToken = await createPiToken(true)
     rewardsBlock = (await getBlock()) + 20
 
