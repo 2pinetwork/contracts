@@ -20,6 +20,19 @@ before(async () => {
   global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
     await sf.host.getSuperTokenFactory.call()
   );
+
+  // Not change signer because if the deployer/nonce changes
+  // the deployed address will change too
+  // All signers have 10k ETH
+  const wmaticOwner = (await ethers.getSigners())[5]
+  const balance = new BigNumber(10000e18)
+
+  const wmatic = await (await ethers.getContractFactory('WETHMock')).connect(wmaticOwner).deploy()
+  await wmatic.deployed()
+
+  expect(wmatic.address).to.be.equal('0x0116686E2291dbd5e317F47faDBFb43B599786Ef')
+
+  global.WMATIC = wmatic
 });
 
 const toNumber = function (value) {
@@ -80,8 +93,23 @@ const expectedOnlyAdmin = async (fn, ...args) => {
 
 const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));
 
+const impersonateContract = async (addr) => {
+  // Fill with gas 10k eth
+  const balance = ethers.BigNumber.from('1' + '0'.repeat(23))._hex
+
+  await network.provider.send('hardhat_setBalance', [addr, balance])
+
+  // Tell hardhat what address enables to impersonate
+  await hre.network.provider.request({
+    method: 'hardhat_impersonateAccount',
+    params: [addr],
+  })
+  // return the impersonated signer
+  return await ethers.getSigner(addr)
+}
+
 module.exports = {
   toNumber, getBlock, mineNTimes,
   createPiToken, waitFor, deploy, zeroAddress, expectedOnlyAdmin,
-  sleep
+  sleep, impersonateContract
 }

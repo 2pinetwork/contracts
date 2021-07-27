@@ -1,9 +1,10 @@
 const {
-  toNumber, createPiToken, getBlock, waitFor, deploy, zeroAddress
+  toNumber, createPiToken, getBlock, waitFor, deploy, zeroAddress,
+  impersonateContract
 } = require('./helpers')
 const { MINT_DATA } = require('./contract_constants')
 
-describe('ArchimedesMocked', () => {
+describe('ArchimedesMock', () => {
   // const owner = global.owner
   let piToken
   let archimedes
@@ -29,7 +30,7 @@ describe('ArchimedesMocked', () => {
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
 
-    const strategy = await deploy('StratMock', archimedes.address)
+    const strategy = await deploy('StratMock', archimedes.address, piToken.address)
     await strategy.deployed()
     await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
     expect(await archimedes.poolLength()).to.be.equal(1)
@@ -60,6 +61,35 @@ describe('ArchimedesMocked', () => {
       expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
     })
 
+    it('should receive less tokens with harvest', async () => {
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      await waitFor(piToken.approve(archimedes.address, toNumber(1e18)))
+      await waitFor(archimedes.deposit(0, toNumber(1e18), zeroAddress))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      // Advance a few blocks
+      await waitFor(piToken.setBlockNumber(toNumber(rewardsBlock + 30)))
+      await waitFor(archimedes.setBlockNumber(toNumber(rewardsBlock + 30)))
+
+      await waitFor(archimedes.updatePool(0))
+
+      const expected = parseInt(await archimedes.pendingPiToken(0, owner.address), 10)
+
+      // Impersonate Archimedes Load with 1e18
+      const archSigner = await impersonateContract(archimedes.address)
+
+      // transfer 1 piToken to other address (just to simulate less than expected)
+      await waitFor(piToken.connect(archSigner).transferFrom(archimedes.address, bob.address, 1))
+
+      const balance = new BigNumber(parseInt(await piToken.balanceOf(owner.address), 10))
+
+      await waitFor(archimedes.harvest(0))
+
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.plus(expected).minus(1).toFixed()
+      )
+    })
   })
 
   describe('pendingPiToken', async () => {
@@ -67,11 +97,11 @@ describe('ArchimedesMocked', () => {
       // Deposit will not claim rewards yet
       await waitFor(piToken.approve(archimedes.address, toNumber(1e18)))
       await waitFor(archimedes.deposit(0, toNumber(1e18), zeroAddress))
-      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(toNumber(1e18))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
       // Claim rewards for the same block will not do anything
       await waitFor(archimedes.updatePool(0))
-      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(toNumber(1e18))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(rewardsBlock + 30)))
       await waitFor(archimedes.setBlockNumber(toNumber(rewardsBlock + 30)))
@@ -87,10 +117,10 @@ describe('ArchimedesMocked', () => {
       await waitFor(archimedes.harvestAll())
 
       // deposited
-      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(toNumber(1e18))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
       // Claim rewards for the same block will not do anything
       await waitFor(archimedes.updatePool(0))
-      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(toNumber(1e18))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(1e10))) // stupid amount of blocks =)
       await waitFor(archimedes.setBlockNumber(toNumber(1e10))) // stupid amount of blocks =)
