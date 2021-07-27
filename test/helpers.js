@@ -25,8 +25,6 @@ before(async () => {
   // the deployed address will change too
   // All signers have 10k ETH
   const wmaticOwner = (await ethers.getSigners())[5]
-  const balance = new BigNumber(10000e18)
-
   const wmatic = await (await ethers.getContractFactory('WETHMock')).connect(wmaticOwner).deploy()
   await wmatic.deployed()
 
@@ -71,7 +69,7 @@ const createPiToken = async (mocked) => {
   let piToken = await deploy(contractName);
   await piToken.deployed();
 
-  await superTokenFactory.initializeCustomSuperToken(piToken.address);
+  await global.superTokenFactory.initializeCustomSuperToken(piToken.address);
   piToken = await ethers.getContractAt('IPiTokenMocked', piToken.address)
 
   const MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)

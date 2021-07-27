@@ -29,7 +29,7 @@ interface IWMATIC is IERC20 {
 
 interface IStrategy {
     function totalSupply() external view returns (uint);
-    function balanceOf() external view returns (uint);
+    function balance() external view returns (uint);
     function decimals() external view returns (uint);
     function farm() external view returns (address);
     function deposit(address _depositor, uint _amount) external returns (uint);
@@ -439,13 +439,13 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint _totalSupply = strat.totalSupply();
 
-        return _totalSupply == 0 ? 1e18 : ((strat.balanceOf() * 1e18) / _totalSupply);
+        return _totalSupply == 0 ? 1e18 : ((strat.balance() * 1e18) / _totalSupply);
     }
     function decimals(uint _pid) public view returns (uint) {
         return IStrategy(poolInfo[_pid].strategy).decimals();
     }
     function balance(uint _pid) public view returns (uint) {
-        return IStrategy(poolInfo[_pid].strategy).balanceOf();
+        return IStrategy(poolInfo[_pid].strategy).balance();
     }
     function balanceOf(uint _pid, address _user) public view returns (uint) {
         return userInfo[_pid][_user].shares;

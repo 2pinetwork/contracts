@@ -284,6 +284,16 @@ describe('Archimedes', () => {
       ).to.be.equal(
         prevBalance.toFixed()
       )
+
+      // Emergency withdraw without harvest
+      aliceBalance = parseInt(await piToken.balanceOf(alice.address), 10)
+      const deposited = parseInt(await strategy.balanceOf(alice.address), 10)
+
+      await waitFor(archimedes.connect(alice).emergencyWithdraw(0))
+
+      expect(await piToken.balanceOf(alice.address)).to.be.equal(
+        toNumber(aliceBalance + deposited)
+      )
     })
   })
 
@@ -311,7 +321,9 @@ describe('Archimedes', () => {
 
     it('Should get wmatic shares and then withdraw', async () => {
       // initial accounts balance  less a few gas fees
-      const balance = new BigNumber(9999e18)
+      const balance = new BigNumber(
+        (await ethers.provider.getBalance(owner.address)) / 1e18
+      )
 
       await waitFor(archimedes.depositMATIC(0, zeroAddress, { value: toNumber(1e18) }))
       expect(await strategy.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
@@ -323,7 +335,7 @@ describe('Archimedes', () => {
 
       // original balance less 1 MATIC
       expect(currentBalance).to.be.equal(
-        Math.floor(balance.div(1e18).minus(1).toNumber())
+        Math.floor(balance.minus(1).toNumber())
       )
 
       await waitFor(archimedes.withdraw(0, toNumber(1e18)))
@@ -336,13 +348,95 @@ describe('Archimedes', () => {
 
       // original value
       expect(currentBalance).to.be.equal(
-        Math.floor(balance.div(1e18).toNumber())
+        Math.floor(balance.toNumber())
       )
     })
   })
-  describe('getPricePerFullShare', async () => {
-    it('', async () => {
 
+  describe('withdraw', async () => {
+    beforeEach(async () => {
+      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
+      await strategy.deployed()
+      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
+    })
+
+    it('Should revert with 0 shares', async () => {
+      expect(archimedes.withdraw(0, 0)).to.be.revertedWith('0 shares')
+    })
+
+    it('Should revert without shares', async () => {
+      expect(archimedes.withdraw(0, 10)).to.be.revertedWith('withdraw: not sufficient found')
+    })
+  })
+
+  describe('getPricePerFullShare', async () => {
+    let strategy
+
+    beforeEach(async () => {
+      strategy = await deploy('StratMock', archimedes.address, piToken.address)
+      await strategy.deployed()
+      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
+    })
+    it('Should get 1e18 for 0 shares', async () => {
+      expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
+    })
+
+    it('Should get updated value after deposit', async () => {
+      // Setup deposit
+      await piToken.approve(archimedes.address, 100)
+      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+
+      expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
+
+      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+
+      expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
+
+      // simulate yield 30 /20 => 15
+      await waitFor(piToken.transfer(strategy.address, 10))
+      expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1.5e18))
+    })
+  })
+
+  describe('decimals', async () => {
+    let strategy
+
+    beforeEach(async () => {
+      strategy = await deploy('StratMock', archimedes.address, piToken.address)
+      await strategy.deployed()
+      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
+    })
+    it('Should be strategy decimals', async () => {
+      expect(await archimedes.decimals(0)).to.be.equal(18)
+      expect(await strategy.decimals()).to.be.equal(18)
+    })
+    it('Should get 1 for 1 shares', async () => {
+      await piToken.approve(archimedes.address, 100)
+      await waitFor(archimedes.deposit(0, 1, zeroAddress))
+
+      expect(await archimedes.balance(0)).to.be.equal(1)
+      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(1)
+    })
+  })
+
+  describe('balance & balanceOf', async () => {
+    let strategy
+
+    beforeEach(async () => {
+      strategy = await deploy('StratMock', archimedes.address, piToken.address)
+      await strategy.deployed()
+      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
+    })
+    it('Should get 0 for 0 shares', async () => {
+      expect(await archimedes.balance(0)).to.be.equal(0)
+      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(0)
+    })
+    it('Should get 1 for 1 shares', async () => {
+      await piToken.approve(archimedes.address, 100)
+      await waitFor(archimedes.deposit(0, 1, zeroAddress))
+
+      expect(await archimedes.balance(0)).to.be.equal(1)
+      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(1)
     })
   })
 
@@ -350,7 +444,7 @@ describe('Archimedes', () => {
     beforeEach(async () => {
       const strategy = await deploy('StratMock', archimedes.address, piToken.address)
       await strategy.deployed()
-      await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
+      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
       expect(await archimedes.poolLength()).to.be.equal(1)
     })
 
@@ -358,6 +452,27 @@ describe('Archimedes', () => {
       await expect(
         archimedes.deposit(0, 0, zeroAddress)
       ).to.be.revertedWith('Insufficient deposit')
+    })
+  })
+
+  describe('setReferralCommissionRate', async () => {
+    it('should revert from not admin change', async () => {
+      expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%
+
+      await expect(
+        archimedes.connect(bob).setReferralCommissionRate(20)
+      ).to.be.revertedWith(
+        'Ownable: caller is not the owner'
+      )
+
+      expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%
+    })
+    it('should change rate from 1 to 2', async () => {
+      expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%
+
+      await waitFor(archimedes.setReferralCommissionRate(20))
+
+      expect(await archimedes.referralCommissionRate()).to.be.equal(20) // 2%
     })
   })
 })

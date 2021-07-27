@@ -136,7 +136,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
     }
 
     function deposit(address _senderUser, uint _amount) public whenNotPaused onlyFarm returns (uint) {
-        uint _before = balanceOf();
+        uint _before = balance();
 
         IERC20(want).safeTransferFrom(
             farm, // Archimedes
@@ -146,7 +146,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
 
         _leverage();
 
-        uint _after = balanceOf();
+        uint _after = balance();
         uint _diff = _after - _before;
 
         uint shares;
@@ -269,7 +269,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
 
     // Withdraw partial funds, normally used with a vault withdrawal
     function withdraw(address _senderUser, uint _shares) external onlyFarm {
-        uint _withdraw = (balanceOf() * _shares) / totalSupply();
+        uint _withdraw = (balance() * _shares) / totalSupply();
 
         _burn(_senderUser, _shares);
 
@@ -298,7 +298,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
         }
     }
 
-    function balanceOf() public view returns (uint) {
+    function balance() public view returns (uint) {
         return wantBalance() + balanceOfPool();
     }
 
@@ -344,9 +344,9 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
     }
 
     function swapRewards(uint _maticToWantRatio) internal {
-        uint balance = IERC20(wmatic).balanceOf(address(this));
+        uint _balance = IERC20(wmatic).balanceOf(address(this));
 
-        if (balance > 0) {
+        if (_balance > 0) {
             // _maticToWantRatio is a 9 decimals ratio number calculated by the
             // caller before call harvest to get the minimum amount of want-tokens.
             // So the balance is multiplied by the ratio and then divided by 9 decimals
@@ -354,15 +354,15 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
             // decimal diff between tokens.
             // E.g want is USDT with  only 6 decimals:
             // _maticToWantRatio = 1_522_650_000 (1.52265 USDT/MATIC)
-            // balance = 1e18 (1.0 MATIC)
+            // _balance = 1e18 (1.0 MATIC)
             // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
             // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
 
             uint tokenDiffPrecision = ((10 ** ERC20(wmatic).decimals()) / (10 ** ERC20(want).decimals())) * 1e9;
-            uint expected = (balance * _maticToWantRatio) / tokenDiffPrecision;
+            uint expected = (_balance * _maticToWantRatio) / tokenDiffPrecision;
 
             IUniswapRouter(exchange).swapExactTokensForTokens(
-                balance, expected, wmaticToWantRoute, address(this), block.timestamp + 60
+                _balance, expected, wmaticToWantRoute, address(this), block.timestamp + 60
             );
         }
     }

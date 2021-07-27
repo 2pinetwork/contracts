@@ -14,12 +14,12 @@ contract StratMock is ERC20 {
         want = IERC20(_want);
     }
 
-    function wantBalance() public view returns (uint) {
+    function balance() public view returns (uint) {
         return want.balanceOf(address(this));
     }
 
     function deposit(address _senderUser, uint _amount) public returns (uint) {
-        uint _before = wantBalance();
+        uint _before = balance();
 
         want.transferFrom(
             farm, // Archimedes
@@ -27,7 +27,7 @@ contract StratMock is ERC20 {
             _amount
         );
 
-        uint _after = wantBalance();
+        uint _after = balance();
         uint _diff = _after - _before;
 
         uint shares;
@@ -43,7 +43,7 @@ contract StratMock is ERC20 {
     }
 
     function withdraw(address _senderUser, uint _shares) public {
-        uint _withdraw = (wantBalance() * _shares) / totalSupply();
+        uint _withdraw = (balance() * _shares) / totalSupply();
 
         _burn(_senderUser, _shares);
 
