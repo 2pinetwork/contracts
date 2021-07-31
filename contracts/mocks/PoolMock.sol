@@ -9,7 +9,6 @@ interface IDataProvider {
 }
 
 contract PoolMock {
-    address want;
     address dataProvider;
     uint256 currentHealthFactor = 1.05e18;
 
@@ -25,9 +24,7 @@ contract PoolMock {
     }
 
     function withdraw(address _asset, uint _amount, address to) public returns (uint) {
-        want = _asset;
-
-        uint256 balance = IERC20(want).balanceOf(address(this));
+        uint256 balance = IERC20(_asset).balanceOf(address(this));
         uint256 toWithdraw = _amount;
 
         if (_amount > balance) {
@@ -39,8 +36,8 @@ contract PoolMock {
         }
 
         if (toWithdraw > 0) {
-            IERC20(want).approve(address(this), toWithdraw);
-            IERC20(want).transferFrom(address(this), to, toWithdraw);
+            IERC20(_asset).approve(address(this), toWithdraw);
+            IERC20(_asset).transferFrom(address(this), to, toWithdraw);
         }
 
         return _amount;

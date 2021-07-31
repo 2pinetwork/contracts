@@ -257,9 +257,9 @@ describe('Archimedes Aave strat', () => {
 
   describe('Harvest', () => {
     it('Should harvest', async () => {
-      expect(
-        strat.harvest(1)
-      ).to.be.not.revertedWith()
+      await strat.addHarvester(owner.address)
+
+      expect(strat.harvest(1)).to.be.not.revertedWith()
     })
   })
 
@@ -270,16 +270,47 @@ describe('Archimedes Aave strat', () => {
       ).to.be.revertedWith('Only harvest role can initialize')
     })
 
+    it('Should not increase health factor', async () => {
+      const balance = await token.balanceOf(owner.address)
+
+      await token.transfer(pool.address, balance)
+
+      const initialBalance = await token.balanceOf(pool.address)
+
+      await strat.increaseHealthFactor()
+
+      const afterBalance = await token.balanceOf(pool.address)
+
+      expect(initialBalance).to.be.equal(afterBalance)
+    })
+
     it('Should increase health factor', async () => {
-      expect(
-        strat.increaseHealthFactor()
-      ).to.be.not.revertedWith()
+      const balance = await token.balanceOf(owner.address)
+
+      await pool.setCurrentHealthFactor('' + 1.06e18)
+      await token.transfer(pool.address, balance)
+
+      const initialBalance = await token.balanceOf(pool.address)
+
+      await strat.increaseHealthFactor()
+
+      const afterBalance = await token.balanceOf(pool.address)
+
+      expect(initialBalance).to.be.not.equal(afterBalance)
     })
 
     it('Should rebalance', async () => {
-      expect(
-        strat.rebalance(1, 1)
-      ).to.be.not.revertedWith()
+      const balance = await token.balanceOf(owner.address)
+
+      await token.transfer(pool.address, balance)
+
+      const initialBalance = await token.balanceOf(pool.address)
+
+      await strat.rebalance(1, 1)
+
+      const afterBalance = await token.balanceOf(pool.address)
+
+      expect(initialBalance).to.be.not.equal(afterBalance)
     })
 
     it('Should reject rebalance due to borrow rate', async () => {
