@@ -24,16 +24,16 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
     // Address of Archimedes
     address public immutable farm;
 
-    address public constant wmatic = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+    address public wmatic;
 
     address public want;
     address public aToken;
     address public debtToken;
 
     // Aave contracts
-    address public constant dataProvider = address(0x7551b5D2763519d4e37e8B81929D336De671d46d);
-    address public constant incentivesController = address(0x357D51124f59836DeD84c8a1730D72B749d8BC23);
-    address public constant pool = address(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+    address public dataProvider;
+    address public incentivesController;
+    address public pool;
 
     // Routes
     address[] public wmaticToWantRoute;
@@ -70,9 +70,8 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
         string(abi.encodePacked("2pi ", ERC20(_want).name())),
         string(abi.encodePacked("2pi", ERC20(_want).symbol()))
     ) {
-        require(_want != address(0), "want");
-        require(Farm(_farm).piToken() != address(0), "PiToken Farm");
-        require(_treasury != address(0), "treasury");
+        require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
+        require(_treasury != address(0), "Treasury can't be the zero address");
 
         want = _want;
         borrowRate = _borrowRate;
@@ -83,24 +82,17 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
         exchange = _exchange;
         treasury = _treasury;
 
-        wmaticToWantRoute = [wmatic, want];
-
-        (aToken,,debtToken) = IDataProvider(dataProvider).getReserveTokensAddresses(want);
-
-        _giveAllowances();
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-
-        // ?
         _setupRole(HARVEST_ROLE, address(this));
     }
 
     modifier onlyFarm() {
-        require(msg.sender == farm, "!farm");
+        require(msg.sender == farm, "Not from farm");
         _;
     }
 
     modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "!admin");
+        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
         _;
     }
 
@@ -116,9 +108,30 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
         IERC20(wmatic).safeApprove(exchange, type(uint).max);
     }
 
+    function setDataProvider(address _dataProvider) external onlyAdmin {
+        dataProvider = _dataProvider;
+
+        (aToken,,debtToken) = IDataProvider(dataProvider).getReserveTokensAddresses(want);
+    }
+
+    function setIncentivesController(address _incentivesController) external onlyAdmin {
+        incentivesController = _incentivesController;
+    }
+
+    function setPool(address _pool) external onlyAdmin {
+        pool = _pool;
+    }
+
+    function setWmatic(address _wmatic) external onlyAdmin {
+        wmatic = _wmatic;
+        wmaticToWantRoute = [wmatic, want];
+
+        _giveAllowances();
+    }
+
     // `withdrawFee` can't be more than 1%
     function setWithdrawFee(uint _fee) external onlyAdmin {
-        require(_fee <= MAX_WITHDRAW_FEE, "!cap");
+        require(_fee <= MAX_WITHDRAW_FEE, "Exceeds fee cap");
 
         withdrawFee = _fee;
     }
@@ -213,10 +226,11 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin {
-        require(_borrowRate <= borrowRateMax, "!rate");
-        require(_borrowDepth <= BORROW_DEPTH_MAX, "!depth");
+        require(_borrowRate <= borrowRateMax, "Exceeds max borrow rate");
+        require(_borrowDepth <= BORROW_DEPTH_MAX, "Exceeds max borrow depth");
 
         _fullDeleverage();
+
         borrowRate = _borrowRate;
         borrowDepth = _borrowDepth;
 
@@ -308,7 +322,6 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
         return supplyBal - borrowBal;
     }
 
-
     function claimRewards() internal {
         // Incentive controller only receive aToken addresses
         address[] memory assets = new address[](2);
@@ -323,7 +336,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable {
     // _maticToWantRatio is a pre-calculated ratio to prevent
     // sandwich attacks
     function harvest(uint _maticToWantRatio) public {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only admin can initialize");
+        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role can initialize");
         uint _before = wantBalance();
 
         claimRewards();
