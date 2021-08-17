@@ -154,7 +154,7 @@ before(async () => {
   // DEPLOY PiToken
   console.log('Deploying PiToken')
   global.PiToken = await createPiToken(false, true)
-  expect(global.PiToken.address).to.be.equal('0xCfaa0489f27b8A6980DeA5134f32516c755B7e63')
+  expect(global.PiToken.address).to.be.equal('0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8')
 })
 
 afterEach(async () => {

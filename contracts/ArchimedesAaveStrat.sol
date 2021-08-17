@@ -331,7 +331,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
     // _maticToWantRatio is a pre-calculated ratio to prevent
     // sandwich attacks
     function harvest(uint _maticToWantRatio) external nonReentrant {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role can initialize");
+        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
         uint _before = wantBalance();
 
         claimRewards();

@@ -174,7 +174,7 @@ describe('Archimedes Aave strat', () => {
 
       await expect(
         strat.connect(bob).harvest(0)
-      ).to.be.not.revertedWith('Only harvest role can initialize')
+      ).to.be.not.revertedWith('Only harvest role')
 
       // Just to take the _other_ path during swap rewards
       await WMATIC.deposit({ value: 1 });
@@ -182,7 +182,7 @@ describe('Archimedes Aave strat', () => {
 
       expect(
         strat.connect(bob).harvest(0)
-      ).to.be.not.revertedWith('Only harvest role can initialize')
+      ).to.be.not.revertedWith('Only harvest role')
     })
   })
 
@@ -270,7 +270,7 @@ describe('Archimedes Aave strat', () => {
     it('Should reject no hardvester doing harvest', async () => {
       expect(
         strat.connect(bob).harvest(0)
-      ).to.be.revertedWith('Only harvest role can initialize')
+      ).to.be.revertedWith('Only harvest role')
     })
 
     it('Should not increase health factor', async () => {

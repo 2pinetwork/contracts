@@ -1,5 +1,3 @@
-node_modules
-
 #Hardhat files
 cache
 artifacts
@@ -12,6 +10,5 @@ coverage/
 coverage.json
 
 # Ignore tmp or utils
-scripts/
 build/
 utils/

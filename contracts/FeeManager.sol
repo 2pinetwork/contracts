@@ -20,8 +20,9 @@ contract FeeManager is AccessControl, ReentrancyGuard {
 
     // Tokens used
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
-    address constant public piToken = address(0xCfaa0489f27b8A6980DeA5134f32516c755B7e63); // Test
-    // address constant public piToken = address(0xCa3F508B8e4Dd382eE878A314789373D80A5190A);
+    address constant public piToken = address(0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8); // Test
+    // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
+    // address constant public piToken = address(0x913C1E1a34B60a80F16c64c83E3D74695F492567); // Mumbai
 
     address public treasury;
     address public piVault;
@@ -31,8 +32,6 @@ contract FeeManager is AccessControl, ReentrancyGuard {
     uint constant public TREASURY_PART = 150;
     uint constant public VAULT_PART = 850;
     uint constant public MAX = 1000;
-
-    address[] public wNativeToPiRoute = [wNative, piToken];
 
     constructor(address _treasury, address _piVault, address _exchange) {
         require(IPiVault(_piVault).piToken() == piToken, "Not PiToken vault");
@@ -54,25 +53,41 @@ contract FeeManager is AccessControl, ReentrancyGuard {
         _;
     }
 
-    function harvest(uint _nativeTo2Pi) external nonReentrant {
+    function harvest(address _token, uint _ratio) external nonReentrant {
         require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
-        uint balance = IERC20(wNative).balanceOf(address(this));
+        uint _balance = IERC20(_token).balanceOf(address(this));
 
-        // _nativeTo2Pi is a 9 decimals ratio number calculated by the
+        if (_balance <= 0) { return; }
+
+        // _ratio is a 9 decimals ratio number calculated by the
         // caller before call harvest to get the minimum amount of 2Pi-tokens.
-        // So the balance is multiplied by the ratio and then divided by 9 decimals
+        // So the _balance is multiplied by the ratio and then divided by 9 decimals
         // to get the same "precision". Then the result should be divided for the
         // decimal diff between tokens.
-        // E.g wNative is WMATIC with 18 decimals:
-        // _nativeTo2Pi = 522_650_000 (0.52265 WMATIC/2Pi)
-        // _balance = 1e18 (1.0 WMATIC)
-        // tokenDiffPrecision = 1e9 (Default 1e9 ratio precision) wNative & 2Pi both have 18 decimals
+        // E.g _token is WMATIC with 18 decimals:
+        // _ratio = 522_650_000 (0.52265 WMATIC/2Pi)
+        // __balance = 1e18 (1.0 WMATIC)
+        // tokenDiffPrecision = 1e9 ((1e18 MATIC decimals / 1e18 2Pi decimals) * 1e9 ratio precision)
         // expected = 522650000000000000 (1e18 * 522_650_000 / 1e9) [0.52 in 2Pi decimals]
-        uint tokenDiffPrecision = 1e9;
-        uint expected = balance * _nativeTo2Pi / tokenDiffPrecision;
+        uint tokenDiffPrecision = ((10 ** ERC20(_token).decimals()) / 1e18) * 1e9;
+        uint expected = _balance * _ratio / tokenDiffPrecision;
+
+        bool native = _token == wNative;
+
+        address[] memory route = new address[](native ? 2 : 3);
+        route[0] = _token;
+
+        if (native) {
+            route[1] = piToken;
+        } else {
+            IERC20(_token).safeApprove(exchange, _balance);
+
+            route[1] = wNative;
+            route[2] = piToken;
+        }
 
         IUniswapRouter(exchange).swapExactTokensForTokens(
-            balance, expected, wNativeToPiRoute, address(this), block.timestamp + 60
+            _balance, expected, route, address(this), block.timestamp + 60
         );
 
         uint piBalance = IERC20(piToken).balanceOf(address(this));
@@ -94,14 +109,5 @@ contract FeeManager is AccessControl, ReentrancyGuard {
 
         exchange = _exchange;
         IERC20(wNative).safeApprove(exchange, type(uint).max);
-    }
-
-    // Rescue locked funds sent by mistake that
-    function inCaseTokensGetStuck(address _token) external onlyAdmin nonReentrant {
-        require(_token != wNative, "!safe");
-        require(_token != piToken, "!safe");
-
-        uint amount = IERC20(_token).balanceOf(address(this));
-        IERC20(_token).safeTransfer(msg.sender, amount);
     }
 }

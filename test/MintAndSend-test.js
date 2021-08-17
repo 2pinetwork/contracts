@@ -67,7 +67,7 @@ describe('MintAndSend setup', () => {
       )
     })
 
-    it('should revert for max investors count', async () => {
+    it('should revert for max 2 tickets investors', async () => {
       // Hardcoded number of max investors with 2 tickets
       for (let i = 0; i < 2; i++) {
         await waitFor(mintAndSend.addInvestor(ethers.Wallet.createRandom().address, 2))
@@ -131,7 +131,9 @@ describe('MintAndSend setup', () => {
       expect(await mintAndSend.treasury()).to.be.equal(alice.address)
     })
     it('should revert set treasury for non owner', async () => {
-      await expect(mintAndSend.connect(alice).setTreasury(alice.address)).to.be.revertedWith('Ownable: caller is not the owner')
+      await expect(
+        mintAndSend.connect(alice).setTreasury(alice.address)
+      ).to.be.revertedWith('Ownable: caller is not the owner')
     })
   })
 

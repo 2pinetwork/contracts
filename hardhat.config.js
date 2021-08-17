@@ -50,6 +50,7 @@ module.exports = {
     }
   },
   networks: {
+    hardhat: { hardfork: 'berlin' },
     polygon: {
       url: url,
       accounts: [process.env.DEPLOYER || accounts[0]],

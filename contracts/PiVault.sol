@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract PiVault is ERC20, Ownable {
     using SafeERC20 for IERC20;
 
-    IERC20 public piToken;
+    IERC20 public immutable piToken;
 
     // Investor & Founders funds will be deposited but not released
     uint public immutable investorsLockTime;
