@@ -84,6 +84,7 @@ module.exports = {
   gasReporter: {
     enabled: (process.env.REPORT_GAS) ? true : false,
     currency: 'USD',
-    coinmarketcap: 'dd4b2cc6-a407-42a0-bc5d-ef6fc5a5a813'
+    coinmarketcap: 'dd4b2cc6-a407-42a0-bc5d-ef6fc5a5a813',
+    gasPrice: 1 // to compare between tests
   }
 }

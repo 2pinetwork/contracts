@@ -8,21 +8,15 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
 import "../interfaces/IUniswapRouter.sol";
 
-interface Farm {
-    function piToken() external view returns (address);
-}
-
-contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard {
+contract ControllerStrat is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
-
-    // Address of Archimedes
-    address public immutable farm;
 
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
     // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
@@ -59,13 +53,13 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
     uint constant public INTEREST_RATE_MODE = 2; // variable
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
-    address public exchange;
 
     // Fees
     uint constant public FEE_MAX = 10000;
-    uint constant public PERFORMANCE_FEE = 350; // 3.5%
-    uint constant public MAX_WITHDRAW_FEE = 100; // 1%
-    uint public withdrawFee = 10; // 0.1%
+    uint public performanceFee = 350; // 3.5%
+
+    address public exchange;
+    address public immutable controller;
 
     constructor(
         address _want,
@@ -73,22 +67,19 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
         uint _borrowRateMax,
         uint _borrowDepth,
         uint _minLeverage,
-        address _farm,
+        address _controller,
         address _exchange,
         address _treasury
-    ) ERC20(
-        string(abi.encodePacked("2pi-", ERC20(_want).name())),
-        string(abi.encodePacked("2pi", ERC20(_want).symbol()))
     ) {
-        require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
-        require(_treasury != address(0), "Treasury can't be the zero address");
+        require(_controller != address(0), "Controller can't be 0 address");
+        require(_treasury != address(0), "Treasury can't be 0 address");
 
         want = _want;
         borrowRate = _borrowRate;
         borrowRateMax = _borrowRateMax;
         borrowDepth = _borrowDepth;
         minLeverage = _minLeverage;
-        farm = _farm;
+        controller = _controller;
         exchange = _exchange;
         treasury = _treasury;
 
@@ -97,12 +88,17 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
         wNativeToWantRoute = [wNative, _want];
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _setupRole(HARVEST_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, address(this));
         _giveAllowances(_want);
     }
 
-    modifier onlyFarm() {
-        require(msg.sender == farm, "Not from farm");
+    event NewTreasury(address old_treasury, address new_treasury);
+    event NewExchange(address old_exchange, address new_exchange);
+    event NewPerformanceFee(uint old_fee, uint new_fee);
+
+    modifier onlyController() {
+        require(msg.sender == controller, "Not from controller");
         _;
     }
 
@@ -112,10 +108,14 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        emit NewTreasury(treasury, _treasury);
+
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        emit NewExchange(exchange, _exchange);
+
         // Revoke current exchange
         IERC20(wNative).safeApprove(exchange, 0);
 
@@ -123,49 +123,45 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
         IERC20(wNative).safeApprove(exchange, type(uint).max);
     }
 
-    // `withdrawFee` can't be more than 1%
-    function setWithdrawFee(uint _fee) external onlyAdmin nonReentrant {
-        require(_fee <= MAX_WITHDRAW_FEE, "Exceeds fee cap");
-
-        withdrawFee = _fee;
-    }
-
     function setSwapRoute(address[] calldata _route) external onlyAdmin nonReentrant {
         wNativeToWantRoute = _route;
+    }
+
+    function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        emit NewPerformanceFee(performanceFee, _fee);
+
+        performanceFee = _fee;
     }
 
     function addHarvester(address newHarvester) external onlyAdmin nonReentrant {
         _setupRole(HARVEST_ROLE, newHarvester);
     }
 
-    function wantBalance() public view returns (uint) {
-        return IERC20(want).balanceOf(address(this));
+    function deposit() external whenNotPaused onlyController nonReentrant {
+        _leverage();
     }
 
-    function deposit(address _senderUser, uint _amount) external whenNotPaused onlyFarm nonReentrant returns (uint) {
-        uint _before = balance();
+    function withdraw(uint _amount) external onlyController nonReentrant {
+        uint _balance = wantBalance();
 
-        IERC20(want).safeTransferFrom(
-            farm, // Archimedes
-            address(this),
-            _amount
-        );
+        if (_balance < _amount) {
+            uint _diff = _amount - _balance;
 
-        _leverage();
-
-        uint _after = balance();
-        uint _diff = _after - _before;
-
-        uint shares;
-        if (totalSupply() <= 0) {
-            shares = _diff;
-        } else {
-            shares = (_diff * totalSupply()) / _before;
+            // If the amount is at least the half of the real deposit
+            // we have to do a full deleverage, in other case the withdraw+repay
+            // will looping for ever.
+            if ((_diff * 2) >= balanceOfPool()) {
+                _fullDeleverage();
+            } else {
+                _partialDeleverage(_diff);
+            }
         }
 
-        _mint(_senderUser, shares);
+        IERC20(want).safeTransfer(controller, _amount);
 
-        return shares;
+        if (!paused()) {
+            _leverage();
+        }
     }
 
     function _leverage() internal {
@@ -209,38 +205,6 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
         }
     }
 
-    function increaseHealthFactor() external onlyAdmin nonReentrant {
-        (uint supplyBal,) = supplyAndBorrow();
-
-        // Only withdraw the 10% of the max withdraw
-        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 100) / 10;
-
-        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
-        IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
-    }
-
-    function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
-        require(_borrowRate <= borrowRateMax, "Exceeds max borrow rate");
-        require(_borrowDepth <= BORROW_DEPTH_MAX, "Exceeds max borrow depth");
-
-        _fullDeleverage();
-
-        borrowRate = _borrowRate;
-        borrowDepth = _borrowDepth;
-
-        _leverage();
-    }
-
-    // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
-    function maxWithdrawFromSupply(uint _supply) internal view returns (uint) {
-        // The healthFactor value has the same representation than supply so
-        // to do the math we should remove 12 places from healthFactor to get a HF
-        // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
-        return _supply - (
-            (_supply * 1e6) / ((currentHealthFactor() / 1e12) - 0.05e6)
-        );
-    }
-
     function _partialDeleverage(uint _needed) internal {
         // Instead of a require() to raise an exception, the fullDeleverage should
         // fix the health factor
@@ -275,43 +239,47 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
         }
     }
 
-    // Withdraw partial funds, normally used with a vault withdrawal
-    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant {
-        // This line has to be calc before burn
-        uint _withdraw = (balance() * _shares) / totalSupply();
+    function increaseHealthFactor() external onlyAdmin nonReentrant {
+        (uint supplyBal,) = supplyAndBorrow();
 
-        _burn(_senderUser, _shares);
+        // Only withdraw the 10% of the max withdraw
+        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 100) / 10;
 
-        uint _balance = wantBalance();
+        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+        IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+    }
 
-        if (_balance < _withdraw) {
-            uint _diff = _withdraw - _balance;
+    function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
+        require(_borrowRate <= borrowRateMax, "Exceeds max borrow rate");
+        require(_borrowDepth <= BORROW_DEPTH_MAX, "Exceeds max borrow depth");
 
-            // If the amount is at least the half of the real deposit
-            // we have to do a full deleverage, in other case the withdraw+repay
-            // will looping for ever.
-            if ((_diff * 2) >= balanceOfPool()) {
-                _fullDeleverage();
-            } else {
-                _partialDeleverage(_diff);
-            }
-        }
+        _fullDeleverage();
 
-        uint withdrawalFee = (_withdraw * withdrawFee) / FEE_MAX;
+        borrowRate = _borrowRate;
+        borrowDepth = _borrowDepth;
 
-        IERC20(want).safeTransfer(treasury, withdrawalFee);
-        IERC20(want).safeTransfer(farm, _withdraw - withdrawalFee);
+        _leverage();
+    }
 
-        if (!paused()) {
-            _leverage();
-        }
+    // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
+    function maxWithdrawFromSupply(uint _supply) internal view returns (uint) {
+        // The healthFactor value has the same representation than supply so
+        // to do the math we should remove 12 places from healthFactor to get a HF
+        // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
+        return _supply - (
+            (_supply * 1e6) / ((currentHealthFactor() / 1e12) - 0.05e6)
+        );
+    }
+
+        function wantBalance() public view returns (uint) {
+        return IERC20(want).balanceOf(address(this));
     }
 
     function balance() public view returns (uint) {
         return wantBalance() + balanceOfPool();
     }
 
-    // it calculates how much 'want' the strategy has working in the farm.
+    // it calculates how much 'want' the strategy has working in the controller.
     function balanceOfPool() public view returns (uint) {
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
         return supplyBal - borrowBal;
@@ -330,7 +298,7 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
 
     // _maticToWantRatio is a pre-calculated ratio to prevent
     // sandwich attacks
-    function harvest(uint _maticToWantRatio) external nonReentrant {
+    function harvest(uint _maticToWantRatio) public nonReentrant {
         require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
         uint _before = wantBalance();
 
@@ -376,14 +344,14 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
     }
 
     /**
-     * @dev Takes out 3.5% performance fee.
+     * @dev Takes out performance fee.
      */
     function chargeFees(uint _harvested) internal {
-        uint performanceFee = (_harvested * PERFORMANCE_FEE) / FEE_MAX;
+        uint fee = (_harvested * performanceFee) / FEE_MAX;
 
-        if (performanceFee > 0) {
-            // Pay to treasury 3.5% of the total reward claimed
-            IERC20(want).safeTransfer(treasury, performanceFee);
+        if (fee > 0) {
+            // Pay to treasury a percentage of the total reward claimed
+            IERC20(want).safeTransfer(treasury, fee);
         }
     }
 
@@ -425,16 +393,16 @@ contract ArchimedesAaveStrat is ERC20, AccessControl, Pausable, ReentrancyGuard 
     }
 
     // called as part of strat migration. Sends all the available funds back to the vault.
-    // function retireStrat() external onlyController {
-    //     _pause();
-    //     _fullDeleverage();
+    function retireStrat() external onlyController {
+        _pause();
+        _fullDeleverage();
 
-    //     harvest(0);
+        harvest(0);
 
-    //     IERC20(want).transfer(controller, wantBalance());
+        IERC20(want).transfer(controller, wantBalance());
 
-    //     _removeAllowances();
-    // }
+        _removeAllowances();
+    }
 
     // pauses deposits and withdraws all funds from third party systems.
     function panic() external onlyAdmin nonReentrant {
