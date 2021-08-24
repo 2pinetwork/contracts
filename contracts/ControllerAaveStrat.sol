@@ -8,12 +8,13 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "hardhat/console.sol";
 
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
 import "../interfaces/IUniswapRouter.sol";
 
-contract ControllerStrat is AccessControl, Pausable, ReentrancyGuard {
+contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
@@ -89,7 +90,7 @@ contract ControllerStrat is AccessControl, Pausable, ReentrancyGuard {
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, address(this));
+        _setupRole(HARVEST_ROLE, _controller); // to retire strat
         _giveAllowances(_want);
     }
 
@@ -214,28 +215,32 @@ contract ControllerStrat is AccessControl, Pausable, ReentrancyGuard {
             return;
         }
 
-        uint borrowBal;
-        uint supplyBal;
-        uint toWithdraw;
-        uint toRepay;
+        // This is because we check the wantBalance in each iteration
+        // but for partialDeleverage we need to withdraw the entire
+        // _needed amount
+        uint toWithdraw = wantBalance() + _needed;
 
-        while (_needed > wantBalance()) {
-            (supplyBal, borrowBal) = supplyAndBorrow();
-            // This amount with borrowDepth = 0 will return the entire deposit
-            toWithdraw = maxWithdrawFromSupply(supplyBal);
+        while (toWithdraw > wantBalance()) {
+            withdrawAndRepay(toWithdraw);
+        }
+    }
 
-            if (toWithdraw > _needed) {
-                toWithdraw = _needed;
-            }
+    function withdrawAndRepay(uint _needed) internal {
+        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
+        // This amount with borrowDepth = 0 will return the entire deposit
+        uint toWithdraw = maxWithdrawFromSupply(supplyBal);
 
-            IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+        if (toWithdraw > _needed) {
+            toWithdraw = _needed;
+        }
 
-            // for depth > 0
-            if (borrowBal > 0) {
-                // Only repay the just amount
-                toRepay = (toWithdraw * borrowRate) / 100;
-                IAaveLendingPool(pool).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
-            }
+        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+
+        // for depth > 0
+        if (borrowBal > 0) {
+            // Only repay the just amount
+            uint toRepay = (toWithdraw * borrowRate) / 100;
+            IAaveLendingPool(pool).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }
     }
 

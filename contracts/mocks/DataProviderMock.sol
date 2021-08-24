@@ -3,12 +3,12 @@
 pragma solidity ^0.8.4;
 
 contract DataProviderMock {
-    uint256 aTokenBalance = 1e18;
-    uint256 debtTokenBalance = 1e18;
+    uint256 aTokenBalance;
+    uint256 debtTokenBalance;
 
     function reset() public {
-        setATokenBalance(1e18);
-        setDebtTokenBalance(1e18);
+        setATokenBalance(0);
+        setDebtTokenBalance(0);
     }
 
     function setATokenBalance(uint256 _aTokenBalance) public {

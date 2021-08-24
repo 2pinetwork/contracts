@@ -9,7 +9,7 @@ describe('ArchimedesMock', () => {
   let piToken
   let archimedes
   let rewardsBlock
-  let refMgr
+  // let refMgr
   let bob
 
   beforeEach(async () => {
@@ -24,15 +24,34 @@ describe('ArchimedesMock', () => {
       owner.address
     )
 
-    refMgr = await deploy('Referral', archimedes.address)
+    // refMgr = await deploy('Referral', archimedes.address)
 
-    await waitFor(archimedes.setReferralAddress(refMgr.address))
+    // await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
 
-    const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-    await strategy.deployed()
-    await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
+    const controller = await deploy(
+      'Controller',
+      piToken.address,
+      archimedes.address,
+      owner.address
+    )
+
+    const strategy = await deploy(
+      'ControllerAaveStrat',
+      piToken.address,
+      0,
+      0,
+      0,
+      0,
+      controller.address,
+      global.exchange.address,
+      owner.address
+    )
+
+    await waitFor(controller.setStrategy(strategy.address))
+
+    await (await archimedes.addNewPool(piToken.address, controller.address, 1, false)).wait()
     expect(await archimedes.poolLength()).to.be.equal(1)
   })
 
@@ -41,7 +60,7 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.updatePool(0))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
     })
-    it('should not claim rewards without strategy shares', async () => {
+    it('should not claim rewards without controller shares', async () => {
       await waitFor(archimedes.setBlockNumber(toNumber(rewardsBlock + 3)))
       await waitFor(archimedes.updatePool(0)) // this will not redeem
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
@@ -74,7 +93,7 @@ describe('ArchimedesMock', () => {
 
       await waitFor(archimedes.updatePool(0))
 
-      const expected = parseInt(await archimedes.pendingPiToken(0, owner.address), 10)
+      const expected = parseInt(await archimedes.pendingPiToken(0), 10)
 
       // Impersonate Archimedes Load with 1e18
       const archSigner = await impersonateContract(archimedes.address)
@@ -110,7 +129,7 @@ describe('ArchimedesMock', () => {
       const reward = (30 * (MINT_DATA[0].community * 0.99))
 
       expect(
-        await archimedes.pendingPiToken(0, owner.address)
+        await archimedes.pendingPiToken(0)
       ).to.be.equal(
         toNumber(reward)
       )
@@ -129,12 +148,12 @@ describe('ArchimedesMock', () => {
       expect(await piToken.totalSupply()).to.be.equal(
         MINT_DATA[5].expected.toFixed() // expected community tokens at the end of the time
       )
-      expect(await archimedes.pendingPiToken(0, owner.address)).to.be.equal(0)
+      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
-      expect(await archimedes.pendingPiToken(0, owner.address)).to.be.equal(0)
+      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
     })
   })
 })

@@ -79,7 +79,9 @@ module.exports = {
     parallel: true,
     jobs: 4, // some day?
     slow: '1500', // 1.5s
-    "full-trace": true
+    "full-trace": true,
+    bail: false,
+    inspect: true
   },
   gasReporter: {
     enabled: (process.env.REPORT_GAS) ? true : false,

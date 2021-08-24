@@ -74,6 +74,31 @@ const createPiToken = async (mocked, withDeployer) => {
   return piToken
 }
 
+const createController = async (token, archimedes) => {
+  const controller = await deploy(
+    'Controller',
+    token.address,
+    archimedes.address,
+    owner.address
+  )
+
+  const strategy = await deploy(
+    'ControllerAaveStrat',
+    token.address,
+    0,
+    100,
+    0,
+    0,
+    controller.address,
+    global.exchange.address,
+    owner.address
+  )
+
+  await waitFor(controller.setStrategy(strategy.address))
+
+  return controller
+}
+
 const zeroAddress = '0x' + '0'.repeat(40)
 
 const expectedOnlyAdmin = async (fn, ...args) => {
@@ -102,7 +127,7 @@ const MAX_UINT = '11579208923731619542357098500868790785326998466564056403945758
 module.exports = {
   toNumber, getBlock, mineNTimes,
   createPiToken, waitFor, deploy, zeroAddress, expectedOnlyAdmin,
-  sleep, impersonateContract, MAX_UINT
+  sleep, impersonateContract, createController, MAX_UINT
 }
 
 // Global setup for all the test-set

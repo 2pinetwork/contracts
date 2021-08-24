@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 import { IPiToken } from "../interfaces/IPiToken.sol";
 
@@ -214,8 +214,6 @@ contract MintAndSend is Ownable, ReentrancyGuard {
 
         for (uint i = 0; i < FOUNDERS_COUNT; i++) {
             // send deposited stk2Pi to each investor
-            // console.log("Transfering to founder", founders[i]);
-            // console.log("Amount: ", sharesPerFounder);
             piVault.safeTransfer(founders[i], sharesPerFounder);
         }
     }

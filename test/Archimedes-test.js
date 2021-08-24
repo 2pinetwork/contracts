@@ -1,12 +1,15 @@
 const {
   toNumber, createPiToken, getBlock, mineNTimes,
-  waitFor, deploy, zeroAddress
+  waitFor, deploy, zeroAddress, createController
 } = require('./helpers')
+
+
 
 describe('Archimedes', () => {
   let bob, alice
   let piToken
   let archimedes
+  let controller
   let rewardsBlock
   let refMgr
 
@@ -30,99 +33,68 @@ describe('Archimedes', () => {
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
-  })
 
-  describe('Deployment', async () => {
-    it('Initial deployment should have a zero balance', async () => {
-      expect(await archimedes.piToken()).to.equal(piToken.address)
-      expect(await archimedes.poolLength()).to.equal(0)
-    })
+    expect(await archimedes.piToken()).to.equal(piToken.address)
+    expect(await archimedes.poolLength()).to.equal(0)
+
+    controller = await createController(piToken, archimedes)
+
+    await archimedes.addNewPool(piToken.address, controller.address, 1, false)
+    expect(await archimedes.poolLength()).to.be.equal(1)
   })
 
   describe('addNewPool', async () => {
     it('Should reverse with zero address want', async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-
       expect(
-        archimedes.addNewPool(zeroAddress, strategy.address, 1)
+        archimedes.addNewPool(zeroAddress, controller.address, 1, true)
       ).to.be.revertedWith('Address zero not allowed')
     })
 
-    it('Should reverse with non-farm strategy', async () => {
-      const strategy = await deploy('StratMock', owner.address, piToken.address)
-      await strategy.deployed()
+    it('Should reverse with non-farm controller', async () => {
+      const otherFarm = await deploy(
+        'Archimedes',
+        piToken.address,
+        rewardsBlock,
+        owner.address
+      )
+
+      const otherCtroller = await createController(piToken, otherFarm)
 
       expect(
-        archimedes.addNewPool(piToken.address, strategy.address, 1)
-      ).to.be.revertedWith('Not a farm strategy')
+        archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
+      ).to.be.revertedWith('Not a farm controller')
     })
   })
 
   describe('changePoolWeighing', async () => {
-    it('Should reverse with zero address want', async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await archimedes.addNewPool(piToken.address, strategy.address, 1)
-
+    it('Should update totalWeighing', async () => {
       expect(await archimedes.totalWeighing()).to.be.equal(1)
 
-      await waitFor(archimedes.changePoolWeighing(0, 5))
+      await waitFor(archimedes.changePoolWeighing(0, 5, true))
 
       expect(await archimedes.totalWeighing()).to.be.equal(5)
 
-      await waitFor(archimedes.changePoolWeighing(0, 0))
-
-      expect(await archimedes.totalWeighing()).to.be.equal(0)
-    })
-  })
-
-  describe('massUpdatePools', async () => {
-    it('Should reverse with zero address want', async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await archimedes.addNewPool(piToken.address, strategy.address, 1)
-
-      expect(await archimedes.totalWeighing()).to.be.equal(1)
-
-      await waitFor(archimedes.changePoolWeighing(0, 5))
-
-      expect(await archimedes.totalWeighing()).to.be.equal(5)
-
-      await waitFor(archimedes.changePoolWeighing(0, 0))
+      await waitFor(archimedes.changePoolWeighing(0, 0, false))
 
       expect(await archimedes.totalWeighing()).to.be.equal(0)
     })
   })
 
   describe('pendingPiToken', async () => {
-    beforeEach(async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
-      expect(await archimedes.poolLength()).to.be.equal(1)
-    })
-
     it('should return 0 for future block', async () => {
       expect(await archimedes.startBlock()).to.be.above(await getBlock())
-      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
     })
 
     it('should return 0 for unknown user', async () => {
       mineNTimes((await archimedes.startBlock()) - (await getBlock()))
 
-      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
     })
   })
 
   describe('FullFlow', async () => {
     it('Full flow with 2 accounts && just 1 referral', async () => {
-      // Create Strategy
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await (await archimedes.addNewPool(piToken.address, strategy.address, 1)).wait()
-      expect(await archimedes.poolLength()).to.be.equal(1)
-
       let referralPaid = 0
 
       // Deposit without rewards yet
@@ -142,7 +114,7 @@ describe('Archimedes', () => {
       const rewardBlock = parseInt(await archimedes.startBlock(), 10)
       const currentBlock = parseInt(await getBlock(), 10)
       expect(rewardBlock).to.be.greaterThan(currentBlock)
-      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
 
       await mineNTimes(rewardBlock - currentBlock)
 
@@ -179,7 +151,7 @@ describe('Archimedes', () => {
         await piToken.balanceOf(alice.address)
       ).to.be.equal(aliceBalance)
       expect(
-        await archimedes.pendingPiToken(0, bob.address)
+        await archimedes.connect(bob).pendingPiToken(0)
       ).to.be.equal(0)
 
       // Work with Alice
@@ -257,7 +229,7 @@ describe('Archimedes', () => {
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
 
-      expect(await archimedes.pendingPiToken(0, bob.address)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
       // just call the fn to get it covered
       await (await archimedes.massUpdatePools()).wait()
 
@@ -287,7 +259,7 @@ describe('Archimedes', () => {
 
       // Emergency withdraw without harvest
       aliceBalance = parseInt(await piToken.balanceOf(alice.address), 10)
-      const deposited = parseInt(await strategy.balanceOf(alice.address), 10)
+      const deposited = parseInt(await controller.balanceOf(alice.address), 10)
 
       await waitFor(archimedes.connect(alice).emergencyWithdraw(0))
 
@@ -298,24 +270,24 @@ describe('Archimedes', () => {
   })
 
   describe('depositMATIC', async () => {
-    let strategy
+    let wmaticCtroller
 
     beforeEach(async () => {
-      strategy = await deploy('StratMock', archimedes.address, WMATIC.address)
-      await strategy.deployed()
-      await (await archimedes.addNewPool(WMATIC.address, strategy.address, 1)).wait()
+      // piToken pid = 0
+      // WMATIC  pid = 1
+      wmaticCtroller = await createController(WMATIC, archimedes)
+      await waitFor(archimedes.addNewPool(WMATIC.address, wmaticCtroller.address, 1, false))
     })
 
     it('Should revert with 0 amount', async () => {
       expect(
-        archimedes.depositMATIC(0, zeroAddress, { value: 0 })
+        archimedes.depositMATIC(1, zeroAddress, { value: 0 })
       ).to.be.revertedWith('Insufficient deposit')
     })
 
     it('Should revert for not wmatic pool', async () => {
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
       expect(
-        archimedes.depositMATIC(1, zeroAddress, { value: 10 })
+        archimedes.depositMATIC(0, zeroAddress, { value: 10 })
       ).to.be.revertedWith('Only MATIC pool')
     })
 
@@ -325,8 +297,8 @@ describe('Archimedes', () => {
         (await ethers.provider.getBalance(owner.address)) / 1e18
       )
 
-      await waitFor(archimedes.depositMATIC(0, zeroAddress, { value: toNumber(1e18) }))
-      expect(await strategy.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
+      await waitFor(archimedes.depositMATIC(1, zeroAddress, { value: toNumber(1e18) }))
+      expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
 
       // This is because eth is the main token and every transaction has fees
       let currentBalance = Math.floor(
@@ -338,9 +310,9 @@ describe('Archimedes', () => {
         Math.floor(balance.minus(1).toNumber())
       )
 
-      await waitFor(archimedes.withdraw(0, toNumber(1e18)))
+      await waitFor(archimedes.withdraw(1, toNumber(1e18)))
 
-      expect(await strategy.balanceOf(owner.address)).to.be.equal(0)
+      expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(0)
 
       currentBalance = Math.floor(
         (await ethers.provider.getBalance(owner.address)) / 1e18
@@ -354,12 +326,6 @@ describe('Archimedes', () => {
   })
 
   describe('withdraw', async () => {
-    beforeEach(async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
-    })
-
     it('Should revert with 0 shares', async () => {
       expect(archimedes.withdraw(0, 0)).to.be.revertedWith('0 shares')
     })
@@ -370,13 +336,6 @@ describe('Archimedes', () => {
   })
 
   describe('getPricePerFullShare', async () => {
-    let strategy
-
-    beforeEach(async () => {
-      strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
-    })
     it('Should get 1e18 for 0 shares', async () => {
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
     })
@@ -393,22 +352,15 @@ describe('Archimedes', () => {
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
 
       // simulate yield 30 /20 => 15
-      await waitFor(piToken.transfer(strategy.address, 10))
+      await waitFor(piToken.transfer(controller.address, 10))
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1.5e18))
     })
   })
 
   describe('decimals', async () => {
-    let strategy
-
-    beforeEach(async () => {
-      strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
-    })
-    it('Should be strategy decimals', async () => {
+    it('Should be controller decimals', async () => {
       expect(await archimedes.decimals(0)).to.be.equal(18)
-      expect(await strategy.decimals()).to.be.equal(18)
+      expect(await controller.decimals()).to.be.equal(18)
     })
     it('Should get 1 for 1 shares', async () => {
       await piToken.approve(archimedes.address, 100)
@@ -420,13 +372,6 @@ describe('Archimedes', () => {
   })
 
   describe('balance & balanceOf', async () => {
-    let strategy
-
-    beforeEach(async () => {
-      strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
-    })
     it('Should get 0 for 0 shares', async () => {
       expect(await archimedes.balance(0)).to.be.equal(0)
       expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(0)
@@ -441,17 +386,19 @@ describe('Archimedes', () => {
   })
 
   describe('deposit', async () => {
-    beforeEach(async () => {
-      const strategy = await deploy('StratMock', archimedes.address, piToken.address)
-      await strategy.deployed()
-      await waitFor(archimedes.addNewPool(piToken.address, strategy.address, 1))
-      expect(await archimedes.poolLength()).to.be.equal(1)
-    })
-
     it('should revert with 0 amount', async () => {
       await expect(
         archimedes.deposit(0, 0, zeroAddress)
       ).to.be.revertedWith('Insufficient deposit')
+    })
+
+    it('should deposit all balance', async () => {
+      await waitFor(piToken.transfer(bob.address, 1000))
+      await waitFor(piToken.connect(bob).approve(archimedes.address, 1000))
+
+      await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+      expect(await archimedes.balanceOf(0, bob.address)).to.be.equal(1000)
     })
   })
 
@@ -473,6 +420,13 @@ describe('Archimedes', () => {
       await waitFor(archimedes.setReferralCommissionRate(20))
 
       expect(await archimedes.referralCommissionRate()).to.be.equal(20) // 2%
+    })
+
+    it('should revert for maximum referral rate', async () => {
+      const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()).plus(1)
+      await expect(archimedes.setReferralAddress(max)).to.be.revertedWith(
+        'setReferralCommissionRate: invalid referral commission rate basis points'
+      )
     })
   })
 })

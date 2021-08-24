@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "hardhat/console.sol";
 
 interface Farm {
     function piToken() external view returns (address);
@@ -44,6 +45,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         string(abi.encodePacked("2pi", ERC20(_want).symbol()))
     ) {
         require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
+        require(_treasury != address(0), "Treasury can't be 0 address");
 
         want = _want;
         farm = _farm;
@@ -70,18 +72,14 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     function setStrategy(address new_strategy) external onlyOwner nonReentrant {
+        require(new_strategy != address(0), "Can't be 0 address");
         emit NewStrategy(strategy, new_strategy);
 
         if (strategy != address(0)) {
             IStrategy(strategy).retireStrat();
-
-            IERC20(want).safeApprove(strategy, 0);
         }
 
         strategy = new_strategy;
-
-
-        IERC20(want).safeApprove(strategy, type(uint).max);
 
         _strategyDeposit();
     }
@@ -160,7 +158,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         uint _amount = wantBalance();
 
         if (_amount > 0) {
-            IERC20(want).safeTransfer(address(this), _amount);
+            IERC20(want).safeTransfer(strategy, _amount);
 
             IStrategy(strategy).deposit();
         }

@@ -85,7 +85,6 @@ contract PiVault is ERC20, Ownable {
         } else {
             shares = _amount * totalSupply() / _pool;
         }
-        // console.log("Minted shares: ", shares);
 
         _mint(msg.sender, shares);
     }
@@ -101,12 +100,10 @@ contract PiVault is ERC20, Ownable {
      * @dev Function to exit the system. The vault will pay up the piToken holder.
      */
     function withdraw(uint _shares) public {
-        // console.log("Shares: ", _shares);
         require(_shares <= balanceOf(msg.sender), "Can't withdraw more than available");
 
         uint r = balance() * _shares / totalSupply();
 
-        // console.log("R: ", r);
         checkWithdraw(r);
 
         _burn(msg.sender, _shares);

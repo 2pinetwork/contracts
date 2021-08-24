@@ -27,12 +27,14 @@ interface IWMATIC is IERC20 {
 // distributed and the community can show to govern itself.
 // Have fun reading it. Hopefully it's bug-free. God bless.
 
-interface IStrategy {
+interface IController {
+    function strategy() external view returns (address);
     function totalSupply() external view returns (uint);
     function balance() external view returns (uint);
+    function balanceOf(address _user) external view returns (uint);
     function decimals() external view returns (uint);
     function farm() external view returns (address);
-    function deposit(address _depositor, uint _amount) external returns (uint);
+    function deposit(address _depositor, uint _amount) external;
     function withdraw(address _depositor, uint _shares) external;
 }
 
@@ -45,30 +47,13 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // IWMATIC public constant wmatic = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
     // IWMATIC public constant wmatic = IWMATIC(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // Polygon
 
-    // Info of each user.
-    struct UserInfo {
-        uint shares;         // How many tokens the user has provided. // could be checked against the strategy
-        uint paidReward;     // Reward debt. See explanation below.
-        //
-        // We do some fancy math here. Basically, any point in time, the amount of PIes
-        // entitled to a user but is pending to be distributed is:
-        //
-        //   pending reward = (user.shares * pool.accPiTokenPerShare) - user.paidReward
-        //
-        // Whenever a user deposits or withdraws tokens to a pool. Here's what happens:
-        //   1. The pool's `accPiTokenPerShare` (and `lastRewardBlock`) gets updated.
-        //   2. User receives the pending reward sent to his/her address.
-        //   3. User's `shares` gets updated.
-        //   4. User's `paidReward` gets updated.
-    }
-
     // Info of each pool.
     struct PoolInfo {
         IERC20 want;             // Address of token contract.
         uint weighing;           // How much weighing assigned to this pool. PIes to distribute per block.
         uint lastRewardBlock;    // Last block number that PIes distribution occurs.
         uint accPiTokenPerShare; // Accumulated PIes per share, times SHARE_PRECISION. See below.
-        address strategy;        // Token strategy
+        address controller;        // Token controller
     }
 
     IPiToken public piToken;
@@ -85,7 +70,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Pool existence mapping to prevent duplication
     // mapping(IERC20 => uint) public poolExistence; // anti duplication?
     // Info of each user that stakes tokens.
-    mapping(uint => mapping(address => UserInfo)) public userInfo;
+    mapping(uint => mapping(address => uint)) public userPaidRewards;
     // Total weighing. Must be the sum of all pools weighing.
     uint public totalWeighing;
     // The block number when PI mining starts.
@@ -98,6 +83,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Max referral commission rate: 5%.
     uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 50; // 5%
     uint16 public constant COMMISSION_RATE_PRECISION = 1000;
+
+    // Whitelist to deposit/withdraw
+    mapping(address => bool) public whitelist;
 
     event Deposit(address indexed user, uint indexed pid, uint amount);
     event Withdraw(address indexed user, uint indexed pid, uint amount);
@@ -121,29 +109,38 @@ contract Archimedes is Ownable, ReentrancyGuard {
     receive() external payable { }
 
     // Add a new want token to the pool. Can only be called by the owner.
-    function addNewPool(IERC20 _want, address _strat, uint _weighing) external onlyOwner {
+    function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyOwner {
         require(address(_want) != address(0), "Address zero not allowed");
         // require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // anti duplication?
-        require(IStrategy(_strat).farm() == address(this), "Not a farm strategy");
+        require(IController(_ctroller).farm() == address(this), "Not a farm controller");
+        require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
+
+        // Update pools before a weighing change
+        if (_massUpdate) {
+            massUpdatePools();
+        }
 
         uint lastRewardBlock = blockNumber() > startBlock ? blockNumber() : startBlock;
 
         totalWeighing += _weighing;
-
-        // poolExistence[_want] = 1; // Anti duplication?
 
         poolInfo.push(PoolInfo({
             want: _want,
             weighing: _weighing,
             lastRewardBlock: lastRewardBlock,
             accPiTokenPerShare: 0,
-            strategy: _strat
+            controller: _ctroller
         }));
     }
 
     // Update the given pool's PI allocation point and deposit fee. Can only be called by the owner.
-    function changePoolWeighing(uint _pid, uint _weighing) external onlyOwner {
-        updatePool(_pid);
+    function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyOwner {
+        // Update pools before a weighing change
+        if (_massUpdate) {
+            massUpdatePools();
+        } else {
+            updatePool(_pid);
+        }
 
         totalWeighing = (totalWeighing - poolInfo[_pid].weighing) + _weighing;
         poolInfo[_pid].weighing = _weighing;
@@ -155,25 +152,24 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // View function to see pending PIes on frontend.
-    function pendingPiToken(uint _pid, address _user) external view returns (uint) {
+    function pendingPiToken(uint _pid) external view returns (uint) {
         if (communityLeftToMint <= 0) { return 0; }
 
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
 
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
-        uint sharesTotal = IStrategy(pool.strategy).totalSupply();
+        uint sharesTotal = IController(pool.controller).totalSupply();
 
         if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0) {
             uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
             uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
-        return ((user.shares * accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
+        return ((userShares(_pid) * accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid);
     }
 
     // Update reward variables for all pools. Be careful of gas spending!
-    function massUpdatePools() external {
+    function massUpdatePools() public {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             updatePool(pid);
@@ -189,7 +185,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         // If community Mint is already finished
         if (communityLeftToMint <= 0) { return; }
 
-        uint sharesTotal = IStrategy(pool.strategy).totalSupply();
+        uint sharesTotal = IController(pool.controller).totalSupply();
 
         if (sharesTotal <= 0 || pool.weighing <= 0) {
             pool.lastRewardBlock = blockNumber();
@@ -236,7 +232,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         // With that Archimedes already has the wmatics
         wmatic.deposit{value: _amount}();
 
-        // Deposit in the strategy
+        // Deposit in the controller
         _depositInStrategy(_pid, _amount);
     }
 
@@ -256,7 +252,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         // Transfer from user => Archimedes
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
 
-        // Deposit in the strategy
+        // Deposit in the controller
         _depositInStrategy(_pid, _amount);
     }
 
@@ -270,8 +266,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Withdraw want token from Archimedes.
     function withdraw(uint _pid, uint _shares) public nonReentrant {
         require(_shares > 0, "0 shares");
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        require(user.shares >= _shares, "withdraw: not sufficient founds");
+        require(userShares(_pid) >= _shares, "withdraw: not sufficient founds");
 
         updatePool(_pid);
 
@@ -280,12 +275,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         PoolInfo storage pool = poolInfo[_pid];
 
-        // Esto no pasa asi derecho hay que arreglarlo
-        user.shares -= _shares;
-
         uint _before = wantBalance(pool);
         // this should burn shares and control the amount
-        IStrategy(pool.strategy).withdraw(msg.sender, _shares);
+        IController(pool.controller).withdraw(msg.sender, _shares);
 
         uint _wantBalance = wantBalance(pool) - _before;
 
@@ -300,18 +292,18 @@ contract Archimedes is Ownable, ReentrancyGuard {
         }
 
         // This is to "save" like the new amount of shares was paid
-        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
+        userPaidRewards[_pid][msg.sender] = (userShares(_pid) * pool.accPiTokenPerShare) / SHARE_PRECISION;
 
         emit Withdraw(msg.sender, _pid, _shares);
     }
 
     function withdrawAll(uint _pid) external {
-        withdraw(_pid, userInfo[_pid][msg.sender].shares);
+        withdraw(_pid, userShares(_pid));
     }
 
     // Claim rewards for a pool
     function harvest(uint _pid) public nonReentrant {
-        if (userInfo[_pid][msg.sender].shares <= 0) {
+        if (userShares(_pid) <= 0) {
             return;
         }
 
@@ -320,7 +312,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         uint pending = calcPendingAndPayRewards(_pid);
 
         if (pending > 0) {
-            userInfo[_pid][msg.sender].paidReward += pending;
+            userPaidRewards[_pid][msg.sender] += pending;
         }
     }
 
@@ -334,16 +326,14 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint _pid) external nonReentrant {
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
 
-        uint _shares = user.shares;
+        userPaidRewards[_pid][msg.sender] = 0;
 
-        user.shares = 0;
-        user.paidReward = 0;
+        uint _shares = userShares(_pid);
 
         uint _before = wantBalance(pool);
         // this should burn shares and control the amount
-        IStrategy(pool.strategy).withdraw(msg.sender, _shares);
+        IController(pool.controller).withdraw(msg.sender, _shares);
 
         uint _wantBalance = wantBalance(pool) - _before;
         pool.want.safeTransfer(address(msg.sender), _wantBalance);
@@ -358,7 +348,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Record referral in referralMgr contract if needed
     function _recordReferral(uint _pid, address _referrer) internal {
         if (
-            userInfo[_pid][msg.sender].shares <= 0 && // only if it's the first deposit
+            userShares(_pid) <= 0 && // only if it's the first deposit
                 _referrer != address(0) &&
                     _referrer != msg.sender &&
                         address(referralMgr) != address(0)) {
@@ -369,26 +359,23 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     function _depositInStrategy(uint _pid, uint _amount) internal {
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
 
-        // Archimedes => strategy transfer & deposit
-        pool.want.safeIncreaseAllowance(pool.strategy, _amount);
-        uint shares = IStrategy(pool.strategy).deposit(msg.sender, _amount);
+        // Archimedes => controller transfer & deposit
+        pool.want.safeIncreaseAllowance(pool.controller, _amount);
+        IController(pool.controller).deposit(msg.sender, _amount);
 
-        // This could be changed by Strategy(pool.strategy).balanceOf(msg.sender)
-        user.shares += shares;
         // This is to "save" like the new amount of shares was paid
-        user.paidReward = (user.shares * pool.accPiTokenPerShare) / SHARE_PRECISION;
+        userPaidRewards[_pid][msg.sender] = (userShares(_pid) * pool.accPiTokenPerShare) / SHARE_PRECISION;
 
         emit Deposit(msg.sender, _pid, _amount);
     }
 
     // Pay rewards
     function calcPendingAndPayRewards(uint _pid) internal returns (uint pending) {
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        uint _shares = userShares(_pid);
 
-        if (user.shares > 0) {
-            pending = ((user.shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - user.paidReward;
+        if (_shares > 0) {
+            pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid);
 
             if (pending > 0) {
                 safePiTokenTransfer(msg.sender, pending);
@@ -440,22 +427,30 @@ contract Archimedes is Ownable, ReentrancyGuard {
         return poolInfo.length;
     }
 
+    function userShares(uint _pid) public view returns (uint) {
+        return IController(poolInfo[_pid].controller).balanceOf(msg.sender);
+    }
+
+    function paidRewards(uint _pid) public view returns (uint) {
+        return userPaidRewards[_pid][msg.sender];
+    }
+
     // old vault functions
     function getPricePerFullShare(uint _pid) external view returns (uint) {
-        IStrategy strat = IStrategy(poolInfo[_pid].strategy);
+        IController ctroller = IController(poolInfo[_pid].controller);
 
-        uint _totalSupply = strat.totalSupply();
+        uint _totalSupply = ctroller.totalSupply();
 
-        return _totalSupply <= 0 ? 1e18 : ((strat.balance() * 1e18) / _totalSupply);
+        return _totalSupply <= 0 ? 1e18 : ((ctroller.balance() * 1e18) / _totalSupply);
     }
     function decimals(uint _pid) external view returns (uint) {
-        return IStrategy(poolInfo[_pid].strategy).decimals();
+        return IController(poolInfo[_pid].controller).decimals();
     }
     function balance(uint _pid) external view returns (uint) {
-        return IStrategy(poolInfo[_pid].strategy).balance();
+        return IController(poolInfo[_pid].controller).balance();
     }
     function balanceOf(uint _pid, address _user) external view returns (uint) {
-        return userInfo[_pid][_user].shares;
+        return IController(poolInfo[_pid].controller).balanceOf(_user);
     }
 
     function piTokenPerBlock() public view returns (uint) {
