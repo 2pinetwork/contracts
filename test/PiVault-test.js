@@ -43,6 +43,35 @@ describe('PiVault', () => {
       expect(await piVault.balance()).to.equal(ownerBalance)
       expect(await piToken.balanceOf(owner.address)).to.equal(0)
     })
+
+    it('Should deposit and withdraw with interest', async () => {
+      await piToken.approve(piVault.address, 20)
+      await piVault.deposit(10)
+
+      expect(await piVault.balance()).to.equal(10)
+
+      // We should deposit again to test the second flow
+      await piVault.deposit(5)
+
+      expect(await piVault.balanceOf(owner.address)).to.equal(15)
+      expect(await piVault.balance()).to.equal(15)
+      expect(await piVault.getPricePerFullShare()).to.equal('' + 1e18)
+
+      // Perf fee
+      await waitFor(piToken.transfer(piVault.address, 6))
+
+      expect(await piVault.balanceOf(owner.address)).to.equal(15)
+      expect(await piVault.balance()).to.equal(21)
+      // 21 / 15 => 1.4
+      expect(await piVault.getPricePerFullShare()).to.equal('' + 1.4e18)
+
+      const balance = await piToken.balanceOf(owner.address)
+
+      await waitFor(piVault.withdrawAll())
+
+      // 15 from deposit + 6 for interest
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(balance.add(21))
+    })
   })
 
   describe('Withdraw', () => {
@@ -116,6 +145,7 @@ describe('PiVault', () => {
 
       expect(piVault.withdraw(1)).to.be.revertedWith('Still locked')
     })
+
     it('should withdraw everything', async () => {
       await waitFor(piVault.addInvestor(owner.address))
 

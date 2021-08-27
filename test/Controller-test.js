@@ -161,7 +161,7 @@ describe('Controller', () => {
   })
 
   describe('Withdraw', () => {
-    it.only('Should withdraw', async () => {
+    it('Should withdraw', async () => {
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
@@ -196,16 +196,11 @@ describe('Controller', () => {
       expect(await controller.balanceOf(bob.address)).to.be.equal(5000)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
 
-      console.log(`wfee: ${await controller.withdrawFee()}`)
-      console.log(`max: ${await controller.FEE_MAX()}`)
       const fee = parseInt(
         5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX()),
         10
       )
 
-      console.log(await piToken.balanceOf(bob.address))
-      console.log(`fee: ${fee}`)
-      console.log(`balance: ${balance}`)
       expect(await piToken.balanceOf(bob.address)).to.be.equal(
         balance.add(5000).sub(fee)
       )

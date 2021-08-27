@@ -179,47 +179,38 @@ describe('Archimedes Aave strat', () => {
     it('Should withdrawal with partial deleverage', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
-      await piToken.transfer(strat.address, 10)
-      await piToken.transfer(pool.address, 1000)
+      await piToken.transfer(strat.address, 1000)
 
       await waitFor(strat.connect(ctrollerSigner).deposit())
       await piToken.transfer(strat.address, 10)
 
-      await waitFor(pool.setCurrentHealthFactor('' + 1.1e18))
-      // just to fake the deposit and withdraw with partial leverage
-      await waitFor(dataProvider.setATokenBalance(300))
-      await waitFor(dataProvider.setDebtTokenBalance(0))
-
-      // Will withdraw 20 from strat and 81 from pool
-      await waitFor(strat.connect(ctrollerSigner).withdraw(101))
+      // Will withdraw 10 from strat and 1 from pool
+      await waitFor(strat.connect(ctrollerSigner).withdraw(11))
 
       expect(await piToken.balanceOf(strat.address)).to.equal(0)
       // Check it does some deleverage + re-deposit
-      // 1000 - 81
-      expect(await piToken.balanceOf(pool.address)).to.be.equal(919)
+      // 1000 - 1
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(999)
     })
 
     it('Should withdrawal with full deleverage for low healthfactor', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
-      await piToken.transfer(strat.address, 10)
-      await piToken.transfer(pool.address, 1000)
+      await piToken.transfer(strat.address, 15)
 
       await waitFor(strat.connect(ctrollerSigner).deposit())
       await piToken.transfer(strat.address, 10)
 
-      await waitFor(pool.setCurrentHealthFactor('' + 1.0e18))
-      // just to fake the deposit and withdraw with partial leverage
-      await waitFor(dataProvider.setATokenBalance(300))
-      await waitFor(dataProvider.setDebtTokenBalance(0))
+      // set fake HF under minimum
+      await waitFor(pool.setHealthFactor('' + 1.04e18))
 
-      // Will withdraw 20 from strat and 81 from pool
-      await waitFor(strat.connect(ctrollerSigner).withdraw(101))
+      // Will withdraw 10 from strat and 1 from pool
+      await waitFor(strat.connect(ctrollerSigner).withdraw(11))
 
       expect(await piToken.balanceOf(strat.address)).to.equal(0)
       // Check it does some deleverage + re-deposit
-      // 1000 - 81
-      expect(await piToken.balanceOf(pool.address)).to.be.equal(919)
+      // 15 - 1
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(14)
     })
   })
 
@@ -271,18 +262,32 @@ describe('Archimedes Aave strat', () => {
     })
 
     it('Should increase health factor', async () => {
-      const balance = await piToken.balanceOf(owner.address)
+      // pool needs reserves to borrow
+      await waitFor(piToken.transfer(pool.address, '' + 1e18))
+      const levStrat = await deploy(
+        'ControllerAaveStrat',
+        piToken.address,
+        80,
+        100,
+        2,
+        10,
+        controller.address,
+        global.exchange.address,
+        owner.address
+      )
+      await waitFor(controller.setStrategy(levStrat.address))
+      const ctrollerSigner = await impersonateContract(controller.address)
 
-      await pool.setCurrentHealthFactor('' + 1.06e18)
-      await piToken.transfer(pool.address, balance)
+      await waitFor(piToken.transfer(levStrat.address, 1000))
+      await waitFor(levStrat.connect(ctrollerSigner).deposit())
 
-      const initialBalance = await piToken.balanceOf(pool.address)
+      const hf = (await levStrat.userAccountData())[5]
 
-      await strat.increaseHealthFactor()
+      await levStrat.increaseHealthFactor()
 
-      const afterBalance = await piToken.balanceOf(pool.address)
+      const newHf = (await levStrat.userAccountData())[5]
 
-      expect(initialBalance).to.be.not.equal(afterBalance)
+      expect(hf).to.be.below(newHf)
     })
 
     it('Should rebalance', async () => {
@@ -314,10 +319,15 @@ describe('Archimedes Aave strat', () => {
 
     it('Should return pool balance', async () => {
       expect(await strat.balanceOfPool()).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
 
-      await waitFor(dataProvider.setDebtTokenBalance(0))
+      const ctrollerSigner = await impersonateContract(controller.address)
 
-      expect(await strat.balanceOfPool()).to.be.equal('' + 1e18)
+      await waitFor(piToken.transfer(strat.address, 1000))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      expect(await strat.balanceOfPool()).to.be.equal(1000)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(1000)
     })
 
     it('Should pause when panic', async () => {

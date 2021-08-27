@@ -3,23 +3,30 @@
 pragma solidity ^0.8.4;
 
 contract DataProviderMock {
-    uint256 aTokenBalance;
-    uint256 debtTokenBalance;
+    // For testing use the counters/balance will be based
+    // on the msg.sender that should be always a different
+    // strategy (instead of the asset)
+    mapping(address => uint) public aTokenBalance;
+    mapping(address => uint) public debtTokenBalance;
+
+    address[] public users;
 
     function reset() public {
-        setATokenBalance(0);
-        setDebtTokenBalance(0);
+        for (uint i = 0; i < users.length; i++) {
+            setATokenBalance(users[i], 0);
+            setDebtTokenBalance(users[i], 0);
+        }
     }
 
-    function setATokenBalance(uint256 _aTokenBalance) public {
-        aTokenBalance = _aTokenBalance;
+    function setATokenBalance(address _user, uint _aTokenBalance) public {
+        aTokenBalance[_user] = _aTokenBalance;
     }
 
-    function setDebtTokenBalance(uint256 _debtTokenBalance) public {
-        debtTokenBalance = _debtTokenBalance;
+    function setDebtTokenBalance(address _user, uint _debtTokenBalance) public {
+        debtTokenBalance[_user] = _debtTokenBalance;
     }
 
-    function getReserveTokensAddresses(address /*_asset*/) public pure returns (
+    function getReserveTokensAddresses(address /*asset*/) public pure returns (
         address aTokenAddress,
         address stableDebtTokenAddress,
         address variableDebtTokenAddress
@@ -27,17 +34,17 @@ contract DataProviderMock {
         return (address(0), address(0), address(0));
     }
 
-    function getUserReserveData(address /*_asset*/, address /*_user*/) public view returns (
-        uint256 currentATokenBalance,
-        uint256 currentStableDebt,
-        uint256 currentVariableDebt,
-        uint256 principalStableDebt,
-        uint256 scaledVariableDebt,
-        uint256 stableBorrowRate,
-        uint256 liquidityRate,
+    function getUserReserveData(address /*asset*/, address _user) public view returns (
+        uint currentATokenBalance,
+        uint currentStableDebt,
+        uint currentVariableDebt,
+        uint principalStableDebt,
+        uint scaledVariableDebt,
+        uint stableBorrowRate,
+        uint liquidityRate,
         uint40 stableRateLastUpdated,
         bool usageAsCollateralEnabled
     ) {
-        return (aTokenBalance, 0, debtTokenBalance, 0, 0, 0, 0, 0, true);
+        return (aTokenBalance[_user], 0, debtTokenBalance[_user], 0, 0, 0, 0, 0, true);
     }
 }

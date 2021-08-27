@@ -181,7 +181,7 @@ describe('Archimedes', () => {
       expect(
         await piToken.balanceOf(archimedes.address)
       ).to.be.equal(
-        toNumber(piPerBlock * 2.5)
+        toNumber(piPerBlock * 2.5) //  appr + dep + 50% of 1º block for bob
       )
       expect(await refMgr.referrers(owner.address)).to.be.equal(zeroAddress)
       expect(
@@ -423,8 +423,9 @@ describe('Archimedes', () => {
     })
 
     it('should revert for maximum referral rate', async () => {
-      const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()).plus(1)
-      await expect(archimedes.setReferralAddress(max)).to.be.revertedWith(
+      const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()) + 1
+
+      await expect(archimedes.setReferralCommissionRate(max)).to.be.revertedWith(
         'setReferralCommissionRate: invalid referral commission rate basis points'
       )
     })
