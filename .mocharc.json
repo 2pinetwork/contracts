@@ -1,0 +1,11 @@
+{
+  "parallel":   true,
+  "jobs":       4,
+  "slow":       "1500", // 1.5s
+  "full-trace": true,
+  "bail":       false,
+  "inspect":    true,
+  "timeout":    20000,
+  "exit":       true,
+  "require":    ["hardhat/register", "solidity-coverage"]
+}
