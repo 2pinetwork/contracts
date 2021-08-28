@@ -65,6 +65,25 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.updatePool(0)) // this will not redeem
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
     })
+
+    it('should cover not more not more piTokens to mint', async () => {
+      await waitFor(piToken.approve(archimedes.address, 100))
+      await waitFor(archimedes.deposit(0, 100, zeroAddress))
+      await waitFor(piToken.addMinter(owner.address))
+      await waitFor(piToken.setBlockNumber(toNumber(2e10)))
+      await waitFor(archimedes.setBlockNumber(toNumber(2e10)))
+
+      const left = (await piToken.MAX_SUPPLY()).sub(
+        await piToken.totalSupply()
+      )
+
+      await waitFor(piToken.mint(owner.address, left, 0x0))
+
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+      // No left tokens to mint...
+      await waitFor(archimedes.updatePool(0))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+    })
   })
 
   describe('harvest', async () => {
@@ -133,6 +152,8 @@ describe('ArchimedesMock', () => {
       ).to.be.equal(
         toNumber(reward)
       )
+      await waitFor(archimedes.harvestAll())
+      // just to check that it does nothing
       await waitFor(archimedes.harvestAll())
 
       // deposited

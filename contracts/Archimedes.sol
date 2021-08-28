@@ -10,7 +10,7 @@ import "hardhat/console.sol";
 import { IPiToken } from "../interfaces/IPiToken.sol";
 
 interface IReferral {
-    function recordReferral(address user, address referrer) external;
+    function recordReferral(address, address referrer) external;
     function referralPaid(address user, uint amount) external;
     function getReferrer(address user) external view returns (address);
 }
@@ -56,6 +56,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         address controller;        // Token controller
     }
 
+    // IPiToken already have safe transfer from SuperToken
     IPiToken public piToken;
     bytes private constant txData = new bytes(0); // just to support SuperToken mint
 
@@ -90,8 +91,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
     event Deposit(address indexed user, uint indexed pid, uint amount);
     event Withdraw(address indexed user, uint indexed pid, uint amount);
     event EmergencyWithdraw(address indexed user, uint indexed pid, uint amount);
-    event SetReferralAddress(address indexed user, IReferral indexed newAddress);
-    event ReferralCommissionPaid(address indexed user, address indexed referrer, uint commissionAmount);
 
     constructor(
         IPiToken _piToken,
@@ -158,7 +157,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
-        uint sharesTotal = IController(pool.controller).totalSupply();
+        uint sharesTotal = controller(_pid).totalSupply();
 
         if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0) {
             uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
@@ -170,8 +169,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
-        uint length = poolInfo.length;
-        for (uint pid = 0; pid < length; ++pid) {
+        for (uint pid = 0; pid < poolInfo.length; ++pid) {
             updatePool(pid);
         }
     }
@@ -185,7 +183,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         // If community Mint is already finished
         if (communityLeftToMint <= 0) { return; }
 
-        uint sharesTotal = IController(pool.controller).totalSupply();
+        uint sharesTotal = controller(_pid).totalSupply();
 
         if (sharesTotal <= 0 || pool.weighing <= 0) {
             pool.lastRewardBlock = blockNumber();
@@ -194,7 +192,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
         uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
-
 
         // No rewards =( update lastRewardBlock
         if (piTokenReward <= 0) {
@@ -277,7 +274,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint _before = wantBalance(pool);
         // this should burn shares and control the amount
-        IController(pool.controller).withdraw(msg.sender, _shares);
+        controller(_pid).withdraw(msg.sender, _shares);
 
         uint _wantBalance = wantBalance(pool) - _before;
 
@@ -333,7 +330,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint _before = wantBalance(pool);
         // this should burn shares and control the amount
-        IController(pool.controller).withdraw(msg.sender, _shares);
+        controller(_pid).withdraw(msg.sender, _shares);
 
         uint _wantBalance = wantBalance(pool) - _before;
         pool.want.safeTransfer(address(msg.sender), _wantBalance);
@@ -362,7 +359,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         // Archimedes => controller transfer & deposit
         pool.want.safeIncreaseAllowance(pool.controller, _amount);
-        IController(pool.controller).deposit(msg.sender, _amount);
+        controller(_pid).deposit(msg.sender, _amount);
 
         // This is to "save" like the new amount of shares was paid
         userPaidRewards[_pid][msg.sender] = (userShares(_pid) * pool.accPiTokenPerShare) / SHARE_PRECISION;
@@ -387,19 +384,17 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // Safe piToken transfer function, just in case if rounding error causes pool to not have enough PI.
     function safePiTokenTransfer(address _to, uint _amount) internal {
         uint piTokenBal = piToken.balanceOf(address(this));
-        bool transferSuccess = false;
+
         if (_amount > piTokenBal) {
-            transferSuccess = piToken.transfer(_to, piTokenBal);
+            piToken.transfer(_to, piTokenBal);
         } else {
-            transferSuccess = piToken.transfer(_to, _amount);
+            piToken.transfer(_to, _amount);
         }
-        require(transferSuccess, "safePiTokenTransfer: Transfer failed");
     }
 
     // Update the referral contract address by the owner
     function setReferralAddress(IReferral _newReferral) external onlyOwner {
         referralMgr = _newReferral;
-        emit SetReferralAddress(msg.sender, referralMgr);
     }
 
     // Update referral commission rate by the owner
@@ -417,7 +412,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
             if (referrer != address(0) && commissionAmount > 0) {
                 piToken.mint(referrer, commissionAmount, txData);
                 referralMgr.referralPaid(referrer, commissionAmount); // sum paid
-                emit ReferralCommissionPaid(msg.sender, referrer, commissionAmount);
             }
         }
     }
@@ -428,29 +422,30 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     function userShares(uint _pid) public view returns (uint) {
-        return IController(poolInfo[_pid].controller).balanceOf(msg.sender);
+        return controller(_pid).balanceOf(msg.sender);
     }
 
     function paidRewards(uint _pid) public view returns (uint) {
         return userPaidRewards[_pid][msg.sender];
     }
+    function controller(uint _pid) internal view returns (IController) {
+        return IController(poolInfo[_pid].controller);
+    }
 
     // old vault functions
     function getPricePerFullShare(uint _pid) external view returns (uint) {
-        IController ctroller = IController(poolInfo[_pid].controller);
+        uint _totalSupply = controller(_pid).totalSupply();
 
-        uint _totalSupply = ctroller.totalSupply();
-
-        return _totalSupply <= 0 ? 1e18 : ((ctroller.balance() * 1e18) / _totalSupply);
+        return _totalSupply <= 0 ? 1e18 : ((controller(_pid).balance() * 1e18) / _totalSupply);
     }
     function decimals(uint _pid) external view returns (uint) {
-        return IController(poolInfo[_pid].controller).decimals();
+        return controller(_pid).decimals();
     }
     function balance(uint _pid) external view returns (uint) {
-        return IController(poolInfo[_pid].controller).balance();
+        return controller(_pid).balance();
     }
     function balanceOf(uint _pid, address _user) external view returns (uint) {
-        return IController(poolInfo[_pid].controller).balanceOf(_user);
+        return controller(_pid).balanceOf(_user);
     }
 
     function piTokenPerBlock() public view returns (uint) {

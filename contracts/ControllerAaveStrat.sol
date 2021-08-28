@@ -239,6 +239,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         // for depth > 0
         if (borrowBal > 0) {
             // Only repay the just amount
+
             uint toRepay = (toWithdraw * borrowRate) / 100;
             IAaveLendingPool(pool).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }

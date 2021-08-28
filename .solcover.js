@@ -1,10 +1,11 @@
-{
+module.exports = {
   skipFiles: [
-    'contracts/mocks/WETHMock.sol',
-    'contracts/mocks/UniswapRouterMock.sol',
-    'contracts/mocks/IncentivesControllerMock.sol',
-    'contracts/mocks/PoolMock.sol',
-    'contracts/mocks/StratMock.sol',
-    'contracts/mocks/TokenMock.sol',
+    'mocks/WETHMock.sol',
+    'mocks/UniswapRouterMock.sol',
+    'mocks/IncentivesControllerMock.sol',
+    'mocks/DataProviderMock.sol',
+    'mocks/PoolMock.sol',
+    'mocks/FarmMock.sol',
+    'mocks/TokenMock.sol'
   ]
 }

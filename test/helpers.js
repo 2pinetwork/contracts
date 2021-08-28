@@ -180,6 +180,8 @@ before(async () => {
   console.log('Deploying PiToken')
   global.PiToken = await createPiToken(false, true)
   expect(global.PiToken.address).to.be.equal('0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8')
+
+  console.log('===============  SETUP DONE  ===============\n\n')
 })
 
 afterEach(async () => {

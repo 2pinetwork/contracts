@@ -4,6 +4,38 @@ const {
 } = require('./helpers')
 
 
+describe('Archimedes setup', () => {
+  let Archimedes
+
+  before(async () => {
+    Archimedes = await ethers.getContractFactory('Archimedes')
+  })
+
+  it('should revert of 0 address piToken', async () => {
+    await expect(Archimedes.deploy(
+      zeroAddress, 1, owner.address
+    )).to.be.revertedWith(
+      "Pi address can't be zero address"
+    )
+  })
+
+  it('should revert for old block number', async () => {
+    await expect(Archimedes.deploy(
+      PiToken.address, 0, owner.address
+    )).to.be.revertedWith(
+      'StartBlock should be in the future'
+    )
+  })
+
+  it('should revert for 0 address treasury', async () => {
+    await expect(Archimedes.deploy(
+      PiToken.address, 1e9, zeroAddress
+    )).to.be.revertedWith(
+      "Treasury address can't be zero address"
+    )
+  })
+})
+
 
 describe('Archimedes', () => {
   let bob, alice
@@ -46,7 +78,7 @@ describe('Archimedes', () => {
   describe('addNewPool', async () => {
     it('Should reverse with zero address want', async () => {
       expect(
-        archimedes.addNewPool(zeroAddress, controller.address, 1, true)
+        archimedes.addNewPool(zeroAddress, controller.address, 1, false)
       ).to.be.revertedWith('Address zero not allowed')
     })
 
@@ -63,6 +95,19 @@ describe('Archimedes', () => {
       expect(
         archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
       ).to.be.revertedWith('Not a farm controller')
+    })
+
+    it('Should reverse for controller without strategy', async () => {
+      const otherCtroller = await deploy(
+        'Controller',
+        piToken.address,
+        archimedes.address,
+        owner.address
+      )
+
+      expect(
+        archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
+      ).to.be.revertedWith('Controller without strategy')
     })
   })
 
@@ -276,17 +321,23 @@ describe('Archimedes', () => {
       // piToken pid = 0
       // WMATIC  pid = 1
       wmaticCtroller = await createController(WMATIC, archimedes)
-      await waitFor(archimedes.addNewPool(WMATIC.address, wmaticCtroller.address, 1, false))
+      await waitFor(archimedes.addNewPool(WMATIC.address, wmaticCtroller.address, 1, true))
+    })
+
+    it('should revert for depositAll', async () => {
+      await expect(
+        archimedes.depositAll(1, zeroAddress)
+      ).to.be.revertedWith("Can't deposit all Matic")
     })
 
     it('Should revert with 0 amount', async () => {
-      expect(
+      await expect(
         archimedes.depositMATIC(1, zeroAddress, { value: 0 })
       ).to.be.revertedWith('Insufficient deposit')
     })
 
     it('Should revert for not wmatic pool', async () => {
-      expect(
+      await expect(
         archimedes.depositMATIC(0, zeroAddress, { value: 10 })
       ).to.be.revertedWith('Only MATIC pool')
     })

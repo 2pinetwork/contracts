@@ -93,7 +93,7 @@ contract MintAndSend is Ownable, ReentrancyGuard {
             }
 
             // Only one investor with 4 tickets
-            if (_tickets == 4){
+            if (_tickets == 4) {
                 require(investorTickets[investors[i]] < 4, "Only one investor with 4 tickets");
             }
         }
@@ -188,8 +188,6 @@ contract MintAndSend is Ownable, ReentrancyGuard {
     }
 
     function mintAndDepositToFounders(uint multiplier) internal {
-        if (leftTokensForFounders <= 0) { return; }
-
         uint toMint = multiplier * FOUNDER_PER_BLOCK * FOUNDERS_COUNT;
 
         // Check for limit to mint

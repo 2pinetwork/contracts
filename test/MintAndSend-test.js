@@ -85,6 +85,7 @@ describe('MintAndSend setup', () => {
     })
 
     it('should revert more than one investor with 4 tickets', async () => {
+      await waitFor(mintAndSend.addInvestor(owner.address, 2))
       await waitFor(mintAndSend.addInvestor(bob.address, 4))
       await expect(mintAndSend.addInvestor(alice.address, 4)).to.be.revertedWith(
         'Only one investor with 4 tickets'
@@ -148,16 +149,20 @@ describe('MintAndSend setup', () => {
     })
 
     it('should be reverted without founders', async () => {
-      await mineNTimes(rewardsBlock);
+      let promises = [
+        mineNTimes(rewardsBlock)
+      ]
 
       for (let i = 0; i < (await mintAndSend.INVESTORS_MAX_COUNT()); i++) {
-        await waitFor(mintAndSend.addInvestor(
+        promises.push(waitFor(mintAndSend.addInvestor(
           ethers.Wallet.createRandom().address,
           1
-        ))
+        )))
       }
 
-      expect(mintAndSend.mintAndSend()).to.be.revertedWith('should wait for Founders')
+      await Promise.all(promises)
+
+      await expect(mintAndSend.mintAndSend()).to.be.revertedWith('should wait for Founders')
     })
   })
 })

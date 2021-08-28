@@ -56,7 +56,6 @@ describe('Archimedes Aave strat', () => {
   let strat
   let rewardsBlock
   let pool
-  let dataProvider
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -77,7 +76,6 @@ describe('Archimedes Aave strat', () => {
     )
 
     pool = Aave.pool
-    dataProvider = Aave.dataProvider
   })
 
   describe('Deployment', () => {
@@ -144,6 +142,12 @@ describe('Archimedes Aave strat', () => {
   })
 
   describe('Deposit', () => {
+    it('Should revert deposit for non-controller', async () => {
+      await waitFor(piToken.transfer(strat.address, 15))
+
+      await expect(strat.deposit()).to.be.revertedWith('Not from controller')
+    })
+
     it('Should deposit', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
@@ -156,6 +160,29 @@ describe('Archimedes Aave strat', () => {
 
       expect(await piToken.balanceOf(strat.address)).to.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.equal(15)
+    })
+
+    it('Should deposit with one leverage', async () => {
+      const newStrat = await deploy(
+        'ControllerAaveStrat',
+        piToken.address,
+        48,
+        50,
+        8,
+        100,
+        controller.address,
+        exchange.address,
+        owner.address
+      )
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(piToken.transfer(newStrat.address, 110))
+
+      await waitFor(newStrat.connect(ctrollerSigner).deposit())
+
+      expect(
+        (await newStrat.supplyAndBorrow())[1]
+      ).to.be.equal(52) // 48% of 110
     })
   })
 
@@ -177,20 +204,35 @@ describe('Archimedes Aave strat', () => {
     })
 
     it('Should withdrawal with partial deleverage', async () => {
+      const newStrat = await deploy(
+        'ControllerAaveStrat',
+        piToken.address,
+        48,
+        50,
+        4,
+        100,
+        controller.address,
+        exchange.address,
+        owner.address
+      )
+
       const ctrollerSigner = await impersonateContract(controller.address)
 
-      await piToken.transfer(strat.address, 1000)
+      await piToken.transfer(newStrat.address, 1e6)
 
-      await waitFor(strat.connect(ctrollerSigner).deposit())
-      await piToken.transfer(strat.address, 10)
+      await waitFor(newStrat.connect(ctrollerSigner).deposit())
+      await piToken.transfer(newStrat.address, 1e3)
 
-      // Will withdraw 10 from strat and 1 from pool
-      await waitFor(strat.connect(ctrollerSigner).withdraw(11))
+      // Just to cover all the lines
+      await waitFor(pool.setHealthFactor('' + 1.0501e18))
 
-      expect(await piToken.balanceOf(strat.address)).to.equal(0)
+      // Will withdraw 10 from newStrat and 1 from pool
+      await waitFor(newStrat.connect(ctrollerSigner).withdraw(1.1e3))
+
+      expect(await piToken.balanceOf(newStrat.address)).to.equal(0)
       // Check it does some deleverage + re-deposit
-      // 1000 - 1
-      expect(await piToken.balanceOf(pool.address)).to.be.equal(999)
+      // 1e6 - 0.1e3
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(1e6 - 0.1e3)
     })
 
     it('Should withdrawal with full deleverage for low healthfactor', async () => {
@@ -212,6 +254,75 @@ describe('Archimedes Aave strat', () => {
       // 15 - 1
       expect(await piToken.balanceOf(pool.address)).to.be.equal(14)
     })
+
+    it('Should withdraw without deleverage', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await piToken.transfer(strat.address, 100)
+
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await piToken.transfer(strat.address, 10)
+
+      await waitFor(strat.connect(ctrollerSigner).withdraw(10))
+
+      expect(await piToken.balanceOf(controller.address)).to.equal(10)
+      expect(await piToken.balanceOf(strat.address)).to.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(100)
+    })
+
+    it('Should withdraw with multiple deleverage', async () => {
+      const newStrat = await deploy(
+        'ControllerAaveStrat',
+        piToken.address,
+        48,
+        50,
+        8,
+        1e15,
+        controller.address,
+        exchange.address,
+        owner.address
+      )
+
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await piToken.transfer(newStrat.address, '' + 1e18)
+
+      await waitFor(newStrat.connect(ctrollerSigner).deposit())
+
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(newStrat.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal('' + 1e18)
+
+      // Just to test the maxWithdrawSupply < _needed
+      await waitFor(pool.setHealthFactor('' + 1.2e18))
+
+      await waitFor(newStrat.connect(ctrollerSigner).withdraw('' + 1e18))
+
+      expect(await piToken.balanceOf(controller.address)).to.equal('' + 1e18)
+      expect(await piToken.balanceOf(newStrat.address)).to.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
+    })
+
+    it('Should withdraw when paused', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await piToken.transfer(strat.address, 100)
+
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(100)
+
+      await waitFor(strat.pause())
+
+      await waitFor(strat.connect(ctrollerSigner).withdraw(10))
+
+      expect(await piToken.balanceOf(controller.address)).to.equal(10)
+      expect(await piToken.balanceOf(strat.address)).to.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(90)
+    })
   })
 
   describe('Harvest', () => {
@@ -219,6 +330,40 @@ describe('Archimedes Aave strat', () => {
       await strat.addHarvester(owner.address)
 
       await expect(strat.harvest(1)).to.be.not.revertedWith()
+    })
+
+    it('should harvest and receive fee', async () => {
+      await strat.addHarvester(owner.address)
+
+      await waitFor(WMATIC.deposit({ value: 1e6 }))
+      await waitFor(WMATIC.transfer(strat.address, 1e6))
+      await waitFor(piToken.transfer(strat.address, 1e6))
+      await waitFor(piToken.transfer(exchange.address, '' + 1e18))
+
+      const balance = await piToken.balanceOf(owner.address)
+
+      await waitFor(strat.harvest(1e9)) // 1 x 1 ratio
+
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.add(3.5e4) // 3.5% of 1e6
+      )
+    })
+
+    it('should harvest without swap', async () => {
+      const newStrat = await deploy(
+        'ControllerAaveStrat',
+        WMATIC.address,
+        48,
+        50,
+        8,
+        1e15,
+        controller.address,
+        exchange.address,
+        owner.address
+      )
+      await newStrat.addHarvester(owner.address)
+
+      await expect(newStrat.harvest(1)).to.be.not.revertedWith()
     })
   })
 
