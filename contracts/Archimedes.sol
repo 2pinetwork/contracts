@@ -385,6 +385,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function safePiTokenTransfer(address _to, uint _amount) internal {
         uint piTokenBal = piToken.balanceOf(address(this));
 
+        // piToken.transfer is safe
         if (_amount > piTokenBal) {
             piToken.transfer(_to, piTokenBal);
         } else {

@@ -405,7 +405,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         harvest(0);
 
-        IERC20(want).transfer(controller, wantBalance());
+        IERC20(want).safeTransfer(controller, wantBalance());
 
         _removeAllowances();
     }
