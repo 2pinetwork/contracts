@@ -96,12 +96,10 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     constructor(
         IPiToken _piToken,
-        uint _startBlock,
-        address _treasury
+        uint _startBlock
     ) {
         require(address(_piToken) != address(0), "Pi address can't be zero address");
         require(_startBlock > blockNumber(), "StartBlock should be in the future");
-        require(_treasury != address(0), "Treasury address can't be zero address");
 
         piToken = _piToken;
         startBlock = _startBlock;
@@ -176,7 +174,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         }
     }
 
-    // Mint community & treasury tokens for a given pool pid
+    // Mint community tokens for a given pool pid
     function updatePool(uint _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
 

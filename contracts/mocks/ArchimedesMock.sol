@@ -8,9 +8,8 @@ contract ArchimedesMock is Archimedes {
 
     constructor(
         IPiToken _piToken,
-        uint _startBlock,
-        address _treasury
-    ) Archimedes(_piToken, _startBlock, _treasury) { }
+        uint _startBlock
+    ) Archimedes(_piToken, _startBlock) { }
 
     function setBlockNumber(uint _n) public {
         mockedBlockNumber = _n;
