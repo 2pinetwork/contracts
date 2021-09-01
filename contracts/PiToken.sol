@@ -27,6 +27,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
     // Rates to mint per block
     uint[] public TRANCHES_COMMUNITY_MINT_PER_BLOCK = new uint[](6);
+    uint[] public TRANCHES_API_MINT_PER_BLOCK = new uint[](6);
 
     uint[] public EXPECTED_MINTED_PER_TRANCHE = new uint[](6);
     uint public constant INVESTORS_MINT_RATIO = 0.71689e18; // 9.42M in 1 year
@@ -38,12 +39,19 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     uint private tranchesBlock;
 
     constructor() {
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[0] = 0.29074e18; // for 1 month
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[1] = 0.58148e18; // for 2 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[2] = 0.72685e18; // for 6 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[3] = 1.24603e18; // for 3 months, first year =D
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[4] = 1.24603e18; // for 4 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[5] = 1.81713e18; // for 8 months until the end
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[0] = 0.19383e18; // for 1 month
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[1] = 0.38765e18; // for 2 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[2] = 0.48457e18; // for 6 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[3] = 0.83069e18; // for 3 months, first year =D
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[4] = 0.83069e18; // for 4 months
+        TRANCHES_COMMUNITY_MINT_PER_BLOCK[5] = 1.21142e18; // for 8 months until the end
+
+        TRANCHES_API_MINT_PER_BLOCK[0] = 0.09691e18; // for 1 month
+        TRANCHES_API_MINT_PER_BLOCK[1] = 0.19383e18; // for 2 months
+        TRANCHES_API_MINT_PER_BLOCK[2] = 0.24228e18; // for 6 months
+        TRANCHES_API_MINT_PER_BLOCK[3] = 0.41534e18; // for 3 months, first year =D
+        TRANCHES_API_MINT_PER_BLOCK[4] = 0.41534e18; // for 4 months
+        TRANCHES_API_MINT_PER_BLOCK[5] = 0.60571e18; // for 8 months until the end
 
         // ACCUMULATED TOKENS for minting everything
         EXPECTED_MINTED_PER_TRANCHE[0] =  1622333e18 + INITIAL_SUPPLY; // for 1 month
@@ -174,6 +182,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     }
 
     function communityMintPerBlock() external view returns (uint) {
+        // Community has 2/3 parts of the total "community" reward
         if (self().totalSupply() < MAX_SUPPLY) {
             return TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche];
         } else {
@@ -181,15 +190,25 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         }
     }
 
+    function apiMintPerBlock() external view returns (uint) {
+        // API has 1/3 parts of the total "community" reward
+        if (self().totalSupply() < MAX_SUPPLY) {
+            return TRANCHES_API_MINT_PER_BLOCK[currentTranche];
+        } else {
+            return 0;
+        }
+    }
+
+
     function totalMintPerBlock() public view returns (uint) {
         if (self().totalSupply() < MAX_SUPPLY) {
-            uint perBlock = TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche] + FOUNDERS_MINT_RATIO;
+            uint perBlock = (TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche] +
+                             TRANCHES_API_MINT_PER_BLOCK[currentTranche] + FOUNDERS_MINT_RATIO);
 
             // 0, 1, 2, 3 is the first year so it has to
             // include investors & treasury ratio
             if (currentTranche < 4) {
-                perBlock += INVESTORS_MINT_RATIO;
-                perBlock += TREASURY_MINT_RATIO;
+                perBlock += (INVESTORS_MINT_RATIO + TREASURY_MINT_RATIO);
             }
 
             return perBlock;

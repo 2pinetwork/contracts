@@ -31,7 +31,9 @@ describe('PiTokenMock', () => {
   describe('increaseCurrentTranche', async () => {
     it('Should increase the current tranche', async () => {
       let tranche = MINT_DATA[0]
-      let expectedRatio = tranche.community + tranche.investors + tranche.founders + tranche.treasury
+      let expectedRatio = (
+        tranche.api + tranche.community + tranche.founders + tranche.investors + tranche.treasury
+      )
 
       const totalPerBlock = parseInt(await piToken.totalMintPerBlock(), 10)
 
@@ -58,7 +60,9 @@ describe('PiTokenMock', () => {
       await piToken.increaseCurrentTranche();
 
       tranche = MINT_DATA[1]
-      expectedRatio = toNumber(tranche.community + tranche.investors + tranche.founders + tranche.treasury)
+      expectedRatio = toNumber(
+        tranche.api + tranche.community + tranche.founders + tranche.investors + tranche.treasury
+      )
 
       expect(
         await piToken.totalMintPerBlock()
@@ -90,10 +94,15 @@ describe('PiTokenMock', () => {
         await piToken.setBlockNumber(tranche.blocks);
 
         expect(await piToken.totalMintPerBlock(), `Loop n: ${i}`).to.be.equal(
-          toNumber(tranche.community + tranche.founders + tranche.investors + tranche.treasury)
+          toNumber(
+            tranche.api + tranche.community + tranche.founders + tranche.investors + tranche.treasury
+          )
         )
         expect(await piToken.communityMintPerBlock(), `Loop n: ${i}`).to.be.equal(
           toNumber(tranche.community)
+        )
+        expect(await piToken.apiMintPerBlock(), `Loop n: ${i}`).to.be.equal(
+          toNumber(tranche.api)
         )
 
         await waitFor(piToken.mint(owner.address, tranche.expected.minus(minted).toFixed(), txData));

@@ -166,15 +166,14 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.setBlockNumber(toNumber(1e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
 
-      expect(await piToken.totalSupply()).to.be.equal(
-        MINT_DATA[5].expected.toFixed() // expected community tokens at the end of the time
-      )
       expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
       expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
     })
   })
 })

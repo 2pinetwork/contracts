@@ -7,6 +7,7 @@ import "../vendor_contracts/NativeSuperTokenProxy.sol";
 interface IPiToken is ISuperToken {
     function mint(address _receiver, uint _supply, bytes calldata data) external;
     function communityMintPerBlock() external view returns(uint);
+    function apiMintPerBlock() external view returns(uint);
 }
 
 // Used for tests

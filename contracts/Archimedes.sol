@@ -65,7 +65,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
     uint public constant SHARE_PRECISION = 1e18;
 
     // PI tokens created per block for community, 31.4M minted in 2 years
-    uint public communityLeftToMint = 3.14e25; // :sunglasses:
+    // This Archimedes has 2/3 of the total LM
+    uint public communityLeftToMint = 2.09e25;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
