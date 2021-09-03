@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.4;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -340,7 +340,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
             // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
 
-            uint tokenDiffPrecision = ((10 ** ERC20(wNative).decimals()) / (10 ** ERC20(want).decimals())) * 1e9;
+            uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * 1e9;
             uint expected = (_balance * _maticToWantRatio) / tokenDiffPrecision;
 
             IUniswapRouter(exchange).swapExactTokensForTokens(

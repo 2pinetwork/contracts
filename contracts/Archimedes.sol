@@ -469,4 +469,15 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
+
+    function redeemStuckedPiTokens() external onlyOwner {
+        require(communityLeftToMint <= 0, "still minting");
+        require(blockNumber() >= startBlock + 26280000, "Wait for 2 years in blocks");
+        require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "still minting");
+
+        uint _balance = piToken.balanceOf(address(this));
+
+        if (_balance > 0)
+            piToken.transfer(owner(), _balance);
+    }
 }

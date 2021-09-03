@@ -1,8 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity 0.8.4;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -68,7 +68,7 @@ contract FeeManager is AccessControl, ReentrancyGuard {
         // __balance = 1e18 (1.0 WMATIC)
         // tokenDiffPrecision = 1e9 ((1e18 MATIC decimals / 1e18 2Pi decimals) * 1e9 ratio precision)
         // expected = 522650000000000000 (1e18 * 522_650_000 / 1e9) [0.52 in 2Pi decimals]
-        uint tokenDiffPrecision = ((10 ** ERC20(_token).decimals()) / 1e18) * 1e9;
+        uint tokenDiffPrecision = ((10 ** IERC20Metadata(_token).decimals()) / 1e18) * 1e9;
         uint expected = _balance * _ratio / tokenDiffPrecision;
 
         bool native = _token == wNative;

@@ -17,13 +17,6 @@ interface IReferral {
     function getReferrer(address user) external view returns (address);
 }
 
-// Archimedes is the master of PiToken. He can make PiToken and he is a fair guy.
-//
-// Note that it's ownable and the owner wields tremendous power. The ownership
-// will be transferred to a governance smart contract once PiToken is sufficiently
-// distributed and the community can show to govern itself.
-// Have fun reading it. Hopefully it's bug-free. God bless.
-
 interface IController {
     function strategy() external view returns (address);
     function totalSupply() external view returns (uint);
@@ -36,7 +29,6 @@ interface IController {
 }
 
 contract ArchimedesAPI is Ownable, ReentrancyGuard {
-    // using Address for address;
     using SafeERC20 for IERC20;
 
     address public handler;
@@ -93,6 +85,11 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         piToken = _piToken;
         startBlock = _startBlock;
         handler = _handler;
+    }
+
+    modifier onlyHandler() {
+        require(msg.sender == handler, "Only handler");
+        _;
     }
 
     function setExchange(address _newExchange) external onlyOwner {
@@ -206,7 +203,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     // Deposit want token to Archimedes for PI allocation.
-    function deposit(uint _pid, address _user, uint _amount, address _referrer) public nonReentrant {
+    function deposit(uint _pid, address _user, uint _amount, address _referrer) external nonReentrant onlyHandler {
         require(_amount > 0, "Insufficient deposit");
 
         // Update pool rewards
@@ -231,7 +228,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     // Withdraw want token from Archimedes.
-    function withdraw(uint _pid, address _user, uint _shares) public nonReentrant {
+    function withdraw(uint _pid, address _user, uint _shares) external nonReentrant onlyHandler {
         require(_shares > 0, "0 shares");
         require(userShares(_pid, _user) >= _shares, "withdraw: not sufficient founds");
 
@@ -291,6 +288,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint _pid, address _user) external nonReentrant {
+        require(msg.sender == _user || msg.sender == owner() || msg.sender == handler, "Not autorized");
         PoolInfo storage pool = poolInfo[_pid];
 
         userPaidRewards[_pid][_user] = 0;
@@ -448,5 +446,18 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // Only to be mocked
     function blockNumber() internal view virtual returns (uint) {
         return block.number;
+    }
+
+    // In case that everyone has claim his tokens and it's still has piTokens
+    // We'll move to Staking
+    function redeemStuckedPiTokens() external onlyOwner {
+        require(apiLeftToMint <= 0, "still minting");
+        require(blockNumber() >= startBlock + 26280000, "Wait for 2 years in blocks");
+        require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "still minting");
+
+        uint _balance = piToken.balanceOf(address(this));
+
+        if (_balance > 0)
+            piToken.transfer(owner(), _balance);
     }
 }
