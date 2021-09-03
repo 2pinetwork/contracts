@@ -7,13 +7,16 @@ import "hardhat/console.sol";
 
 contract UniswapRouterMock {
     function swapExactTokensForTokens(
-        uint /*amountIn*/,
+        uint amountIn,
         uint amountOutMin,
         address[] calldata path,
         address to,
         uint /*deadline*/
     ) external returns (uint[] memory amounts) {
-        IERC20(path[1]).transfer(to, amountOutMin);
+        uint idx = path.length - 1;
+        // console.log("Swapped: ", amountIn);
+        IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);
+        IERC20(path[idx]).transfer(to, amountOutMin);
 
         uint[] memory a = new uint[](1);
         a[0] = amountOutMin;

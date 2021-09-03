@@ -4,7 +4,6 @@ const {
   createPiToken,
   deploy,
   getBlock,
-  impersonateContract,
   waitFor,
   zeroAddress
 } = require('./helpers')
@@ -68,8 +67,7 @@ describe('Controller', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock,
-      owner.address
+      rewardsBlock
     )
 
     controller = await createController(piToken, archimedes)

@@ -17,6 +17,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 pragma solidity 0.8.4;
 
+import "hardhat/console.sol";
+
 contract WETHMock {
     string public name     = "Wrapped Ether";
     string public symbol   = "WETH";

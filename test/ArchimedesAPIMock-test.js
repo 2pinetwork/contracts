@@ -2,13 +2,13 @@ const {
   toNumber, createPiToken, getBlock, waitFor, deploy, zeroAddress,
   impersonateContract, createController
 } = require('./helpers')
-const { MINT_DATA } = require('./contract_constants')
 
-describe('ArchimedesMock', () => {
+describe('ArchimedesAPIMock', () => {
   let piToken
   let archimedes
   let rewardsBlock
   let bob
+  let controller
 
   beforeEach(async () => {
     [, bob] = await ethers.getSigners()
@@ -16,18 +16,25 @@ describe('ArchimedesMock', () => {
     rewardsBlock = (await getBlock()) + 20
 
     archimedes = await deploy(
-      'ArchimedesMock',
+      'ArchimedesAPIMock',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      owner.address
     )
 
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
 
-    const controller = await createController(piToken, archimedes)
+    controller = await createController(WMATIC, archimedes)
 
-    await (await archimedes.addNewPool(piToken.address, controller.address, 1, false)).wait()
+    await (await archimedes.addNewPool(WMATIC.address, controller.address, 1, false)).wait()
     expect(await archimedes.poolLength()).to.be.equal(1)
+    await waitFor(archimedes.setExchange(exchange.address))
+    await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
+
+
+    await waitFor(WMATIC.deposit({ value: toNumber(1e18) }))
+    await waitFor(WMATIC.transfer(exchange.address, toNumber(1e18)))
   })
 
   describe('updatePool', async () => {
@@ -42,8 +49,11 @@ describe('ArchimedesMock', () => {
     })
 
     it('should cover not more not more piTokens to mint', async () => {
-      await waitFor(piToken.approve(archimedes.address, 100))
-      await waitFor(archimedes.deposit(0, 100, zeroAddress))
+      const wmatic = WMATIC.connect(owner)
+
+      await waitFor(wmatic.deposit({ value: 100 }))
+      await waitFor(wmatic.approve(archimedes.address, 100))
+      await waitFor(archimedes.deposit(0, owner.address, 100, zeroAddress))
       await waitFor(piToken.addMinter(owner.address))
       await waitFor(piToken.setBlockNumber(toNumber(2e10)))
       await waitFor(archimedes.setBlockNumber(toNumber(2e10)))
@@ -69,7 +79,7 @@ describe('ArchimedesMock', () => {
       await waitFor(piToken.setBlockNumber(toNumber(rewardsBlock + 30)))
       await waitFor(archimedes.setBlockNumber(toNumber(rewardsBlock + 30)))
 
-      await waitFor(archimedes.connect(bob).harvest(0))
+      await waitFor(archimedes.harvest(0, bob.address))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
       expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
     })
@@ -77,8 +87,12 @@ describe('ArchimedesMock', () => {
     it('should receive less tokens with harvest', async () => {
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
-      await waitFor(piToken.approve(archimedes.address, toNumber(1e18)))
-      await waitFor(archimedes.deposit(0, toNumber(1e18), zeroAddress))
+      const wmatic = WMATIC.connect(owner)
+
+      await waitFor(wmatic.deposit({ value: toNumber(1e18) }))
+      await waitFor(wmatic.approve(archimedes.address, toNumber(1e18)))
+
+      await waitFor(archimedes.deposit(0, owner.address, toNumber(1e18), zeroAddress))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
       // Advance a few blocks
@@ -87,29 +101,31 @@ describe('ArchimedesMock', () => {
 
       await waitFor(archimedes.updatePool(0))
 
-      const expected = parseInt(await archimedes.pendingPiToken(0), 10)
-
       // Impersonate Archimedes Load with 1e18
       const archSigner = await impersonateContract(archimedes.address)
 
       // transfer 1 piToken to other address (just to simulate less than expected)
       await waitFor(piToken.connect(archSigner).transferFrom(archimedes.address, bob.address, 1))
 
-      const balance = new BigNumber(parseInt(await piToken.balanceOf(owner.address), 10))
+      const balance = await piToken.balanceOf(owner.address)
 
-      await waitFor(archimedes.harvest(0))
+      await waitFor(archimedes.harvest(0, owner.address))
 
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.plus(expected).minus(1).toFixed()
+        balance.toString() // .plus(1).minus(1).toFixed()
       )
     })
   })
 
-  describe('pendingPiToken', async () => {
-    it('should return 0 when community rewards are done', async () => {
+  describe('ApiToMint', async () => {
+    it('should return 0 when api rewards are done', async () => {
       // Deposit will not claim rewards yet
-      await waitFor(piToken.approve(archimedes.address, toNumber(1e18)))
-      await waitFor(archimedes.deposit(0, toNumber(1e18), zeroAddress))
+      const wmatic = WMATIC.connect(owner)
+
+      await waitFor(wmatic.deposit({ value: toNumber(1e18) }))
+      await waitFor(wmatic.approve(archimedes.address, toNumber(1e18)))
+
+      await waitFor(archimedes.deposit(0, owner.address, toNumber(1e18), zeroAddress))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
 
       // Claim rewards for the same block will not do anything
@@ -119,17 +135,9 @@ describe('ArchimedesMock', () => {
       await waitFor(piToken.setBlockNumber(toNumber(rewardsBlock + 30)))
       await waitFor(archimedes.setBlockNumber(toNumber(rewardsBlock + 30)))
 
-      // 1% is reserved for referals
-      const reward = (30 * (MINT_DATA[0].community * 0.99))
-
-      expect(
-        await archimedes.pendingPiToken(0)
-      ).to.be.equal(
-        toNumber(reward)
-      )
-      await waitFor(archimedes.harvestAll())
+      await waitFor(archimedes.harvestAll(owner.address))
       // just to check that it does nothing
-      await waitFor(archimedes.harvestAll())
+      await waitFor(archimedes.harvestAll(owner.address))
 
       // deposited
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
@@ -141,14 +149,12 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.setBlockNumber(toNumber(1e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
 
-      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
+      expect(await archimedes.apiLeftToMint()).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
-      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
+      expect(await archimedes.apiLeftToMint()).to.be.equal(0)
     })
   })
 })

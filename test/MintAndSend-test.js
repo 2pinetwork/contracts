@@ -149,9 +149,7 @@ describe('MintAndSend setup', () => {
     })
 
     it('should be reverted without founders', async () => {
-      let promises = [
-        mineNTimes(rewardsBlock)
-      ]
+      let promises = []
 
       for (let i = 0; i < (await mintAndSend.INVESTORS_MAX_COUNT()); i++) {
         promises.push(waitFor(mintAndSend.addInvestor(
@@ -159,6 +157,8 @@ describe('MintAndSend setup', () => {
           1
         )))
       }
+
+      promises.push(mineNTimes(rewardsBlock - (await getBlock())))
 
       await Promise.all(promises)
 

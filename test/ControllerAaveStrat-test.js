@@ -11,7 +11,7 @@ const {
   MAX_UINT
 } = require('./helpers')
 
-describe('Archimedes Aave strat wrong deployment', () => {
+describe('Controller Aave Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
     await expect(
       deploy(
@@ -48,7 +48,7 @@ describe('Archimedes Aave strat wrong deployment', () => {
   })
 })
 
-describe('Archimedes Aave strat', () => {
+describe('Controller Aave Strat', () => {
   let bob
   let piToken
   let archimedes
@@ -64,8 +64,7 @@ describe('Archimedes Aave strat', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock,
-      owner.address
+      rewardsBlock
     )
 
     controller = await createController(piToken, archimedes)

@@ -227,7 +227,7 @@ describe('Archimedes', () => {
       aliceBalance = (
         new BigNumber(aliceBalance)
       ).plus(
-        new BigNumber((piPerBlock / 3) * 2) // 66.6% of 1 block per 2º deposit
+        new BigNumber((piPerBlock / 3) * 2) // 33.3% of 1 block per 2º deposit
       ).toFixed()
 
       expect(
@@ -237,7 +237,7 @@ describe('Archimedes', () => {
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
 
-      // 2 blocks solo + 1 block 50% + 1 block 33.3%
+      // 2 blocks solo + 1 block 50% + 1 block 66.6%
       bobBalance = (new BigNumber(bobBalance)).plus(
         piPerBlock * (2 + 0.5 + 2 / 3)
       ).toFixed()
@@ -398,13 +398,6 @@ describe('Archimedes', () => {
     it('Should be controller decimals', async () => {
       expect(await archimedes.decimals(0)).to.be.equal(18)
       expect(await controller.decimals()).to.be.equal(18)
-    })
-    it('Should get 1 for 1 shares', async () => {
-      await piToken.approve(archimedes.address, 100)
-      await waitFor(archimedes.deposit(0, 1, zeroAddress))
-
-      expect(await archimedes.balance(0)).to.be.equal(1)
-      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(1)
     })
   })
 

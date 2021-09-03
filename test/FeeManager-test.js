@@ -59,11 +59,34 @@ describe('FeeManager', () => {
 
       await waitFor(piToken.transfer(feeMgr.address, 100))
       await waitFor(feeMgr.harvest(WMATIC.address, 0))
-      const amount = await feeMgr.VAULT_PART()
+
+      const max = await feeMgr.MAX()
+      const amount = max.sub(await feeMgr.TREASURY_PART())
 
       expect(amount).to.be.above(1)
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(
-        amount.mul(100).div(1000)
+        amount.mul(100).div(max)
+      )
+    })
+
+    it('should execute harvest and send to vault with non-wNative', async () => {
+      // This is because harvest need balance to swap
+      const otherW = await deploy('WETHMock')
+
+      await waitFor(otherW.deposit({ value: 100 }))
+      await waitFor(otherW.transfer(feeMgr.address, 100))
+
+      expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
+
+      await waitFor(piToken.transfer(exchange.address, 100))
+      await waitFor(feeMgr.harvest(otherW.address, 1e9))
+
+      const max = await feeMgr.MAX()
+      const amount = max.sub(await feeMgr.TREASURY_PART())
+
+      expect(amount).to.be.above(1)
+      expect(await piToken.balanceOf(piVault.address)).to.be.equal(
+        amount.mul(100).div(max)
       )
     })
 
@@ -76,16 +99,19 @@ describe('FeeManager', () => {
 
     it('should exchange for other token', async () => {
       // This is because harvest need balance to swap
+      await waitFor(piToken.transfer(exchange.address, 100))
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
 
-      await waitFor(piToken.transfer(feeMgr.address, 100))
-      await waitFor(feeMgr.harvest(piToken.address, 0))
+      await waitFor(WMATIC.deposit({ value: 100 }))
+      await waitFor(WMATIC.transfer(feeMgr.address, 100))
+      await waitFor(feeMgr.harvest(WMATIC.address, 1e9)) // 1-1 ratio
 
-      const amount = await feeMgr.VAULT_PART()
+      const max = await feeMgr.MAX()
+      const amount = max.sub(await feeMgr.TREASURY_PART())
 
       expect(amount).to.be.above(1)
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(
-        amount.mul(100).div(1000)
+        amount.mul(100).div(max)
       )
     })
   })
