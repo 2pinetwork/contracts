@@ -14,7 +14,7 @@ async function main() {
 
   deploy.block = block.number + 1714 // 1hour in block time
 
-  const args =  [
+  const args = [
     deploy.PiToken, // pitoken
     deploy.block,
     owner.address

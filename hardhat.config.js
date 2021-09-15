@@ -44,13 +44,14 @@ module.exports = {
   networks: {
     hardhat: { hardfork: 'berlin' },
     mumbai:  {
-      url:           'https://rpc-mumbai.maticvigil.com',
+      // url:           'https://rpc-mumbai.maticvigil.com',
+      url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
       accounts:      accounts,
       network_id:    80001,
-      gas:           5500000,
-      confirmations: 2,
-      timeoutBlocks: 200,
-      skipDryRun:    true
+      gas:           5500000
+      // confirmations: 2,
+      // timeoutBlocks: 200,
+      // skipDryRun:    true
     },
     kovan: {
       url:      process.env.KOVAN_URL || '',
@@ -58,6 +59,10 @@ module.exports = {
     },
     rinkeby: {
       url:      process.env.RINKEBY_URL || '',
+      accounts: accounts
+    },
+    arbrinkeby: {
+      url: 'https://rinkeby.arbitrum.io/rpc',
       accounts: accounts
     }
   },

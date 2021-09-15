@@ -5,9 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // import "hardhat/console.sol";
 
-contract PiVault is ERC20, Ownable {
+contract PiVault is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable piToken;
@@ -37,6 +38,8 @@ contract PiVault is ERC20, Ownable {
         foundersLockTime = _foundersLock;
     }
 
+    event Deposit(address indexed user, uint amount);
+    event Withdraw(address indexed user, uint amount);
 
     /**
      * @dev Adds address to investors list
@@ -71,7 +74,7 @@ contract PiVault is ERC20, Ownable {
      * @dev The entrypoint of funds into the system. People deposit with this function
      * into the vault.
      */
-    function deposit(uint _amount) public {
+    function deposit(uint _amount) public nonReentrant {
         uint shares = 0;
         uint _pool = balance();
 
@@ -87,6 +90,7 @@ contract PiVault is ERC20, Ownable {
         }
 
         _mint(msg.sender, shares);
+        emit Deposit(msg.sender, _amount);
     }
 
     /**
@@ -99,7 +103,7 @@ contract PiVault is ERC20, Ownable {
     /**
      * @dev Function to exit the system. The vault will pay up the piToken holder.
      */
-    function withdraw(uint _shares) public {
+    function withdraw(uint _shares) public nonReentrant {
         require(_shares <= balanceOf(msg.sender), "Can't withdraw more than available");
 
         uint r = balance() * _shares / totalSupply();
@@ -108,6 +112,8 @@ contract PiVault is ERC20, Ownable {
 
         _burn(msg.sender, _shares);
         piToken.safeTransfer(msg.sender, r);
+
+        emit Withdraw(msg.sender, _shares);
     }
 
     function getPricePerFullShare() external view returns (uint) {
