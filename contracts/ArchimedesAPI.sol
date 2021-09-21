@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IUniswapRouter.sol";
@@ -41,7 +41,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         uint weighing;           // How much weighing assigned to this pool. PIes to distribute per block.
         uint lastRewardBlock;    // Last block number that PIes distribution occurs.
         uint accPiTokenPerShare; // Accumulated PIes per share, times SHARE_PRECISION. See below.
-        address controller;        // Token controller
+        address controller;      // Token controller
     }
 
     // IPiToken already have safe transfer from SuperToken
@@ -118,7 +118,6 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // Add a new want token to the pool. Can only be called by the owner.
     function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyOwner {
         require(address(_want) != address(0), "Address zero not allowed");
-        // require(poolExistence[_want] <= 0, "nonDuplicated: duplicated"); // anti duplication?
         require(IController(_ctroller).farm() == address(this), "Not a farm controller");
         require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
 
@@ -165,7 +164,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         }
     }
 
-    // Mint community & treasury tokens for a given pool pid
+    // Mint api tokens for a given pool pid
     function updatePool(uint _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
 
@@ -212,16 +211,17 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         // Record referral if it's needed
         _recordReferral(_pid, _user, _referrer);
 
-        uint _before = wantBalance(poolInfo[_pid]);
+        uint _before = wantBalance(poolInfo[_pid].want);
 
         // Pay rewards
         calcPendingAndSwapRewards(_pid, _user);
 
         // Transfer from user => Archimedes
         // This is the only line that should transfer from msg.sender to Archimedes
+        // And in case of swap rewards will be included in the deposit
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
 
-        uint _balance = wantBalance(poolInfo[_pid]) - _before;
+        uint _balance = wantBalance(poolInfo[_pid].want) - _before;
 
         // Deposit in the controller
         _depositInController(_pid, _user, _balance);
@@ -236,10 +236,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
         PoolInfo storage pool = poolInfo[_pid];
 
-
-        uint _before = wantBalance(pool);
-
-        // console.log("Withdraw, before:", _before);
+        uint _before = wantBalance(pool.want);
 
         // Pay rewards
         calcPendingAndSwapRewards(_pid, _user);
@@ -248,9 +245,8 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         controller(_pid).withdraw(_user, _shares);
 
 
-        uint _wantBalance = wantBalance(pool) - _before;
+        uint _wantBalance = wantBalance(pool.want) - _before;
 
-        // console.log("Withdraw, after:", _wantBalance);
 
         pool.want.safeTransfer(_user, _wantBalance);
 
@@ -268,11 +264,11 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
         updatePool(_pid);
 
-        uint _before = wantBalance(poolInfo[_pid]);
+        uint _before = wantBalance(poolInfo[_pid].want);
 
         calcPendingAndSwapRewards(_pid, _user);
 
-        uint _balance = wantBalance(poolInfo[_pid]) - _before;
+        uint _balance = wantBalance(poolInfo[_pid].want) - _before;
 
         if (_balance > 0) {
             _depositInController(_pid, _user, _balance);
@@ -289,24 +285,24 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint _pid, address _user) external nonReentrant {
         require(msg.sender == _user || msg.sender == owner() || msg.sender == handler, "Not autorized");
-        PoolInfo storage pool = poolInfo[_pid];
+        IERC20 want = poolInfo[_pid].want;
 
         userPaidRewards[_pid][_user] = 0;
 
         uint _shares = userShares(_pid, _user);
 
-        uint _before = wantBalance(pool);
+        uint _before = wantBalance(want);
         // this should burn shares and control the amount
         controller(_pid).withdraw(_user, _shares);
 
-        uint _wantBalance = wantBalance(pool) - _before;
-        pool.want.safeTransfer(_user, _wantBalance);
+        uint _wantBalance = wantBalance(want) - _before;
+        want.safeTransfer(_user, _wantBalance);
 
         emit EmergencyWithdraw(_pid, _user, _shares);
     }
 
-    function wantBalance(PoolInfo memory _pool) internal view returns (uint) {
-        return _pool.want.balanceOf(address(this));
+    function wantBalance(IERC20 _want) internal view returns (uint) {
+        return _want.balanceOf(address(this));
     }
 
     // Record referral in referralMgr contract if needed
@@ -337,11 +333,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         if (_shares > 0) {
             pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
 
-
             if (pending > 0) {
-                // console.log("Pending shares: ", _shares);
-                // console.log("Acc: ", poolInfo[_pid].accPiTokenPerShare);
-                // console.log("Paidrew: ", paidRewards(_pid, _user));
                 swapForWant(_pid, pending);
                 payReferralCommission(_pid, _user, pending);
             }
@@ -399,7 +391,6 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
                     poolInfo[_pid].want.safeTransfer(referrer, _reward);
 
-                    // console.log("Pagando....", commissionAmount);
                     referralMgr.referralPaid(referrer, commissionAmount); // sum paid
                 }
             }
@@ -448,11 +439,11 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         return block.number;
     }
 
-    // In case that everyone has claim his tokens and it's still has piTokens
-    // We'll move to Staking
+    // In case of stucketd 2Pi tokens after 2 years
+    // check if any holder has pending tokens then call this fn
+    // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
     function redeemStuckedPiTokens() external onlyOwner {
         require(apiLeftToMint <= 0, "still minting");
-        require(blockNumber() >= startBlock + 26280000, "Wait for 2 years in blocks");
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "still minting");
 
         uint _balance = piToken.balanceOf(address(this));
