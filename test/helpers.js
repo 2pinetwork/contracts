@@ -181,6 +181,23 @@ before(async () => {
   global.PiToken = await createPiToken(false, true)
   expect(global.PiToken.address).to.be.equal('0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8')
 
+  console.log('Deploying BTC')
+  global.BTC = await deployWithMainDeployer('TokenMock', 'BTC', 'BTC')
+  expect(global.BTC.address).to.be.equal('btc')
+
+  console.log('Deploying CRV')
+  global.BTC = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
+  expect(global.BTC.address).to.be.equal('crv')
+
+
+  console.log('Deploying Curve Pool & BTC-CRV')
+  global.BTC = await deployWithMainDeployer('CurvePool')
+  expect(global.BTC.address).to.be.equal('CurvePool')
+
+  console.log('Deploying Curve RewardsGauge')
+  global.BTC = await deployWithMainDeployer('CurveRewardsGauge')
+  expect(global.BTC.address).to.be.equal('CurveRewardsGauge')
+
   console.log('===============  SETUP DONE  ===============\n\n')
 })
 
