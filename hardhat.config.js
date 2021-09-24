@@ -5,7 +5,7 @@ require('@nomiclabs/hardhat-etherscan');
 // require('@nomiclabs/hardhat-web3');
 require('@nomiclabs/hardhat-truffle5');
 require('solidity-coverage');
-require('hardhat-gas-reporter');
+// require('hardhat-gas-reporter');
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -44,8 +44,8 @@ module.exports = {
   networks: {
     hardhat: { hardfork: 'berlin' },
     mumbai:  {
-      // url:           'https://rpc-mumbai.maticvigil.com',
-      url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
+      url:           'https://rpc-mumbai.maticvigil.com',
+      // url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
       accounts:      accounts,
       network_id:    80001,
       gas:           5500000

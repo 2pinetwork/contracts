@@ -132,14 +132,28 @@ module.exports = {
 
 // Global setup for all the test-set
 before(async () => {
-  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
-  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
-
-  // First deploy the non-superfluid dependencies
-  // DEPLOY WETH-WMATIC-Wlike token
   // Not change signer because if the deployer/nonce changes
   // the deployed address will change too
   // All signers have 10k ETH
+  // global variable is like "window"
+  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
+  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
+  global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
+
+  // DEPLOY SuperFluid framework
+  const errorHandler = err => {
+    if (err) throw err;
+  };
+
+  await deployFramework(errorHandler, { web3: web3, from: global.superFluidDeployer.address });
+  const sf = new Framework({ web3: web3, version: 'test' });
+  await sf.initialize()
+
+  global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
+    await sf.host.getSuperTokenFactory.call()
+  );
+
+  // DEPLOY WETH-WMATIC-Wlike token
   console.log('Deploying WMatic')
   global.WMATIC = await deployWithMainDeployer('WETHMock')
   expect(global.WMATIC.address).to.be.equal('0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f')
@@ -161,42 +175,27 @@ before(async () => {
   global.Aave.pool = await deployWithMainDeployer('PoolMock')
   expect(global.Aave.pool.address).to.be.equal('0xb09da8a5B236fE0295A345035287e80bb0008290')
 
-  // DEPLOY SuperFluid framework
-  const errorHandler = err => {
-    if (err) throw err;
-  };
-
-
-  await deployFramework(errorHandler, { web3: web3, from: global.deployer.address });
-  const sf = new Framework({ web3: web3, version: 'test' });
-  await sf.initialize()
-
-  // global variable is like "window"
-  global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
-    await sf.host.getSuperTokenFactory.call()
-  );
-
   // DEPLOY PiToken
   console.log('Deploying PiToken')
   global.PiToken = await createPiToken(false, true)
-  expect(global.PiToken.address).to.be.equal('0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8')
+  expect(global.PiToken.address).to.be.equal('0x5095d3313C76E8d29163e40a0223A5816a8037D8')
 
   console.log('Deploying BTC')
   global.BTC = await deployWithMainDeployer('TokenMock', 'BTC', 'BTC')
-  expect(global.BTC.address).to.be.equal('btc')
+  expect(global.BTC.address).to.be.equal('0x6d925938Edb8A16B3035A4cF34FAA090f490202a')
 
   console.log('Deploying CRV')
-  global.BTC = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
-  expect(global.BTC.address).to.be.equal('crv')
+  global.CRV = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
+  expect(global.CRV.address).to.be.equal('0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E')
 
 
   console.log('Deploying Curve Pool & BTC-CRV')
-  global.BTC = await deployWithMainDeployer('CurvePool')
-  expect(global.BTC.address).to.be.equal('CurvePool')
+  global.CurvePool = await deployWithMainDeployer('CurvePool')
+  expect(global.CurvePool.address).to.be.equal('CurvePool')
 
   console.log('Deploying Curve RewardsGauge')
-  global.BTC = await deployWithMainDeployer('CurveRewardsGauge')
-  expect(global.BTC.address).to.be.equal('CurveRewardsGauge')
+  global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGauge')
+  expect(global.CurveRewardsGauge.address).to.be.equal('CurveRewardsGauge')
 
   console.log('===============  SETUP DONE  ===============\n\n')
 })

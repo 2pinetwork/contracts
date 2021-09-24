@@ -1,4 +1,4 @@
-/* global Aave */
+/* global Curve */
 const { expect } = require('chai')
 const {
   createController,
@@ -11,17 +11,12 @@ const {
   MAX_UINT
 } = require('./helpers')
 
-describe('Controller Aave Strat wrong deployment', () => {
+describe('Controller Curve Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
     await expect(
       deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         zeroAddress,
-        48,
-        50,
-        8,
-        1e15,
-        zeroAddress, // ignored in that case
         exchange.address,
         owner.address
       )
@@ -34,12 +29,7 @@ describe('Controller Aave Strat wrong deployment', () => {
 
     await expect(
       deploy(
-        'ControllerAaveStrat',
-        piToken.address,
-        48,
-        50,
-        8,
-        1e15,
+        'ControllerCurveStrat',
         archimedes.address,
         exchange.address,
         zeroAddress
@@ -48,7 +38,7 @@ describe('Controller Aave Strat wrong deployment', () => {
   })
 })
 
-describe('Controller Aave Strat', () => {
+describe('Controller Curve Strat', () => {
   let bob
   let piToken
   let archimedes
@@ -70,11 +60,11 @@ describe('Controller Aave Strat', () => {
     controller = await createController(piToken, archimedes)
 
     strat = await ethers.getContractAt(
-      'ControllerAaveStrat',
+      'ControllerCurveStrat',
       (await controller.strategy())
     )
 
-    pool = Aave.pool
+    pool = Curve.pool
   })
 
   describe('Deployment', () => {
@@ -114,13 +104,13 @@ describe('Controller Aave Strat', () => {
 
 
     it('Should set the swap route', async () => {
-      expect(await strat.wNativeToWantRoute(0)).to.not.equal(piToken.address)
-      expect(await strat.wNativeToWantRoute(1)).to.not.equal(WMATIC.address)
+      expect(await strat.wmaticToBtcRoute(0)).to.not.equal(piToken.address)
+      expect(await strat.wmaticToBtcRoute(1)).to.not.equal(WMATIC.address)
 
-      await strat.setSwapRoute([piToken.address, WMATIC.address])
+      await strat.setWmaticSwapRoute([piToken.address, WMATIC.address])
 
-      expect(await strat.wNativeToWantRoute(0)).to.equal(piToken.address)
-      expect(await strat.wNativeToWantRoute(1)).to.equal(WMATIC.address)
+      expect(await strat.wmaticToBtcRoute(0)).to.equal(piToken.address)
+      expect(await strat.wmaticToBtcRoute(1)).to.equal(WMATIC.address)
     })
 
     it('Should set a new hardvester', async () => {
@@ -163,7 +153,7 @@ describe('Controller Aave Strat', () => {
 
     it('Should deposit with one leverage', async () => {
       const newStrat = await deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         piToken.address,
         48,
         50,
@@ -204,7 +194,7 @@ describe('Controller Aave Strat', () => {
 
     it('Should withdrawal with partial deleverage', async () => {
       const newStrat = await deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         piToken.address,
         48,
         50,
@@ -272,7 +262,7 @@ describe('Controller Aave Strat', () => {
 
     it('Should withdraw with multiple deleverage', async () => {
       const newStrat = await deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         piToken.address,
         48,
         50,
@@ -350,7 +340,7 @@ describe('Controller Aave Strat', () => {
 
     it('should harvest without swap', async () => {
       const newStrat = await deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         WMATIC.address,
         48,
         50,
@@ -409,7 +399,7 @@ describe('Controller Aave Strat', () => {
       // pool needs reserves to borrow
       await waitFor(piToken.transfer(pool.address, '' + 1e18))
       const levStrat = await deploy(
-        'ControllerAaveStrat',
+        'ControllerCurveStrat',
         piToken.address,
         80,
         100,

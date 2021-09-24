@@ -34,8 +34,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     // Test
     address public constant WMATIC = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
-    address constant public BTC = address(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6);
-    address constant public CRV = address(0x172370d5Cd63279eFa6d502DAB29171933a610AF);
+    address constant public BTC = address(0x6d925938Edb8A16B3035A4cF34FAA090f490202a);
+    address constant public CRV = address(0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E);
     address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wmatic
     address constant public BTCCRV = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67); // same than CurvePool
     address constant public CURVE_POOL = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
