@@ -172,9 +172,6 @@ describe('Controller', () => {
 
       await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
 
-      // await waitFor(global.Aave.dataProvider.setATokenBalance(10000))
-      // await waitFor(global.Aave.dataProvider.setDebtTokenBalance(0))
-
       expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
 
       expect(await controller.balanceOf(bob.address)).to.be.equal(10000)
