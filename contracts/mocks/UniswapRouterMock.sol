@@ -3,7 +3,6 @@
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "hardhat/console.sol";
 
 contract UniswapRouterMock {
     function swapExactTokensForTokens(
@@ -14,7 +13,7 @@ contract UniswapRouterMock {
         uint /*deadline*/
     ) external returns (uint[] memory amounts) {
         uint idx = path.length - 1;
-        // console.log("Swapped: ", amountIn);
+
         IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);
         IERC20(path[idx]).transfer(to, amountOutMin);
 

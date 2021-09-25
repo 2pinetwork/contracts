@@ -48,7 +48,7 @@ describe('ArchimedesAPIMock', () => {
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
     })
 
-    it('should cover not more not more piTokens to mint', async () => {
+    it('should cover not more piTokens to mint', async () => {
       const wmatic = WMATIC.connect(owner)
 
       await waitFor(wmatic.deposit({ value: 100 }))
@@ -68,6 +68,66 @@ describe('ArchimedesAPIMock', () => {
       // No left tokens to mint...
       await waitFor(archimedes.updatePool(0))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+    })
+  })
+
+  describe('redeemStuckedPiTokens', async () => {
+    it('should redeem stucked piTokens', async () => {
+      const wmatic = WMATIC.connect(owner)
+
+      await waitFor(wmatic.deposit({ value: toNumber(1e18) }))
+      await waitFor(wmatic.approve(archimedes.address, toNumber(1e18)))
+
+      await waitFor(archimedes.deposit(0, owner.address, 100, zeroAddress))
+      await waitFor(piToken.addMinter(owner.address))
+      await waitFor(piToken.setBlockNumber(toNumber(2e10)))
+      await waitFor(archimedes.setBlockNumber(toNumber(2e10)))
+
+      await waitFor(archimedes.updatePool(0))
+
+      const left = (await piToken.MAX_SUPPLY()).sub(await piToken.totalSupply())
+
+      await waitFor(piToken.mint(owner.address, left, 0x0))
+
+      expect(await archimedes.apiLeftToMint()).to.be.equal(0)
+      expect(await piToken.totalSupply()).to.be.equal(await piToken.MAX_SUPPLY())
+
+      const balance = await piToken.balanceOf(archimedes.address)
+      const ownerBalance = await piToken.balanceOf(owner.address)
+
+      expect(balance).to.be.above(0)
+
+      await waitFor(archimedes.redeemStuckedPiTokens())
+
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        ownerBalance.add(balance)
+      )
+    })
+
+    it('should revert with community left to mint', async () => {
+      await expect(archimedes.redeemStuckedPiTokens()).to.be.revertedWith(
+        'still minting'
+      )
+    })
+
+    it('should revert with PiToken still minting', async () => {
+      const wmatic = WMATIC.connect(owner)
+
+      await waitFor(wmatic.deposit({ value: toNumber(1e18) }))
+      await waitFor(wmatic.approve(archimedes.address, toNumber(1e18)))
+
+      await waitFor(archimedes.deposit(0, owner.address, 100, zeroAddress))
+      await waitFor(piToken.addMinter(owner.address))
+      await waitFor(piToken.setBlockNumber(toNumber(2e10)))
+      await waitFor(archimedes.setBlockNumber(toNumber(2e10)))
+
+      await waitFor(archimedes.updatePool(0))
+
+      expect(await archimedes.apiLeftToMint()).to.be.equal(0)
+      expect(await piToken.totalSupply()).to.be.not.equal(await piToken.MAX_SUPPLY())
+
+      await expect(archimedes.redeemStuckedPiTokens()).to.be.revertedWith('PiToken still minting')
     })
   })
 

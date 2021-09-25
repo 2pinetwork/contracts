@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 import "../interfaces/IUniswapRouter.sol";
 
@@ -37,9 +36,9 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     address constant public BTC = address(0x6d925938Edb8A16B3035A4cF34FAA090f490202a);
     address constant public CRV = address(0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E);
     address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wmatic
-    address constant public BTCCRV = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67); // same than CurvePool
-    address constant public CURVE_POOL = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
-    address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
+    address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
+    address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
+    address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
 
 
     // Matic Polygon
@@ -134,6 +133,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     function _deposit() internal {
         uint btcBal = btcBalance();
+
         if (btcBal > 0) {
             uint[2] memory amounts = [btcBal, 0];
 
@@ -141,6 +141,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         }
 
         uint _btcCRVBalance = btcCRVBalance();
+
         if (_btcCRVBalance > 0) {
             IRewardsGauge(REWARDS_GAUGE).deposit(_btcCRVBalance);
         }
@@ -262,6 +263,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint[2] memory amounts = [_amount, 0];
             crvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, false);
         }
+
 
         IRewardsGauge(REWARDS_GAUGE).withdraw(crvAmount);
 

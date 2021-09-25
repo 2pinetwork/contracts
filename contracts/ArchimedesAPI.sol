@@ -444,7 +444,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
     function redeemStuckedPiTokens() external onlyOwner {
         require(apiLeftToMint <= 0, "still minting");
-        require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "still minting");
+        require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
 
         uint _balance = piToken.balanceOf(address(this));
 
