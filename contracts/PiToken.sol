@@ -82,6 +82,8 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     }
 
     function init() external onlyAdmin {
+        require(self().totalSupply() <= 0, "Already initialized");
+
         ISuperToken(address(this)).initialize(
             IERC20(address(0x0)),
             18, // shouldn't matter if there's no wrapped token
@@ -198,7 +200,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
             return 0;
         }
     }
-
 
     function totalMintPerBlock() public view returns (uint) {
         if (self().totalSupply() < MAX_SUPPLY) {

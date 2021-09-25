@@ -26,7 +26,7 @@ contract Referral is Ownable {
         _;
     }
 
-    function recordReferral(address _user, address _referrer) public onlyOperator {
+    function recordReferral(address _user, address _referrer) external onlyOperator {
         if (_user != address(0)
             && _referrer != address(0)
             && _user != _referrer
@@ -38,7 +38,7 @@ contract Referral is Ownable {
         }
     }
 
-    function referralPaid(address _referrer, uint _amount) external {
+    function referralPaid(address _referrer, uint _amount) external onlyOperator {
         totalPaid += _amount;
         referralsPaid[_referrer] += _amount;
     }

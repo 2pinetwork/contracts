@@ -32,7 +32,7 @@ describe('PiToken', () => {
     })
 
     it('Should revert second call', async () => {
-      expect(piToken.init()).to.be.revertedWith('Initializable: contract is already initialized')
+      await expect(piToken.init()).to.be.revertedWith('Already initialized')
     })
   })
 
