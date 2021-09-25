@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 import "../interfaces/IUniswapRouter.sol";
 
@@ -33,20 +32,27 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
 
     // Test
-    // address public constant wmatic = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
+    address public constant WMATIC = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
+    address constant public BTC = address(0x6d925938Edb8A16B3035A4cF34FAA090f490202a);
+    address constant public CRV = address(0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E);
+    address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wmatic
+    address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
+    address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
+    address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
+
 
     // Matic Polygon
-    address constant public wmatic = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
-    address constant public btc = address(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6);
-    address constant public crv = address(0x172370d5Cd63279eFa6d502DAB29171933a610AF);
-    address constant public eth = address(0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619);
-    address constant public btcCRV = address(0xf8a57c1d3b9629b77b6726a042ca48990A84Fb49);
-    address constant public curvePool = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
-    address constant public rewardsGauge = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
+    // address constant public WMATIC = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+    // address constant public BTC = address(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6);
+    // address constant public CRV = address(0x172370d5Cd63279eFa6d502DAB29171933a610AF);
+    // address constant public ETH = address(0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619);
+    // address constant public BTCCRV = address(0xf8a57c1d3b9629b77b6726a042ca48990A84Fb49);
+    // address constant public CURVE_POOL = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
+    // address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
 
     // Routes
-    address[] public wmaticToBtcRoute = [wmatic, eth, btc];
-    address[] public crvToBtcRoute = [crv, eth, btc];
+    address[] public wmaticToBtcRoute = [WMATIC, ETH, BTC];
+    address[] public crvToBtcRoute = [CRV, ETH, BTC];
 
     // Fees
     uint constant public FEE_MAX = 10000;
@@ -95,12 +101,12 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         emit NewExchange(exchange, _exchange);
 
         // Revoke current exchange
-        IERC20(wmatic).safeApprove(exchange, 0);
-        IERC20(crv).safeApprove(exchange, 0);
+        IERC20(WMATIC).safeApprove(exchange, 0);
+        IERC20(CRV).safeApprove(exchange, 0);
 
         exchange = _exchange;
-        IERC20(wmatic).safeApprove(exchange, type(uint).max);
-        IERC20(crv).safeApprove(exchange, type(uint).max);
+        IERC20(WMATIC).safeApprove(exchange, type(uint).max);
+        IERC20(CRV).safeApprove(exchange, type(uint).max);
     }
 
     function setWmaticSwapRoute(address[] calldata _route) external onlyAdmin {
@@ -127,15 +133,17 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     function _deposit() internal {
         uint btcBal = btcBalance();
+
         if (btcBal > 0) {
             uint[2] memory amounts = [btcBal, 0];
 
-            ICurvePool(curvePool).add_liquidity(amounts, 0, true);
+            ICurvePool(CURVE_POOL).add_liquidity(amounts, 0, true);
         }
 
         uint _btcCRVBalance = btcCRVBalance();
+
         if (_btcCRVBalance > 0) {
-            IRewardsGauge(rewardsGauge).deposit(_btcCRVBalance);
+            IRewardsGauge(REWARDS_GAUGE).deposit(_btcCRVBalance);
         }
     }
 
@@ -158,7 +166,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             }
         }
 
-        IERC20(btc).safeTransfer(controller, _amount);
+        IERC20(BTC).safeTransfer(controller, _amount);
 
         if (!paused()) {
             _deposit();
@@ -189,7 +197,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
     function claimRewards() internal {
-        IRewardsGauge(rewardsGauge).claim_rewards(address(this));
+        IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
     /**
@@ -239,11 +247,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         if (fee > 0) {
             // Pay to treasury a percentage of the total reward claimed
-            IERC20(btc).safeTransfer(treasury, fee);
+            IERC20(BTC).safeTransfer(treasury, fee);
         }
     }
 
-    // amount is the btc expected to be withdrawn
+    // amount is the BTC expected to be withdrawn
     function withdrawBtc(uint _amount, bool _maxWithdraw) internal {
         uint crvAmount;
 
@@ -253,10 +261,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             // BTC has 8 decimals and crvBTC has 18, so we need a convertion to
             // withdraw the correct amount of crvBTC
             uint[2] memory amounts = [_amount, 0];
-            crvAmount = ICurvePool(curvePool).calc_token_amount(amounts, false);
+            crvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, false);
         }
 
-        IRewardsGauge(rewardsGauge).withdraw(crvAmount);
+
+        IRewardsGauge(REWARDS_GAUGE).withdraw(crvAmount);
 
         // remove_liquidity
         uint balance = btcCRVBalance();
@@ -264,36 +273,36 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         // consider the fee.
         uint expected = (calc_withdraw_one_coin(balance) * 95) / 100;
 
-        ICurvePool(curvePool).remove_liquidity_one_coin(
+        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(
             balance, 0,  expected, true
         );
     }
 
     function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
         if (_amount > 0) {
-            return ICurvePool(curvePool).calc_withdraw_one_coin(_amount, 0);
+            return ICurvePool(CURVE_POOL).calc_withdraw_one_coin(_amount, 0);
         } else {
             return 0;
         }
     }
 
     function btcBalance() public view returns (uint) {
-        return IERC20(btc).balanceOf(address(this));
+        return IERC20(BTC).balanceOf(address(this));
     }
     function wmaticBalance() public view returns (uint) {
-        return IERC20(wmatic).balanceOf(address(this));
+        return IERC20(WMATIC).balanceOf(address(this));
     }
     function crvBalance() public view returns (uint) {
-        return IERC20(crv).balanceOf(address(this));
+        return IERC20(CRV).balanceOf(address(this));
     }
     function btcCRVBalance() public view returns (uint) {
-        return IERC20(btcCRV).balanceOf(address(this));
+        return IERC20(BTCCRV).balanceOf(address(this));
     }
     function balanceOf() public view returns (uint) {
         return btcBalance() + balanceOfPoolInBtc();
     }
     function balanceOfPool() public view returns (uint) {
-        return IRewardsGauge(rewardsGauge).balanceOf(address(this));
+        return IRewardsGauge(REWARDS_GAUGE).balanceOf(address(this));
     }
     function balanceOfPoolInBtc() public view returns (uint) {
         return calc_withdraw_one_coin(balanceOfPool());
@@ -306,7 +315,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         withdrawBtc(0, true); // max withdraw
         harvest(0, 0);
 
-        IERC20(btc).safeTransfer(controller, btcBalance());
+        IERC20(BTC).safeTransfer(controller, btcBalance());
 
         _removeAllowances();
     }
@@ -332,16 +341,16 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function _giveAllowances() internal {
-        IERC20(btc).safeApprove(curvePool, type(uint).max);
-        IERC20(btcCRV).safeApprove(rewardsGauge, type(uint).max);
-        IERC20(wmatic).safeApprove(exchange, type(uint).max);
-        IERC20(crv).safeApprove(exchange, type(uint).max);
+        IERC20(BTC).safeApprove(CURVE_POOL, type(uint).max);
+        IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, type(uint).max);
+        IERC20(WMATIC).safeApprove(exchange, type(uint).max);
+        IERC20(CRV).safeApprove(exchange, type(uint).max);
     }
 
     function _removeAllowances() internal {
-        IERC20(btc).safeApprove(curvePool, 0);
-        IERC20(btcCRV).safeApprove(rewardsGauge, 0);
-        IERC20(wmatic).safeApprove(exchange, 0);
-        IERC20(crv).safeApprove(exchange, 0);
+        IERC20(BTC).safeApprove(CURVE_POOL, 0);
+        IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, 0);
+        IERC20(WMATIC).safeApprove(exchange, 0);
+        IERC20(CRV).safeApprove(exchange, 0);
     }
 }

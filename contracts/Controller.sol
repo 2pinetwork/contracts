@@ -5,7 +5,8 @@ pragma solidity ^0.8.4;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol";
 
@@ -22,11 +23,11 @@ interface IStrategy {
 }
 
 contract Controller is ERC20, Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
 
     // Address of Archimedes
     address public immutable farm;
-    address public immutable want;
+    IERC20Metadata public immutable want;
 
     address public strategy;
     address public treasury;
@@ -37,12 +38,12 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     uint public withdrawFee = 10; // 0.1%
 
     constructor(
-        address _want,
+        IERC20Metadata _want,
         address _farm,
         address _treasury
     ) ERC20(
-        string(abi.encodePacked("2pi-", ERC20(_want).name())),
-        string(abi.encodePacked("2pi", ERC20(_want).symbol()))
+        string(abi.encodePacked("2pi-", _want.name())),
+        string(abi.encodePacked("2pi", _want.symbol()))
     ) {
         require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
         require(_treasury != address(0), "Treasury can't be 0 address");
@@ -50,6 +51,10 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         want = _want;
         farm = _farm;
         treasury = _treasury;
+    }
+
+    function decimals() override public view returns (uint8) {
+        return want.decimals();
     }
 
     modifier onlyFarm() {
@@ -94,7 +99,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     function deposit(address _senderUser, uint _amount) external whenNotPaused onlyFarm nonReentrant {
         uint _before = balance();
 
-        IERC20(want).safeTransferFrom(
+        want.safeTransferFrom(
             farm, // Archimedes
             address(this),
             _amount
@@ -130,8 +135,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         }
 
         uint withdrawalFee = _withdraw * withdrawFee / FEE_MAX;
-        IERC20(want).safeTransfer(farm, _withdraw - withdrawalFee);
-        IERC20(want).safeTransfer(treasury, withdrawalFee);
+        want.safeTransfer(farm, _withdraw - withdrawalFee);
+        want.safeTransfer(treasury, withdrawalFee);
 
         if (!_strategyPaused()) {
             _strategyDeposit();
@@ -147,7 +152,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     function wantBalance() public view returns (uint) {
-        return IERC20(want).balanceOf(address(this));
+        return want.balanceOf(address(this));
     }
 
     function balance() public view returns (uint) {
@@ -158,7 +163,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         uint _amount = wantBalance();
 
         if (_amount > 0) {
-            IERC20(want).safeTransfer(strategy, _amount);
+            want.safeTransfer(strategy, _amount);
 
             IStrategy(strategy).deposit();
         }

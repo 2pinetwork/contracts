@@ -74,7 +74,7 @@ const createPiToken = async (mocked, withDeployer) => {
   return piToken
 }
 
-const createController = async (token, archimedes) => {
+const createController = async (token, archimedes, stratName) => {
   const controller = await deploy(
     'Controller',
     token.address,
@@ -82,17 +82,33 @@ const createController = async (token, archimedes) => {
     owner.address
   )
 
-  const strategy = await deploy(
-    'ControllerAaveStrat',
-    token.address,
-    0,
-    100,
-    0,
-    0,
-    controller.address,
-    global.exchange.address,
-    owner.address
-  )
+  let strategy
+
+  stratName = stratName || 'ControllerAaveStrat'
+
+  switch(stratName) {
+    case 'ControllerAaveStrat':
+      strategy = await deploy(
+        'ControllerAaveStrat',
+        token.address,
+        0,
+        100,
+        0,
+        0,
+        controller.address,
+        global.exchange.address,
+        owner.address
+      )
+      break
+    case 'ControllerCurveStrat':
+      strategy = await deploy(
+        'ControllerCurveStrat',
+        controller.address,
+        global.exchange.address,
+        owner.address
+      )
+      break
+  }
 
   await waitFor(controller.setStrategy(strategy.address))
 
@@ -131,15 +147,21 @@ module.exports = {
 }
 
 // Global setup for all the test-set
-before(async () => {
-  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
-  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
+setupSuperFluid = async () => {
+   const errorHandler = err => {
+    if (err) throw err;
+  };
 
-  // First deploy the non-superfluid dependencies
-  // DEPLOY WETH-WMATIC-Wlike token
-  // Not change signer because if the deployer/nonce changes
-  // the deployed address will change too
-  // All signers have 10k ETH
+  await deployFramework(errorHandler, { web3: web3, from: global.superFluidDeployer.address });
+  const sf = new Framework({ web3: web3, version: 'test' });
+  await sf.initialize()
+
+  global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
+    await sf.host.getSuperTokenFactory.call()
+  );
+}
+
+setupNeededTokens = async () => {
   console.log('Deploying WMatic')
   global.WMATIC = await deployWithMainDeployer('WETHMock')
   expect(global.WMATIC.address).to.be.equal('0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f')
@@ -161,30 +183,52 @@ before(async () => {
   global.Aave.pool = await deployWithMainDeployer('PoolMock')
   expect(global.Aave.pool.address).to.be.equal('0xb09da8a5B236fE0295A345035287e80bb0008290')
 
-  // DEPLOY SuperFluid framework
-  const errorHandler = err => {
-    if (err) throw err;
-  };
-
-
-  await deployFramework(errorHandler, { web3: web3, from: global.deployer.address });
-  const sf = new Framework({ web3: web3, version: 'test' });
-  await sf.initialize()
-
-  // global variable is like "window"
-  global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
-    await sf.host.getSuperTokenFactory.call()
-  );
-
   // DEPLOY PiToken
   console.log('Deploying PiToken')
   global.PiToken = await createPiToken(false, true)
-  expect(global.PiToken.address).to.be.equal('0xBF4fD550c7BD3Cf6eC6A0b30bD4c8e603bbC16a8')
+  expect(global.PiToken.address).to.be.equal('0x5095d3313C76E8d29163e40a0223A5816a8037D8')
+
+  console.log('Deploying BTC')
+  global.BTC = await deployWithMainDeployer('TokenMock', 'BTC', 'BTC')
+  expect(global.BTC.address).to.be.equal('0x6d925938Edb8A16B3035A4cF34FAA090f490202a')
+
+  console.log('Deploying CRV')
+  global.CRV = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
+  expect(global.CRV.address).to.be.equal('0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E')
+
+
+  console.log('Deploying Curve Pool & BTC-CRV')
+  global.CurvePool = await deployWithMainDeployer('CurvePoolMock')
+  expect(global.CurvePool.address).to.be.equal('0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4')
+
+  console.log('Deploying Curve RewardsGauge')
+  global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock')
+  expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
+}
+
+before(async () => {
+  // Not change signer because if the deployer/nonce changes
+  // the deployed address will change too
+  // All signers have 10k ETH
+  // global variable is like "window"
+  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
+  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
+  global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
+
+  // If PiToken fails change this to wait for SuperFluid
+  await Promise.all([
+    setupSuperFluid(),
+    setupNeededTokens()
+  ])
 
   console.log('===============  SETUP DONE  ===============\n\n')
 })
 
 afterEach(async () => {
-  await (await global.Aave.pool.reset()).wait()
-  await (await global.Aave.dataProvider.reset()).wait()
+  Promise.all([
+    (await global.Aave.pool.reset()).wait(),
+    (await global.Aave.dataProvider.reset()).wait(),
+    (await global.CurvePool.reset()).wait(),
+    (await global.CurveRewardsGauge.reset()).wait()
+  ])
 })
