@@ -436,10 +436,11 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // old vault functions
     function getPricePerFullShare(uint _pid) external view returns (uint) {
         uint _totalSupply = controller(_pid).totalSupply();
+        uint precision = 10 ** decimals(_pid);
 
-        return _totalSupply <= 0 ? 1e18 : ((controller(_pid).balance() * 1e18) / _totalSupply);
+        return _totalSupply <= 0 ? precision : ((controller(_pid).balance() * precision) / _totalSupply);
     }
-    function decimals(uint _pid) external view returns (uint) {
+    function decimals(uint _pid) public view returns (uint) {
         return controller(_pid).decimals();
     }
     function balance(uint _pid) external view returns (uint) {

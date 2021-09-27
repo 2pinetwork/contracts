@@ -448,4 +448,32 @@ describe('ArchimedesAPI', () => {
       )
     })
   })
+
+  describe('Token decimals', async () => {
+    it('Should have the same decimals than want', async () => {
+      const token = await deploy('TokenMock', 'T', 'T')
+      await waitFor(token.setDecimals(6))
+
+      const ctroller = await createController(token, archimedes)
+
+      await waitFor(archimedes.addNewPool(token.address, ctroller.address, 1, false))
+
+      expect(await archimedes.decimals(1)).to.be.equal(6)
+      expect(await archimedes.getPricePerFullShare(1)).to.be.equal(1e6)
+
+      await waitFor(token.approve(archimedes.address, '' + 1e18))
+      await waitFor(archimedes.deposit(1, owner.address, 100, zeroAddress))
+
+      const price = await archimedes.getPricePerFullShare(1)
+      expect(price).to.be.equal(1e6)
+
+      expect(price * 100).to.be.equal(100e6)
+
+      await waitFor(token.transfer(ctroller.address, 10))
+
+      expect(
+        await archimedes.getPricePerFullShare(1)
+      ).to.be.equal(1.1e6)
+    })
+  })
 })
