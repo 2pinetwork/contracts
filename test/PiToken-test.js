@@ -205,7 +205,23 @@ describe('PiToken', () => {
         piToken.connect(alice).mint(alice.address, 1, txData)
       ).to.be.revertedWith('Only minters')
 
-      await piToken.connect(bob).mint(alice.address, toNumber(1e10), txData)
+      await expect(
+        piToken.connect(bob).mint(alice.address, toNumber(1e10), txData)
+      ).to.emit(
+        piToken, 'Minted'
+      ).withArgs(
+        piToken.address,
+        piToken.address,
+        toNumber(1e10),
+        '0x00',
+        '0x'
+      ).to.emit(
+        piToken, 'Transfer'
+      ).withArgs(
+        piToken.address,
+        alice.address,
+        toNumber(1e10)
+      )
 
       expect(await piToken.totalSupply()).to.equal(
         (new BigNumber(INITIAL_SUPPLY)).plus(1e10).toFixed()
@@ -275,7 +291,17 @@ describe('PiToken', () => {
       ).to.be.revertedWith('SuperfluidToken: burn amount exceeds balance')
 
       await piToken.transfer(bob.address, toNumber(100e18))
-      await piToken.connect(bob).burn(toNumber(100e18), txData)
+      await expect(
+        piToken.connect(bob).burn(toNumber(100e18), txData)
+      ).to.emit(
+        piToken, 'Burned'
+      ).withArgs(
+        piToken.address,
+        bob.address,
+        toNumber(100e18),
+        '0x00',
+        '0x'
+      )
 
       const expected = (await piToken.INITIAL_SUPPLY()).sub(
         toNumber(100e18)

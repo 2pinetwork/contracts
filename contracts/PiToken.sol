@@ -64,18 +64,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    event Mint(uint amount);
-    event Burn(uint amount);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Sent(
-        address indexed operator,
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        bytes data,
-        bytes operatorData
-    );
-
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
         _;
@@ -147,7 +135,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
         self().selfMint(address(this), _supply, data);
         require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
-        emit Mint(_supply);
     }
 
     function tokensReceived(
@@ -172,7 +159,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(hasRole(BURNER_ROLE, msg.sender), "Only burners");
 
         self().selfBurn(msg.sender, _amount, data);
-        emit Burn(_amount);
     }
 
     function self() internal view returns (ISuperToken) {

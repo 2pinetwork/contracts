@@ -43,6 +43,12 @@ module.exports = {
   },
   networks: {
     hardhat: { hardfork: 'berlin' },
+    polygon:  {
+      // url:        'https://polygon-mainnet.g.alchemy.com/v2/6QS-pCOZrFiG4f6pQ3B5wuD_Ihx4HJkl',
+      url:        'https://polygon-rpc.com/',
+      network_id: 137,
+      accounts: accounts,
+    },
     mumbai:  {
       url:           'https://rpc-mumbai.maticvigil.com',
       // url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
@@ -57,13 +63,25 @@ module.exports = {
       url:      process.env.KOVAN_URL || '',
       accounts: accounts
     },
+    ropsten: {
+      url:      process.env.ROPSTEN_URL || 'https://eth-ropsten.alchemyapi.io/v2/yz4A63lL39hgwPNfy8Z0IV44sU53mC9d',
+      accounts: accounts
+    },
     rinkeby: {
       url:      process.env.RINKEBY_URL || '',
-      accounts: accounts
+      accounts: accounts,
+      gasPrice: 1.5e9
     },
     arbrinkeby: {
       url: 'https://rinkeby.arbitrum.io/rpc',
       accounts: accounts
+    },
+    ganache: {
+      url: 'http://localhost:8545',
+      network_id: 1337,
+      accounts: [
+        '0xcafc46c4bde2dc5a274e73a992e8165a9390f198b017888b94ade845f1bec0bf'
+      ]
     }
   },
   gasReporter: {
