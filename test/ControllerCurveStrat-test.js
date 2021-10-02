@@ -97,7 +97,7 @@ describe('Controller Curve Strat', () => {
     })
 
     it('Should not set the treasury as non admin', async () => {
-      expect(
+      await expect(
         strat.connect(bob).setTreasury(contract.address)
       ).to.be.revertedWith('Not an admin')
     })
@@ -348,7 +348,7 @@ describe('Controller Curve Strat', () => {
     })
 
     it('Should reject no hardvester doing harvest', async () => {
-      expect(
+      await expect(
         strat.connect(bob).harvest(0, 0)
       ).to.be.revertedWith('Only harvest role')
     })

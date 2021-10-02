@@ -4,7 +4,7 @@ pragma solidity 0.8.4;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
 
 contract PiToken is NativeSuperTokenProxy, AccessControl {

@@ -156,10 +156,35 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(otherStrat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(100)
     })
+
+    it('should revert with 0 address', async () => {
+      await expect(
+        controller.setStrategy(zeroAddress)
+      ).to.be.revertedWith("Can't be 0 address")
+    })
   })
 
-  describe('Withdraw', () => {
-    it('Should withdraw', async () => {
+  describe('Deposit', async () => {
+    it('should be reverted for not farm)', async () => {
+      await expect(controller.deposit(bob.address, 10000)).to.be.revertedWith(
+        'Not from farm'
+      )
+    })
+    it('should be reverted for paused strategy', async () => {
+      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
+      await waitFor(strat.pause())
+
+      await piToken.approve(archimedes.address, 10000)
+
+      await expect(controller.deposit(bob.address, 10000)).to.be.revertedWith(
+        'Not from farm'
+      )
+      await expect(archimedes.deposit(0, 10000, zeroAddress)).to.be.revertedWith(
+        'Strategy paused'
+      )
+    })
+
+    it('should deposit', async () => {
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
@@ -167,22 +192,35 @@ describe('Controller', () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
 
       await piToken.transfer(bob.address, 10000)
-
       await piToken.connect(bob).approve(archimedes.address, 10000)
 
+      // Just to cover
       await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
 
       expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
-
       expect(await controller.balanceOf(bob.address)).to.be.equal(10000)
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(10000) // from deposit
+    })
+  })
 
-      // await waitFor(piToken.transfer(controller.address, 100))
-      // await waitFor(piToken.transfer(strat.address, 400))
+  describe('Withdraw', () => {
+    beforeEach(async () =>{
+      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
+    })
+
+    it('Should withdraw', async () => {
+      await piToken.transfer(bob.address, 10000)
+      await piToken.connect(bob).approve(archimedes.address, 10000)
+
+      await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
 
       const balance = await piToken.balanceOf(bob.address)
+
+      expect(balance).to.be.equal(0)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(10000)
+
       const treasuryBalance = await piToken.balanceOf(owner.address)
 
       // Should withdraw 100 from controller and 400 from strategy
@@ -191,10 +229,7 @@ describe('Controller', () => {
       expect(await controller.balanceOf(bob.address)).to.be.equal(5000)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
 
-      const fee = parseInt(
-        5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX()),
-        10
-      )
+      const fee = 5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX())
 
       expect(await piToken.balanceOf(bob.address)).to.be.equal(
         balance.add(5000).sub(fee)
@@ -202,6 +237,92 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
         treasuryBalance.add(fee)
       )
+    })
+
+    it('Should withdraw and and not redeposit paused strat', async () => {
+      await piToken.transfer(bob.address, 10000)
+      await piToken.connect(bob).approve(archimedes.address, 10000)
+
+      await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
+
+      const balance = await piToken.balanceOf(bob.address)
+
+      expect(balance).to.be.equal(0)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(10000)
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(10000) // from deposit
+
+      await waitFor(strat.pause())
+
+      // Should withdraw 100 from controller and 400 from strategy
+      await waitFor(archimedes.connect(bob).withdraw(0, 5000))
+
+      const fee = 5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX())
+
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(
+        balance.add(5000).sub(fee)
+      )
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(5000) // withdraw and not re-deposit
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
+    })
+
+    it('should withdraw from controller', async () => {
+      await piToken.transfer(bob.address, 10000)
+      await piToken.connect(bob).approve(archimedes.address, 10000)
+
+      await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
+
+      expect(await controller.balanceOf(bob.address)).to.be.equal(10000)
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(10000) // from deposit
+
+      // To withdraw from controller
+      await waitFor(piToken.transfer(controller.address, 101))
+
+      // Should withdraw 100 from controller and 400 from strategy
+      await waitFor(archimedes.connect(bob).withdraw(0, 100))
+
+      expect(await controller.balanceOf(bob.address)).to.be.equal(9900)
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(101) // 1% more than deposited
+      expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(10000)
+    })
+  })
+
+  describe('transfer', async () => {
+    it('should not be transfer', async () => {
+      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
+      await waitFor(piToken.approve(archimedes.address, 100))
+      await waitFor(archimedes.deposit(0, 100, zeroAddress))
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
+
+      // Call transfer
+      await waitFor(controller.transfer(bob.address, 50))
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(0)
+    })
+  })
+
+  describe('transferFrom', async () => {
+    it('should not be transfer', async () => {
+      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
+      await waitFor(piToken.approve(archimedes.address, 100))
+      await waitFor(archimedes.deposit(0, 100, zeroAddress))
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
+
+      // Call transfer
+      await waitFor(controller.transferFrom(owner.address, bob.address, 50))
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(0)
     })
   })
 })

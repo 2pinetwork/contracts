@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 interface Farm {
     function piToken() external view returns (address);
@@ -57,13 +57,19 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return want.decimals();
     }
 
-    modifier onlyFarm() {
-        require(msg.sender == farm, "Not from farm");
-        _;
+    // Prevent transfer to avoid claim rewards from different depositors
+    // If needed to change owner, just withdraw+transfer+deposit
+    function transfer(address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
+        return false;
     }
 
-    modifier whenNotPaused() {
-        require(!_strategyPaused(), "Strategy paused");
+    function transferFrom(address /* sender */, address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
+        return false;
+    }
+
+
+    modifier onlyFarm() {
+        require(msg.sender == farm, "Not from farm");
         _;
     }
 
@@ -95,8 +101,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         withdrawFee = _fee;
     }
 
-
-    function deposit(address _senderUser, uint _amount) external whenNotPaused onlyFarm nonReentrant {
+    function deposit(address _senderUser, uint _amount) external onlyFarm nonReentrant {
+        require(!_strategyPaused(), "Strategy paused");
         uint _before = balance();
 
         want.safeTransferFrom(
@@ -131,7 +137,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         if (_balance < _withdraw) {
             uint _diff = _withdraw - _balance;
 
-            _strategyWithdraw(_diff);
+            IStrategy(strategy).withdraw(_diff);
         }
 
         uint withdrawalFee = _withdraw * withdrawFee / FEE_MAX;
@@ -166,12 +172,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
             want.safeTransfer(strategy, _amount);
 
             IStrategy(strategy).deposit();
-        }
-    }
-
-    function _strategyWithdraw(uint _amount) internal {
-        if (_amount > 0) {
-            IStrategy(strategy).withdraw(_amount);
         }
     }
 }
