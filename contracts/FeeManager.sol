@@ -38,8 +38,6 @@ contract FeeManager is AccessControl, ReentrancyGuard {
         piVault = _piVault;
         exchange = _exchange;
 
-        IERC20(wNative).safeApprove(exchange, type(uint).max);
-
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, msg.sender);
     }
@@ -79,12 +77,11 @@ contract FeeManager is AccessControl, ReentrancyGuard {
         if (native) {
             route[1] = piToken;
         } else {
-            IERC20(_token).safeApprove(exchange, _balance);
-
             route[1] = wNative;
             route[2] = piToken;
         }
 
+        IERC20(_token).safeApprove(exchange, _balance);
         IUniswapRouter(exchange).swapExactTokensForTokens(
             _balance, expected, route, address(this), block.timestamp + 60
         );
@@ -104,9 +101,6 @@ contract FeeManager is AccessControl, ReentrancyGuard {
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
         emit NewExchange(exchange, _exchange);
 
-        IERC20(wNative).safeApprove(exchange, 0);
-
         exchange = _exchange;
-        IERC20(wNative).safeApprove(exchange, type(uint).max);
     }
 }

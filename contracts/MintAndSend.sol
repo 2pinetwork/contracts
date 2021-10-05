@@ -62,11 +62,6 @@ contract MintAndSend is Ownable, ReentrancyGuard {
         piVault = IPiVault(_piVault);
         treasury = _treasury;
         lastBlock = _startBlock; // Same than PiToken & Archimedes
-
-        IERC20(_piToken).safeApprove(
-            _piVault,
-            leftTokensForInvestors + leftTokensForFounders + leftTokensForTreasury
-        );
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -171,6 +166,9 @@ contract MintAndSend is Ownable, ReentrancyGuard {
         // Calc deposited shares
         uint _before = piVault.balanceOf(address(this));
 
+        uint piBalance = piToken.balanceOf(address(this));
+        IERC20(piToken).safeApprove(address(piVault), piBalance);
+
         piVault.depositAll();
 
         uint shares = piVault.balanceOf(address(this)) - _before;
@@ -202,6 +200,9 @@ contract MintAndSend is Ownable, ReentrancyGuard {
 
         // Calc deposited shares
         uint _before = piVault.balanceOf(address(this));
+
+        uint piBalance = piToken.balanceOf(address(this));
+        IERC20(piToken).safeApprove(address(piVault), piBalance);
 
         piVault.depositAll();
 

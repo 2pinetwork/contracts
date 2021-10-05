@@ -84,13 +84,13 @@ describe('ArchimedesAPI', () => {
   })
 
   describe('setExchange', async () => {
-    it('should change allowance', async () => {
-      expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(MAX_UINT)
-      expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(0)
-      await waitFor(archimedes.setExchange(owner.address))
-      expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(0)
-      expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(MAX_UINT)
-    })
+    // it('should change allowance', async () => {
+    //   expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(MAX_UINT)
+    //   expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(0)
+    //   await waitFor(archimedes.setExchange(owner.address))
+    //   expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(0)
+    //   expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(MAX_UINT)
+    // })
   })
 
   describe('setHandler', async () => {

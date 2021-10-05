@@ -3,7 +3,7 @@
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 interface IDataProvider {
     function setATokenBalance(address _user, uint _ATokenBalance) external;
@@ -80,12 +80,17 @@ contract PoolMock {
     function repay(address _asset, uint _amount, uint /*rateMode*/, address /*onBehalfOf*/) public returns (uint) {
         (, uint _debt) = supplyAndBorrow();
 
+        console.log("llego: ", _amount);
+
         if (_debt <= _amount) {
             _amount = _debt; // to transfer only needed
             _debt = 0;
         } else {
             _debt -= _amount;
         }
+        console.log("Vamos a sacar: ", _amount);
+        console.log("Allowance: ", IERC20(_asset).allowance(msg.sender, address(this)));
+
 
         IDataProvider(dataProvider).setDebtTokenBalance(msg.sender, _debt);
 

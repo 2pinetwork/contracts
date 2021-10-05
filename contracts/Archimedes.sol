@@ -22,13 +22,7 @@ interface IWMATIC is IERC20 {
     function withdraw(uint wad) external;
 }
 
-// Archimedes is the master of PiToken. He can make PiToken and he is a fair guy.
-//
-// Note that it's ownable and the owner wields tremendous power. The ownership
-// will be transferred to a governance smart contract once PiToken is sufficiently
-// distributed and the community can show to govern itself.
-// Have fun reading it. Hopefully it's bug-free. God bless.
-
+// Want-token controller
 interface IController {
     function strategy() external view returns (address);
     function totalSupply() external view returns (uint);

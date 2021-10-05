@@ -30,6 +30,7 @@ interface IController {
 
 contract ArchimedesAPI is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SafeERC20 for IPiToken;
 
     address public handler;
     address public exchange;
@@ -93,13 +94,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     function setExchange(address _newExchange) external onlyOwner {
-        if (exchange != address(0)) {
-            require(piToken.approve(exchange, 0));
-        }
-
         exchange = _newExchange;
-
-        require(piToken.approve(exchange, type(uint).max));
     }
 
     function setRoute(uint _pid, address[] memory _route) external onlyOwner {
@@ -345,11 +340,10 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         uint piTokenBal = piToken.balanceOf(address(this));
 
         // piToken.transfer is safe
-        if (_amount > piTokenBal) {
-            _amount = piTokenBal;
-        }
+        if (_amount > piTokenBal) { _amount = piTokenBal; }
 
         if (_amount > 0) {
+            piToken.safeApprove(exchange, _amount);
             uint[] memory outAmounts = IUniswapRouter(exchange).swapExactTokensForTokens(
                 _amount, 1, piTokenToWantRoute[_pid], address(this), block.timestamp + 60
             );

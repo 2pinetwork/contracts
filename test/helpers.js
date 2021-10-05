@@ -225,10 +225,11 @@ before(async () => {
 })
 
 afterEach(async () => {
-  Promise.all([
+  await Promise.all([
     (await global.Aave.pool.reset()).wait(),
     (await global.Aave.dataProvider.reset()).wait(),
     (await global.CurvePool.reset()).wait(),
-    (await global.CurveRewardsGauge.reset()).wait()
+    (await global.CurveRewardsGauge.reset()).wait(),
+    network.provider.send('evm_setAutomine', [true])
   ])
 })

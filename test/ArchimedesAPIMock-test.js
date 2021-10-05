@@ -32,7 +32,6 @@ describe('ArchimedesAPIMock', () => {
     await waitFor(archimedes.setExchange(exchange.address))
     await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
 
-
     await waitFor(WMATIC.deposit({ value: toNumber(1e18) }))
     await waitFor(WMATIC.transfer(exchange.address, toNumber(1e18)))
   })

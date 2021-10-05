@@ -74,7 +74,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, _controller); // to retire strat
-        _giveAllowances();
     }
 
     event NewTreasury(address old_treasury, address new_treasury);
@@ -100,13 +99,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
         emit NewExchange(exchange, _exchange);
 
-        // Revoke current exchange
-        IERC20(WMATIC).safeApprove(exchange, 0);
-        IERC20(CRV).safeApprove(exchange, 0);
-
         exchange = _exchange;
-        IERC20(WMATIC).safeApprove(exchange, type(uint).max);
-        IERC20(CRV).safeApprove(exchange, type(uint).max);
     }
 
     function setWmaticSwapRoute(address[] calldata _route) external onlyAdmin {
@@ -137,12 +130,14 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         if (btcBal > 0) {
             uint[2] memory amounts = [btcBal, 0];
 
+            IERC20(BTC).safeApprove(CURVE_POOL, btcBal);
             ICurvePool(CURVE_POOL).add_liquidity(amounts, 0, true);
         }
 
         uint _btcCRVBalance = btcCRVBalance();
 
         if (_btcCRVBalance > 0) {
+            IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, _btcCRVBalance);
             IRewardsGauge(REWARDS_GAUGE).deposit(_btcCRVBalance);
         }
     }
@@ -187,10 +182,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         chargeFees(harvested);
 
-        if (!paused()) {
-            // re-deposit
-            _deposit();
-        }
+        // re-deposit
+        if (!paused()) { _deposit(); }
     }
 
     /**
@@ -220,6 +213,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             // tokenDiffPrecision = 1e19 for Wmatic => BTC
             uint expected = (balance * _wmaticToBtc) / 1e19;
 
+            IERC20(WMATIC).safeApprove(exchange, balance);
+
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 balance, expected, wmaticToBtcRoute, address(this), block.timestamp + 60
             );
@@ -232,6 +227,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         if (balance > 0) {
             // tokenDiffPrecision = 1e19 for Crv => BTC
             uint expected = (balance * _crvToBtc) / 1e19;
+
+            IERC20(CRV).safeApprove(exchange, balance);
 
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
@@ -316,8 +313,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         harvest(0, 0);
 
         IERC20(BTC).safeTransfer(controller, btcBalance());
-
-        _removeAllowances();
     }
 
     // pauses deposits and withdraws all funds from third party systems.
@@ -328,29 +323,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     function pause() public onlyAdmin {
         _pause();
-
-        _removeAllowances();
     }
 
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
-        _giveAllowances();
-
         _deposit();
-    }
-
-    function _giveAllowances() internal {
-        IERC20(BTC).safeApprove(CURVE_POOL, type(uint).max);
-        IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, type(uint).max);
-        IERC20(WMATIC).safeApprove(exchange, type(uint).max);
-        IERC20(CRV).safeApprove(exchange, type(uint).max);
-    }
-
-    function _removeAllowances() internal {
-        IERC20(BTC).safeApprove(CURVE_POOL, 0);
-        IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, 0);
-        IERC20(WMATIC).safeApprove(exchange, 0);
-        IERC20(CRV).safeApprove(exchange, 0);
     }
 }
