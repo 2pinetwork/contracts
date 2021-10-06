@@ -94,6 +94,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     function setExchange(address _newExchange) external onlyOwner {
+        require(_newExchange != address(0), "Can't be 0 address");
         exchange = _newExchange;
     }
 
@@ -239,9 +240,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         // this should burn shares and control the amount
         controller(_pid).withdraw(_user, _shares);
 
-
         uint _wantBalance = wantBalance(pool.want) - _before;
-
 
         pool.want.safeTransfer(_user, _wantBalance);
 
@@ -253,9 +252,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
     // Claim rewards for a pool
     function harvest(uint _pid, address _user) public nonReentrant {
-        if (userShares(_pid, _user) <= 0) {
-            return;
-        }
+        if (userShares(_pid, _user) <= 0) { return; }
 
         updatePool(_pid);
 
@@ -425,8 +422,9 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     function piTokenPerBlock() public view returns (uint) {
-        // Skip 1% of minting per block for Referrals
-        return piToken.apiMintPerBlock() * 99 / 100;
+        // Skip x% of minting per block for Referrals
+        uint reserve = COMMISSION_RATE_PRECISION - referralCommissionRate;
+        return piToken.apiMintPerBlock() * reserve / COMMISSION_RATE_PRECISION;
     }
 
     // Only to be mocked
@@ -440,6 +438,8 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     function redeemStuckedPiTokens() external onlyOwner {
         require(apiLeftToMint <= 0, "still minting");
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
+        // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
+        require(blockNumber() <= (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 

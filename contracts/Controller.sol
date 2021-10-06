@@ -33,7 +33,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     address public treasury;
 
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public RATIO_PRECISION = 10000;
     uint constant public MAX_WITHDRAW_FEE = 100; // 1%
     uint public withdrawFee = 10; // 0.1%
 
@@ -140,13 +140,11 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
             IStrategy(strategy).withdraw(_diff);
         }
 
-        uint withdrawalFee = _withdraw * withdrawFee / FEE_MAX;
+        uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
         want.safeTransfer(farm, _withdraw - withdrawalFee);
         want.safeTransfer(treasury, withdrawalFee);
 
-        if (!_strategyPaused()) {
-            _strategyDeposit();
-        }
+        if (!_strategyPaused()) { _strategyDeposit(); }
     }
 
     function _strategyPaused() internal view returns (bool){

@@ -36,7 +36,6 @@ contract MintAndSend is Ownable, ReentrancyGuard {
     address public treasury;
 
     // investor wallet => investor tickets per block
-    // private just to keep them anon ?
     mapping(address => uint) private investorTickets;
     uint public constant INVESTORS_TICKETS = 15;
     uint public constant INVESTORS_MAX_COUNT = 10;

@@ -54,9 +54,22 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     uint constant public INTEREST_RATE_MODE = 2; // variable
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
+    uint constant public RATIO_PRECISION = 10000; // 100%
+
+    // In the case of leverage we should withdraw when the
+    // amount to withdraw is 50%
+    uint public ratio_for_full_withdraw = 5000; // 50%
+    uint public pool_slippage_ratio = 200; // 2%
+
+
+    // The healthFactor value has the same representation than supply so
+    // to do the math we should remove 12 places from healthFactor to get a HF
+    // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
+    uint public constant HF_DECIMAL_FACTOR = 1e6;
+    uint public constant HF_WITHDRAW_TOLERANCE = 0.05e6;
 
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
 
     address public exchange;
@@ -72,8 +85,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         address _exchange,
         address _treasury
     ) {
+        require(_want != address(0), "want can't be 0 address");
         require(_controller != address(0), "Controller can't be 0 address");
         require(_treasury != address(0), "Treasury can't be 0 address");
+        require(_borrowRate <= _borrowRateMax, "Borrow can't be greater than MaxBorrow");
+        require(_borrowRateMax <= RATIO_PRECISION, "MaxBorrow can't be greater than 100%");
 
         want = _want;
         borrowRate = _borrowRate;
@@ -146,7 +162,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
             // will looping for ever.
-            if ((_diff * 2) >= balanceOfPool()) {
+            if ((_diff * ratio_for_full_withdraw / RATIO_PRECISION) >= balanceOfPool()) {
                 _fullDeleverage();
             } else {
                 _partialDeleverage(_diff);
@@ -168,7 +184,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         // Borrow & deposit strategy
         for (uint i = 0; i < borrowDepth; i++) {
-            _amount = (_amount * borrowRate) / 100;
+            _amount = (_amount * borrowRate) / RATIO_PRECISION;
 
             IAaveLendingPool(POOL).borrow(want, _amount, INTEREST_RATE_MODE, 0, address(this));
             IERC20(want).safeApprove(POOL, _amount);
@@ -229,22 +245,25 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         // for depth > 0
         if (borrowBal > 0) {
             // Only repay the just amount
-
-            uint toRepay = (toWithdraw * borrowRate) / 100;
+            uint toRepay = (toWithdraw * borrowRate) / RATIO_PRECISION;
             IERC20(want).safeApprove(POOL, toRepay);
             IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }
     }
 
-    function increaseHealthFactor() external onlyAdmin nonReentrant {
-        (uint supplyBal,) = supplyAndBorrow();
+    function increaseHealthFactor(uint byRatio) external onlyAdmin nonReentrant {
+        require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
+        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
 
-        // Only withdraw the 10% of the max withdraw
-        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 10) / 100;
+        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
 
         IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
-        IERC20(want).safeApprove(POOL, toWithdraw);
-        IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+
+        //  just in case
+        if (borrowBal > 0) {
+            IERC20(want).safeApprove(POOL, toWithdraw);
+            IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+        }
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
@@ -264,12 +283,14 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
+        uint hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
+
         return _supply - (
-            (_supply * 1e6) / ((currentHealthFactor() / 1e12) - 0.05e6)
+            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / hfDecimals) - HF_WITHDRAW_TOLERANCE)
         );
     }
 
-        function wantBalance() public view returns (uint) {
+    function wantBalance() public view returns (uint) {
         return IERC20(want).balanceOf(address(this));
     }
 
@@ -342,7 +363,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
      * @dev Takes out performance fee.
      */
     function chargeFees(uint _harvested) internal {
-        uint fee = (_harvested * performanceFee) / FEE_MAX;
+        uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
         if (fee > 0) { IERC20(want).safeTransfer(treasury, fee); }

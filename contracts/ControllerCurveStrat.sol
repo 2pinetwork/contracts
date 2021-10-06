@@ -50,13 +50,20 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     // address constant public CURVE_POOL = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
     // address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
 
+    // Pool settings
+    uint public pool_slippage_ratio = 100; // 1%
+    uint public ratio_for_full_withdraw = 9000; // 90%
+
     // Routes
     address[] public wmaticToBtcRoute = [WMATIC, ETH, BTC];
     address[] public crvToBtcRoute = [CRV, ETH, BTC];
 
+    uint constant public RATIO_PRECISION = 10000; // 100%
+
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
+
 
     address public treasury;
     address public exchange;
@@ -91,12 +98,14 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != address(0), "!Zero address");
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != address(0), "!Zero address");
         emit NewExchange(exchange, _exchange);
 
         exchange = _exchange;
@@ -111,9 +120,18 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee <= MAX_PERFORMANCE_FEE, "Fee is greater than expected");
         emit NewPerformanceFee(performanceFee, _fee);
 
         performanceFee = _fee;
+    }
+
+    function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
+        pool_slippage_ratio = _ratio;
+    }
+
+    function setRatioForFullWithdreaw(uint _perc) public onlyAdmin {
+        ratio_for_full_withdraw = _perc;
     }
 
     function addHarvester(address newHarvester) external onlyAdmin nonReentrant {
@@ -131,7 +149,12 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint[2] memory amounts = [btcBal, 0];
 
             IERC20(BTC).safeApprove(CURVE_POOL, btcBal);
-            ICurvePool(CURVE_POOL).add_liquidity(amounts, 0, true);
+
+            uint expectedCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, true);
+
+            expectedCrvAmount = (expectedCrvAmount * (RATIO_PRECISION - pool_slippage_ratio)) / RATIO_PRECISION;
+
+            ICurvePool(CURVE_POOL).add_liquidity(amounts, expectedCrvAmount, true);
         }
 
         uint _btcCRVBalance = btcCRVBalance();
@@ -142,30 +165,30 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         }
     }
 
-    function withdraw(uint _amount) external onlyController nonReentrant {
+    function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
         uint balance = btcBalance();
 
         if (balance < _amount) {
             uint poolBalance = balanceOfPoolInBtc();
 
-            // If the requested amount is greater than 90% of the founds just withdraw everything
-            if (_amount > (poolBalance * 90 / 100)) {
+            // If the requested amount is greater than xx% of the founds just withdraw everything
+            if (_amount > (poolBalance * ratio_for_full_withdraw / RATIO_PRECISION)) {
                 withdrawBtc(0, true);
             } else {
                 withdrawBtc(_amount, false);
             }
 
             balance = btcBalance();
-            if (balance < _amount) {
-                _amount = balance;
-            }
+
+            if (balance < _amount) { _amount = balance; }
         }
 
         IERC20(BTC).safeTransfer(controller, _amount);
 
-        if (!paused()) {
-            _deposit();
-        }
+        // Redeposit
+        if (!paused()) { _deposit(); }
+
+        return _amount;
     }
 
     // _maticToWantRatio is a pre-calculated ratio to prevent
@@ -240,12 +263,10 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
      * @dev Takes out performance fee.
      */
     function chargeFees(uint _harvested) internal {
-        uint fee = (_harvested * performanceFee) / FEE_MAX;
+        uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
-        if (fee > 0) {
-            // Pay to treasury a percentage of the total reward claimed
-            IERC20(BTC).safeTransfer(treasury, fee);
-        }
+        // Pay to treasury a percentage of the total reward claimed
+        if (fee > 0) { IERC20(BTC).safeTransfer(treasury, fee); }
     }
 
     // amount is the BTC expected to be withdrawn
@@ -261,18 +282,16 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             crvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, false);
         }
 
-
         IRewardsGauge(REWARDS_GAUGE).withdraw(crvAmount);
 
         // remove_liquidity
         uint balance = btcCRVBalance();
-        // Calculate at least 95% of the expected. The function doesn't
+        // Calculate at least xx% of the expected. The function doesn't
         // consider the fee.
-        uint expected = (calc_withdraw_one_coin(balance) * 95) / 100;
+        uint expected = (calc_withdraw_one_coin(balance) * (RATIO_PRECISION - pool_slippage_ratio)) / RATIO_PRECISION;
+        require(expected > 0, "remove_liquidity should expect more than 0");
 
-        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(
-            balance, 0,  expected, true
-        );
+        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(balance, 0,  expected, true);
     }
 
     function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
@@ -309,7 +328,9 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     function retireStrat() external onlyController {
         _pause();
 
-        withdrawBtc(0, true); // max withdraw
+        // max withdraw can fail if not staked (in case of panic)
+        if (balanceOfPoolInBtc() > 0) { withdrawBtc(0, true); }
+
         harvest(0, 0);
 
         IERC20(BTC).safeTransfer(controller, btcBalance());

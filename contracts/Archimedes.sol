@@ -65,8 +65,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
-    // Pool existence mapping to prevent duplication
-    // mapping(IERC20 => uint) public poolExistence; // anti duplication?
     // Info of each user that stakes tokens.
     mapping(uint => mapping(address => uint)) public userPaidRewards;
     // Total weighing. Must be the sum of all pools weighing.
@@ -104,9 +102,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
 
         // Update pools before a weighing change
-        if (_massUpdate) {
-            massUpdatePools();
-        }
+        if (_massUpdate) { massUpdatePools(); }
 
         uint lastRewardBlock = blockNumber() > startBlock ? blockNumber() : startBlock;
 
@@ -287,9 +283,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // Claim rewards for a pool
     function harvest(uint _pid) public nonReentrant {
-        if (userShares(_pid) <= 0) {
-            return;
-        }
+        if (userShares(_pid) <= 0) { return; }
 
         updatePool(_pid);
 
@@ -427,7 +421,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
         return IController(poolInfo[_pid].controller);
     }
 
-    // old vault functions
     function getPricePerFullShare(uint _pid) external view returns (uint) {
         uint _totalSupply = controller(_pid).totalSupply();
         uint precision = 10 ** decimals(_pid);
@@ -445,8 +438,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     function piTokenPerBlock() public view returns (uint) {
-        // Skip 1% of minting per block for Referrals
-        return piToken.communityMintPerBlock() * 99 / 100;
+        // Skip 0~5% of minting per block for Referrals
+        uint reserve = COMMISSION_RATE_PRECISION - referralCommissionRate;
+        return piToken.communityMintPerBlock() * reserve / COMMISSION_RATE_PRECISION;
     }
 
     // Only to be mocked
@@ -454,16 +448,17 @@ contract Archimedes is Ownable, ReentrancyGuard {
         return block.number;
     }
 
-    // In case of stucketd 2Pi tokens after 2 years
+    // In case of stucketd 2Pi tokens after 2.5 years
     // check if any holder has pending tokens then call this fn
     // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
     function redeemStuckedPiTokens() external onlyOwner {
         require(communityLeftToMint <= 0, "still minting");
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
+        // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
+        require(blockNumber() <= (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 
-        if (_balance > 0)
-            piToken.transfer(owner(), _balance);
+        if (_balance > 0) { piToken.transfer(owner(), _balance); }
     }
 }
