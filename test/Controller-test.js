@@ -229,7 +229,7 @@ describe('Controller', () => {
       expect(await controller.balanceOf(bob.address)).to.be.equal(5000)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
 
-      const fee = 5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX())
+      const fee = 5000 * (await controller.withdrawFee()) / (await controller.RATIO_PRECISION())
 
       expect(await piToken.balanceOf(bob.address)).to.be.equal(
         balance.add(5000).sub(fee)
@@ -258,7 +258,7 @@ describe('Controller', () => {
       // Should withdraw 100 from controller and 400 from strategy
       await waitFor(archimedes.connect(bob).withdraw(0, 5000))
 
-      const fee = 5000 * (await controller.withdrawFee()) / (await controller.FEE_MAX())
+      const fee = 5000 * (await controller.withdrawFee()) / (await controller.RATIO_PRECISION())
 
       expect(await piToken.balanceOf(bob.address)).to.be.equal(
         balance.add(5000).sub(fee)

@@ -83,16 +83,6 @@ describe('ArchimedesAPI', () => {
     await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
   })
 
-  describe('setExchange', async () => {
-    // it('should change allowance', async () => {
-    //   expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(MAX_UINT)
-    //   expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(0)
-    //   await waitFor(archimedes.setExchange(owner.address))
-    //   expect(await piToken.allowance(archimedes.address, exchange.address)).to.be.equal(0)
-    //   expect(await piToken.allowance(archimedes.address, owner.address)).to.be.equal(MAX_UINT)
-    // })
-  })
-
   describe('setHandler', async () => {
     it('should revert for 0 address', async () => {
       await expect(archimedes.setHandler(zeroAddress)).to.be.revertedWith(

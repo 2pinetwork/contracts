@@ -118,11 +118,11 @@ describe('PiToken', () => {
 
   describe('Allowance', async () => {
     it('Should update allowance after approve', async () => {
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
 
       await piToken.approve(bob.address, 50)
 
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(50)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(50)
     })
 
     it('Should use allowance to transfer on behalf of', async () => {
@@ -140,7 +140,7 @@ describe('PiToken', () => {
       )
 
       await piToken.approve(bob.address, 1e18.toString())
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(1e18.toString())
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1e18.toString())
 
       expect(
         await piToken.connect(bob).transferFrom(owner.address, alice.address, 1e18.toString())
@@ -162,17 +162,17 @@ describe('PiToken', () => {
         piToken, 'Approval'
       ).withArgs(owner.address, bob.address, 1)
 
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
 
       await piToken.increaseAllowance(bob.address, 1)
 
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(2)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(2)
     })
 
     it('Should decrease allowance and emit approval event', async () => {
       await piToken.increaseAllowance(bob.address, 1)
 
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(1)
 
       expect(
         await piToken.decreaseAllowance(bob.address, 1)
@@ -180,7 +180,7 @@ describe('PiToken', () => {
         piToken, 'Approval'
       ).withArgs(owner.address, bob.address, 0)
 
-      // expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
+      expect(await piToken.allowance(owner.address, bob.address)).to.equal(0)
     })
   })
 

@@ -8,8 +8,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "hardhat/console.sol";
 
 import "../interfaces/IUniswapRouter.sol";
+import "../interfaces/IChainLink.sol";
 
 interface ICurvePool {
     // _use_underlying If True, withdraw underlying assets instead of aTokens
@@ -32,17 +34,17 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
 
     // Test
-    address public constant WMATIC = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
+    address public constant WNATIVE = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
     address constant public BTC = address(0x6d925938Edb8A16B3035A4cF34FAA090f490202a);
     address constant public CRV = address(0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E);
-    address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wmatic
+    address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wNative
     address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
     address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
     address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
 
 
     // Matic Polygon
-    // address constant public WMATIC = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+    // address constant public WNATIVE = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
     // address constant public BTC = address(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6);
     // address constant public CRV = address(0x172370d5Cd63279eFa6d502DAB29171933a610AF);
     // address constant public ETH = address(0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619);
@@ -51,14 +53,16 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     // address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
 
     // Pool settings
-    uint public pool_slippage_ratio = 100; // 1%
     uint public ratio_for_full_withdraw = 9000; // 90%
+    uint public pool_slippage_ratio = 100; // 1%
+    uint public swap_slippage_ratio = 100; // 1%
 
     // Routes
-    address[] public wmaticToBtcRoute = [WMATIC, ETH, BTC];
+    address[] public wNativeToBtcRoute = [WNATIVE, ETH, BTC];
     address[] public crvToBtcRoute = [CRV, ETH, BTC];
 
     uint constant public RATIO_PRECISION = 10000; // 100%
+    uint constant public SWAP_PRECISION = 1e9;
 
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
@@ -68,6 +72,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     address public treasury;
     address public exchange;
     address public immutable controller;
+
+    // Chainlink addr
+    IChainLink public wNativeFeed;
+    IChainLink public btcFeed;
+    IChainLink public crvFeed;
 
     constructor(address _controller, address _exchange, address _treasury) {
         require(_controller != address(0), "Controller can't be 0 address");
@@ -97,6 +106,19 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         _;
     }
 
+    function setPriceFeeds(IChainLink _wNativeFeed, IChainLink _btcFeed, IChainLink _crvFeed) external onlyAdmin {
+        (uint80 round,,,,) = _wNativeFeed.latestRoundData();
+        require(round > 0, "Invalid wNative feed");
+        (round,,,,) = _btcFeed.latestRoundData();
+        require(round > 0, "Invalid btc feed");
+        (round,,,,) = _crvFeed.latestRoundData();
+        require(round > 0, "Invalid crv feed");
+
+        wNativeFeed = _wNativeFeed;
+        btcFeed = _btcFeed;
+        crvFeed = _crvFeed;
+    }
+
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         require(_treasury != address(0), "!Zero address");
         emit NewTreasury(treasury, _treasury);
@@ -111,8 +133,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         exchange = _exchange;
     }
 
-    function setWmaticSwapRoute(address[] calldata _route) external onlyAdmin {
-        wmaticToBtcRoute = _route;
+    function setWNativeSwapRoute(address[] calldata _route) external onlyAdmin {
+        wNativeToBtcRoute = _route;
     }
 
     function setCrvSwapRoute(address[] calldata _route) external onlyAdmin {
@@ -127,15 +149,16 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
         pool_slippage_ratio = _ratio;
     }
-
-    function setRatioForFullWithdreaw(uint _perc) public onlyAdmin {
-        ratio_for_full_withdraw = _perc;
+    function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        swap_slippage_ratio = _ratio;
     }
-
-    function addHarvester(address newHarvester) external onlyAdmin nonReentrant {
-        _setupRole(HARVEST_ROLE, newHarvester);
+    function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        ratio_for_full_withdraw = _ratio;
     }
 
     function deposit() external whenNotPaused onlyController nonReentrant {
@@ -191,15 +214,12 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         return _amount;
     }
 
-    // _maticToWantRatio is a pre-calculated ratio to prevent
-    // sandwich attacks
-    function harvest(uint _wmaticToBtc, uint _crvToBtc) public nonReentrant {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
+    function harvest() public nonReentrant {
         uint _before = btcBalance();
 
         claimRewards();
-        swapWMaticRewards(_wmaticToBtc);
-        swapCrvRewards(_crvToBtc);
+        swapWMaticRewards();
+        swapCrvRewards();
 
         uint harvested = btcBalance() - _before;
 
@@ -218,38 +238,54 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     /**
      * @dev swap ratio explain
-     * _wmaticToBtc/_crvToBtc is a 9 decimals ratio number calculated by the
-     * caller before call harvest to get the minimum amount of want-tokens.
-     * So the balance is multiplied by the ratio and then divided by 9 decimals
-     * to get the same "precision". Then the result should be divided for the
-     * decimal diff between tokens.
-     * E.g want is BTC with only 8 decimals:
-     * _wmaticToBtc = 32_000 (0.000032 BTC/WMATIC)
-     * balance = 1e18 (1.0 MATIC)
-     * tokenDiffPrecision = 1e19 ((1e18 WMATIC decimals / 1e8 BTC decimals) * 1e9 ratio precision)
-     * expected = 3_200 (1e18 * 32_000 / 1e19) [0.000032 in BTC decimals]
+     * ratio is a 9 decimals ratio number calculated to get the minimum
+     * amount of want-tokens. So the balance is multiplied by the ratio
+     * and then divided by 9 decimals to get the same "precision".
+     * Then the result should be divided for the decimal diff between tokens.
+     * Oracle Price Feed has always 8 decimals.
+     * E.g want is USDT with only 6 decimals:
+     * tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
+     * ratio = 1_507_423_500 ((152265000 * 1e9) / 100000000) * 99 / 100 [with 1.52 USDT/MATIC]
+     * _balance = 1e18 (1.0 MATIC)
+     * expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
      */
-    function swapWMaticRewards(uint _wmaticToBtc) internal {
-        uint balance = wmaticBalance();
+    function swapWMaticRewards() internal {
+        uint balance = wNativeBalance();
 
         if (balance > 0) {
-            // tokenDiffPrecision = 1e19 for Wmatic => BTC
-            uint expected = (balance * _wmaticToBtc) / 1e19;
+            // WNATIVE 18 decimals BTC => 8 decimals
+            uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
+            uint ratio = (
+                (getPriceFor(WNATIVE) * SWAP_PRECISION) / getPriceFor(BTC)
+            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            uint expected = balance * ratio / tokenDiffPrecision;
 
-            IERC20(WMATIC).safeApprove(exchange, balance);
+            console.log("SwapMatic balance: ", balance);
+            console.log("SwapMatic prec: ", tokenDiffPrecision);
+            console.log("SwapMatic ratio: ", ratio);
+            console.log("SwapMatic expected: ", expected);
 
-            IUniswapRouter(exchange).swapExactTokensForTokens(
-                balance, expected, wmaticToBtcRoute, address(this), block.timestamp + 60
-            );
+            // BTC price is too high so sometimes it requires a lot of rewards to swap
+            if (expected > 1) {
+                IERC20(WNATIVE).safeApprove(exchange, balance);
+
+                IUniswapRouter(exchange).swapExactTokensForTokens(
+                    balance, expected, wNativeToBtcRoute, address(this), block.timestamp + 60
+                );
+            }
         }
     }
 
-    function swapCrvRewards(uint _crvToBtc) internal {
+    function swapCrvRewards() internal {
         uint balance = crvBalance();
 
         if (balance > 0) {
-            // tokenDiffPrecision = 1e19 for Crv => BTC
-            uint expected = (balance * _crvToBtc) / 1e19;
+            // CRV 18 decimals BTC => 8 decimals
+            uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
+            uint ratio = (
+                (getPriceFor(CRV) * SWAP_PRECISION) / getPriceFor(BTC)
+            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            uint expected = balance * ratio / tokenDiffPrecision;
 
             IERC20(CRV).safeApprove(exchange, balance);
 
@@ -257,6 +293,20 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
                 balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
             );
         }
+    }
+
+    function getPriceFor(address _token) internal view returns (uint) {
+        // This could be implemented with FeedRegistry but it's not available in polygon
+        int256 price;
+        if (_token == WNATIVE) {
+            (, price,,,) = wNativeFeed.latestRoundData();
+        } else if (_token == BTC) {
+            (, price,,,) = btcFeed.latestRoundData();
+        } else {
+            (, price,,,) = crvFeed.latestRoundData();
+        }
+
+        return uint(price);
     }
 
     /**
@@ -305,8 +355,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     function btcBalance() public view returns (uint) {
         return IERC20(BTC).balanceOf(address(this));
     }
-    function wmaticBalance() public view returns (uint) {
-        return IERC20(WMATIC).balanceOf(address(this));
+    function wNativeBalance() public view returns (uint) {
+        return IERC20(WNATIVE).balanceOf(address(this));
     }
     function crvBalance() public view returns (uint) {
         return IERC20(CRV).balanceOf(address(this));
@@ -331,7 +381,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         // max withdraw can fail if not staked (in case of panic)
         if (balanceOfPoolInBtc() > 0) { withdrawBtc(0, true); }
 
-        harvest(0, 0);
+        harvest();
 
         IERC20(BTC).safeTransfer(controller, btcBalance());
     }

@@ -1,4 +1,3 @@
-/* global Curve */
 const { expect } = require('chai')
 const {
   createController,
@@ -7,8 +6,7 @@ const {
   getBlock,
   impersonateContract,
   waitFor,
-  zeroAddress,
-  MAX_UINT
+  zeroAddress
 } = require('./helpers')
 
 describe('Controller Curve Strat wrong deployment', () => {
@@ -23,7 +21,7 @@ describe('Controller Curve Strat wrong deployment', () => {
     ).to.be.revertedWith("Controller can't be 0 address")
   })
 
-it('Should not deploy with zero address exchange', async () => {
+  it('Should not deploy with zero address exchange', async () => {
     await expect(
       deploy(
         'ControllerCurveStrat',
@@ -54,6 +52,9 @@ describe('Controller Curve Strat', () => {
   let strat
   let rewardsBlock
   let pool
+  let wNativeFeed
+  let btcFeed
+  let crvFeed
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -72,7 +73,25 @@ describe('Controller Curve Strat', () => {
       (await controller.strategy())
     )
 
+    wNativeFeed = await deploy('PriceFeedMock')
+    btcFeed = await deploy('PriceFeedMock')
+    crvFeed = await deploy('PriceFeedMock')
+
+    // 2021-10-06 wNative-eth prices
+    await waitFor(wNativeFeed.setPrice(129755407))
+    await waitFor(btcFeed.setPrice(5394968350000))
+    await waitFor(crvFeed.setPrice(283589154))
+
+    await waitFor(strat.setPriceFeeds(wNativeFeed.address, btcFeed.address, crvFeed.address));
+
+
     pool = CurvePool
+  })
+
+  afterEach(async ()=> {
+    await waitFor(wNativeFeed.setPrice(129755407))
+    await waitFor(btcFeed.setPrice(5394968350000))
+    await waitFor(crvFeed.setPrice(283589154))
   })
 
   describe('Deployment', () => {
@@ -91,7 +110,9 @@ describe('Controller Curve Strat', () => {
     it('Should set the treasury', async () => {
       expect(await strat.treasury()).to.not.equal(contract.address)
 
-      await strat.setTreasury(contract.address)
+      await expect(strat.setTreasury(contract.address)).to.emit(
+        strat, 'NewTreasury'
+      ).withArgs(owner.address, contract.address)
 
       expect(await strat.treasury()).to.equal(contract.address)
     })
@@ -111,15 +132,15 @@ describe('Controller Curve Strat', () => {
     })
 
 
-    it('Should set wmatic swap route', async () => {
+    it('Should set wNative swap route', async () => {
       // change to test the function
-      expect(await strat.wmaticToBtcRoute(0)).to.not.equal(piToken.address)
-      expect(await strat.wmaticToBtcRoute(1)).to.not.equal(BTC.address)
+      expect(await strat.wNativeToBtcRoute(0)).to.not.equal(piToken.address)
+      expect(await strat.wNativeToBtcRoute(1)).to.not.equal(BTC.address)
 
-      await strat.setWmaticSwapRoute([piToken.address, BTC.address])
+      await strat.setWNativeSwapRoute([piToken.address, BTC.address])
 
-      expect(await strat.wmaticToBtcRoute(0)).to.equal(piToken.address)
-      expect(await strat.wmaticToBtcRoute(1)).to.equal(BTC.address)
+      expect(await strat.wNativeToBtcRoute(0)).to.equal(piToken.address)
+      expect(await strat.wNativeToBtcRoute(1)).to.equal(BTC.address)
     })
 
     it('Should set CRV swap route', async () => {
@@ -133,26 +154,16 @@ describe('Controller Curve Strat', () => {
       expect(await strat.crvToBtcRoute(1)).to.equal(BTC.address)
     })
 
-
-    it('Should set a new hardvester', async () => {
-      await strat.addHarvester(bob.address)
-
-      await expect(
-        strat.connect(bob).harvest(0, 0)
-      ).to.be.not.revertedWith('Only harvest role')
-
+    it('Should harvest without rewards', async () => {
       // Just to take the _other_ path during swap rewards
       await BTC.mint(exchange.address, 1e6)
       await CRV.mint(CurveRewardsGauge.address, 1)
       await WMATIC.deposit({ value: 1 });
       await WMATIC.transfer(CurveRewardsGauge.address, 1)
 
-      balance = await CurvePool.balanceOf(CurveRewardsGauge.address)
+      let balance = await CurvePool.balanceOf(CurveRewardsGauge.address)
 
-      // Nothing to harvest yet
-      await expect(
-        strat.connect(bob).harvest(1, 1)
-      ).to.be.not.revertedWith('Only harvest role')
+      await waitFor(strat.connect(bob).harvest())
 
       expect(
         await CurvePool.balanceOf(CurveRewardsGauge.address)
@@ -269,35 +280,91 @@ describe('Controller Curve Strat', () => {
 
   describe('Harvest', () => {
     it('Should harvest', async () => {
-      await strat.addHarvester(owner.address)
+      await waitFor(strat.harvest()) // Not revert
+    })
 
-      await waitFor(strat.harvest(1, 1)) // Not revert
+    it('should harvest and not swap', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(BTC.transfer(strat.address, 1e6))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(WMATIC.deposit({ value: 100 }))
+      await waitFor(WMATIC.transfer(CurveRewardsGauge.address, 100))
+
+      const balance = await BTC.balanceOf(owner.address)
+      const stratBalance = await BTC.balanceOf(strat.address)
+
+      expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
+
+      await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(btcFeed.setPrice(20))
+
+      // 1 x 0.2 ratio => Expected 0 for WMATIC
+      await waitFor(strat.harvest())
+
+      // Without swap
+      expect(await BTC.balanceOf(owner.address)).to.be.equal(balance)
+      expect(await BTC.balanceOf(strat.address)).to.be.equal(stratBalance)
+      // At least claim rewards
+      expect(await WMATIC.balanceOf(strat.address)).to.be.equal(100)
     })
 
     it('should harvest and receive fee', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
-      await strat.addHarvester(owner.address)
+      await waitFor(BTC.transfer(strat.address, 1e6))
+      await waitFor(BTC.transfer(exchange.address, '' + 1e18))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
+      await waitFor(WMATIC.transfer(CurveRewardsGauge.address, '' + 1e18))
+
+      const balance = await BTC.balanceOf(owner.address)
+
+      await waitFor(wNativeFeed.setPrice(100))
+      // await waitFor(crvFeed.setPrice(100))
+      await waitFor(btcFeed.setPrice(20))
+
+      // 1 x 0.2 ratio
+      await waitFor(strat.harvest())
+
+      // RATIO => (100 * 1e9 / ) * 99 / 100 == 4950000000.0
+      // 1e18 * RATIO / 1e19 => 495000000.0 (swapped)
+      // 495000000.0 * 0.035 == 17325000  (perf fee)
+      expect(await BTC.balanceOf(owner.address)).to.be.equal(
+        balance.add(17325000)
+      )
+    })
+
+    it('should harvest and receive fee for both rewards', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
 
       await waitFor(BTC.transfer(strat.address, 1e6))
       await waitFor(BTC.transfer(exchange.address, '' + 1e18))
       await waitFor(strat.connect(ctrollerSigner).deposit())
 
-      await waitFor(WMATIC.deposit({ value: 1e6 }))
-      await waitFor(WMATIC.transfer(CurveRewardsGauge.address, 1e6))
+      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
+      await waitFor(WMATIC.transfer(CurveRewardsGauge.address, '' + 1e18))
+      await waitFor(CRV.mint(CurveRewardsGauge.address, '' + 1e18))
+
       const balance = await BTC.balanceOf(owner.address)
 
-      await waitFor(strat.harvest('' + 1e19, '' + 1e19)) // 1 x 1 ratio
+      await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(crvFeed.setPrice(100))
+      await waitFor(btcFeed.setPrice(20))
 
+      // 1 x 0.2 ratio
+      await waitFor(strat.harvest())
+
+      // RATIO => (100 * 1e9 / ) * 99 / 100 == 4950000000.0
+      // 1e18 * RATIO / 1e19 => 495000000.0 (swapped)
+      // 495000000.0 * 0.035 == 17325000  (perf fee)
       expect(await BTC.balanceOf(owner.address)).to.be.equal(
-        balance.add(3.5e4) // 3.5% of 1e6
+        balance.add(17325000 * 2) // same ratio crv & wNative
       )
-    })
-
-    it('should harvest without swap', async () => {
-      await strat.addHarvester(owner.address)
-
-      await waitFor(strat.harvest(0, 0))
+      expect(await WMATIC.balanceOf(CurveRewardsGauge.address)).to.be.equal(0)
+      expect(await CRV.balanceOf(CurveRewardsGauge.address)).to.be.equal(0)
     })
   })
 
@@ -347,13 +414,6 @@ describe('Controller Curve Strat', () => {
       expect(await strat.balanceOfPoolInBtc()).to.be.equal(1000)
     })
 
-    it('Should reject no hardvester doing harvest', async () => {
-      await expect(
-        strat.connect(bob).harvest(0, 0)
-      ).to.be.revertedWith('Only harvest role')
-    })
-
-
     it('Should return pool balance', async () => {
       expect(await strat.balanceOfPool()).to.be.equal(0)
       expect(await BTC.balanceOf(pool.address)).to.be.equal(0)
@@ -368,40 +428,45 @@ describe('Controller Curve Strat', () => {
     })
 
     it('Should pause when panic', async () => {
-      const balance = await BTC.balanceOf(owner.address)
-
-      await BTC.transfer(strat.address, balance.div(2))
-      await BTC.transfer(pool.address, balance.div(2))
+      await waitFor(BTC.mint(strat.address, 10e8))
 
       expect(await strat.paused()).to.be.equal(false)
 
-      await strat.panic()
+      // Revert for 0 deposit
+      await expect(strat.panic()).to.be.revertedWith('remove_liquidity should expect more than 0')
+
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(strat.panic())
 
       expect(await strat.paused()).to.be.equal(true)
+      expect(await BTC.balanceOf(strat.address)).to.be.equal(9.9e8) // 1% slippage
     })
 
     it('Should pause and unpause', async () => {
       expect(await strat.paused()).to.be.equal(false)
 
-      await strat.pause()
+      await waitFor(strat.pause())
 
       expect(await strat.paused()).to.be.equal(true)
 
-      await strat.unpause()
+      await waitFor(strat.unpause())
 
       expect(await strat.paused()).to.be.equal(false)
     })
 
     it('Should retire strategy', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
+      await waitFor(BTC.mint(strat.address, 10e8))
 
-      // expect(await BTC.allowance(strat.address, pool.address)).to.be.equal(MAX_UINT)
-      // expect(await WMATIC.allowance(strat.address, exchange.address)).to.be.equal(MAX_UINT)
+      expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
+      await waitFor(strat.connect(ctrollerSigner).deposit())
 
       await waitFor(strat.connect(ctrollerSigner).retireStrat())
 
-      // expect(await BTC.allowance(strat.address, pool.address)).to.be.equal(0)
-      // expect(await WMATIC.allowance(strat.address, exchange.address)).to.be.equal(0)
+      expect(await BTC.balanceOf(controller.address)).to.be.equal(9.9e8) // 1% slippage
     })
   })
 })

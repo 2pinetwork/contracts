@@ -8,21 +8,15 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
 import "../interfaces/IUniswapRouter.sol";
-
-interface IChainLink {
-  function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
-  function decimals() external view returns (uint8);
-}
+import "../interfaces/IChainLink.sol";
 
 contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-
-    bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
 
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
     // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
@@ -60,12 +54,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
     uint constant public RATIO_PRECISION = 10000; // 100%
+    uint constant public SWAP_PRECISION = 1e9;
 
     // In the case of leverage we should withdraw when the
     // amount to withdraw is 50%
     uint public ratio_for_full_withdraw = 5000; // 50%
-    uint public pool_slippage_ratio = 200; // 2%
-
     uint public swap_slippage_ratio = 100; // 1%
 
     // The healthFactor value has the same representation than supply so
@@ -115,8 +108,6 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         wNativeToWantRoute = [wNative, _want];
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, _controller); // to retire strat
     }
 
     event NewTreasury(address old_treasury, address new_treasury);
@@ -159,32 +150,32 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         wNativeToWantRoute = _route;
     }
 
+    function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        swap_slippage_ratio = _ratio;
+    }
+    function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        ratio_for_full_withdraw = _ratio;
+    }
+
+
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 
         performanceFee = _fee;
-    }
-
-    function addHarvester(address newHarvester) external onlyAdmin nonReentrant {
-        _setupRole(HARVEST_ROLE, newHarvester);
     }
 
     function deposit() external whenNotPaused onlyController nonReentrant {
         _leverage();
     }
 
-    function withdraw(uint _amount) external onlyController nonReentrant {
+    function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
         uint _balance = wantBalance();
 
         if (_balance < _amount) {
             uint _diff = _amount - _balance;
-
-            console.log("Se viene el withdraw de: ", _diff);
-
-            console.log("Ratio: ", ratio_for_full_withdraw);
-            console.log("RATIO_PREC: ", RATIO_PRECISION);
-            console.log("Cuenta: ", (_diff * ratio_for_full_withdraw / RATIO_PRECISION));
-            console.log("Pool: ", balanceOfPool());
 
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
@@ -199,6 +190,8 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         IERC20(want).safeTransfer(controller, _amount);
 
         if (!paused()) { _leverage(); }
+
+        return _amount;
     }
 
     function _leverage() internal {
@@ -227,7 +220,6 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         while (borrowBal > 0) {
             toWithdraw = maxWithdrawFromSupply(supplyBal);
-            console.log("Full deleverage: ", toWithdraw);
 
             IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
             IERC20(want).safeApprove(POOL, toWithdraw);
@@ -343,10 +335,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         );
     }
 
-    // _maticToWantRatio is a pre-calculated ratio to prevent
-    // sandwich attacks
     function harvest() public nonReentrant {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
         uint _before = wantBalance();
 
         claimRewards();
@@ -366,21 +355,21 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint _balance = IERC20(wNative).balanceOf(address(this));
 
         if (_balance > 0) {
-            // ratio is a 9 decimals ratio number calculated by the
-            // caller before call harvest to get the minimum amount of want-tokens.
-            // So the balance is multiplied by the ratio and then divided by 9 decimals
-            // to get the same "precision". Then the result should be divided for the
-            // decimal diff between tokens.
-            // E.g want is USDT with  only 6 decimals:
-            // _maticToWantRatio = 1_522_650_000 (1.52265 USDT/MATIC)
-            // _balance = 1e18 (1.0 MATIC)
+            // ratio is a 9 decimals ratio number calculated to get the minimum
+            // amount of want-tokens. So the balance is multiplied by the ratio
+            // and then divided by 9 decimals to get the same "precision".
+            // Then the result should be divided for the decimal diff between tokens.
+            // Oracle Price Feed has always 8 decimals.
+            // E.g want is USDT with only 6 decimals:
             // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
-            // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
-            uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * 1e9;
+            // ratio = 1_507_423_500 ((152265000 * 1e9) / 100000000) * 99 / 100 [with 1.52 USDT/MATIC]
+            // _balance = 1e18 (1.0 MATIC)
+            // expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
+            uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * SWAP_PRECISION;
             uint ratio = (
-                (getPriceFor(wNative) * 1e9) / getPriceFor(want)
+                (getPriceFor(wNative) * SWAP_PRECISION) / getPriceFor(want)
             ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
-            uint expected = (_balance * ratio) / tokenDiffPrecision;
+            uint expected = _balance * ratio / tokenDiffPrecision;
 
             IERC20(wNative).safeApprove(exchange, _balance);
             IUniswapRouter(exchange).swapExactTokensForTokens(
@@ -389,7 +378,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         }
     }
 
-    function getPriceFor(address _token) public view returns (uint) {
+    function getPriceFor(address _token) internal view returns (uint) {
         // This could be implemented with FeedRegistry but it's not available in polygon
         int256 price;
         if (_token == wNative) {
