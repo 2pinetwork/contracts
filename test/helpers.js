@@ -92,7 +92,7 @@ const createController = async (token, archimedes, stratName) => {
         'ControllerAaveStrat',
         token.address,
         0,
-        100,
+        10000,
         0,
         0,
         controller.address,
@@ -127,7 +127,7 @@ const impersonateContract = async (addr) => {
   // Fill with gas 10k eth
   const balance = ethers.BigNumber.from('1' + '0'.repeat(23))._hex
 
-  await network.provider.send('hardhat_setBalance', [addr, balance])
+  await hre.network.provider.send('hardhat_setBalance', [addr, balance])
 
   // Tell hardhat what address enables to impersonate
   await hre.network.provider.request({

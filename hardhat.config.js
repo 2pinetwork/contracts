@@ -43,6 +43,10 @@ module.exports = {
   },
   networks: {
     hardhat: { hardfork: 'berlin' },
+    polygon: {
+      url: 'https://polygon-rpc.com',
+      accounts: accounts
+    },
     mumbai:  {
       url:           'https://rpc-mumbai.maticvigil.com',
       // url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',

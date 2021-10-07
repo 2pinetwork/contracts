@@ -8,11 +8,16 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
 import "../interfaces/IUniswapRouter.sol";
+
+interface IChainLink {
+  function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+  function decimals() external view returns (uint8);
+}
 
 contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -61,6 +66,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     uint public ratio_for_full_withdraw = 5000; // 50%
     uint public pool_slippage_ratio = 200; // 2%
 
+    uint public swap_slippage_ratio = 100; // 1%
 
     // The healthFactor value has the same representation than supply so
     // to do the math we should remove 12 places from healthFactor to get a HF
@@ -74,6 +80,10 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     address public exchange;
     address public immutable controller;
+
+    // Chainlink addr
+    IChainLink public wNativeFeed;
+    IChainLink public wantFeed;
 
     constructor(
         address _want,
@@ -123,6 +133,16 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         _;
     }
 
+    function setPriceFeeds(IChainLink _wNativeFeed, IChainLink _wantFeed) external onlyAdmin {
+        (uint80 round,,,,) = _wNativeFeed.latestRoundData();
+        require(round > 0, "Invalid wNative feed");
+        (round,,,,) = _wantFeed.latestRoundData();
+        require(round > 0, "Invalid want feed");
+
+        wNativeFeed = _wNativeFeed;
+        wantFeed = _wantFeed;
+    }
+
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         emit NewTreasury(treasury, _treasury);
 
@@ -159,10 +179,17 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         if (_balance < _amount) {
             uint _diff = _amount - _balance;
 
+            console.log("Se viene el withdraw de: ", _diff);
+
+            console.log("Ratio: ", ratio_for_full_withdraw);
+            console.log("RATIO_PREC: ", RATIO_PRECISION);
+            console.log("Cuenta: ", (_diff * ratio_for_full_withdraw / RATIO_PRECISION));
+            console.log("Pool: ", balanceOfPool());
+
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
             // will looping for ever.
-            if ((_diff * ratio_for_full_withdraw / RATIO_PRECISION) >= balanceOfPool()) {
+            if ((balanceOfPool() * ratio_for_full_withdraw / RATIO_PRECISION) <= _diff) {
                 _fullDeleverage();
             } else {
                 _partialDeleverage(_diff);
@@ -200,6 +227,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         while (borrowBal > 0) {
             toWithdraw = maxWithdrawFromSupply(supplyBal);
+            console.log("Full deleverage: ", toWithdraw);
 
             IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
             IERC20(want).safeApprove(POOL, toWithdraw);
@@ -317,14 +345,14 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     // _maticToWantRatio is a pre-calculated ratio to prevent
     // sandwich attacks
-    function harvest(uint _maticToWantRatio) public nonReentrant {
+    function harvest() public nonReentrant {
         require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
         uint _before = wantBalance();
 
         claimRewards();
 
         // only need swap when is different =)
-        if (want != wNative) { swapRewards(_maticToWantRatio); }
+        if (want != wNative) { swapRewards(); }
 
         uint harvested = wantBalance() - _before;
 
@@ -334,11 +362,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         if (!paused()) { _leverage(); }
     }
 
-    function swapRewards(uint _maticToWantRatio) internal {
+    function swapRewards() internal {
         uint _balance = IERC20(wNative).balanceOf(address(this));
 
         if (_balance > 0) {
-            // _maticToWantRatio is a 9 decimals ratio number calculated by the
+            // ratio is a 9 decimals ratio number calculated by the
             // caller before call harvest to get the minimum amount of want-tokens.
             // So the balance is multiplied by the ratio and then divided by 9 decimals
             // to get the same "precision". Then the result should be divided for the
@@ -348,15 +376,29 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             // _balance = 1e18 (1.0 MATIC)
             // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
             // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
-
             uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * 1e9;
-            uint expected = (_balance * _maticToWantRatio) / tokenDiffPrecision;
+            uint ratio = (
+                (getPriceFor(wNative) * 1e9) / getPriceFor(want)
+            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            uint expected = (_balance * ratio) / tokenDiffPrecision;
 
             IERC20(wNative).safeApprove(exchange, _balance);
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 _balance, expected, wNativeToWantRoute, address(this), block.timestamp + 60
             );
         }
+    }
+
+    function getPriceFor(address _token) public view returns (uint) {
+        // This could be implemented with FeedRegistry but it's not available in polygon
+        int256 price;
+        if (_token == wNative) {
+            (, price,,,) = wNativeFeed.latestRoundData();
+        } else {
+            (, price,,,) = wantFeed.latestRoundData();
+        }
+
+        return uint(price);
     }
 
     /**
@@ -411,7 +453,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         _pause();
         _fullDeleverage();
 
-        harvest(0);
+        harvest();
 
         IERC20(want).safeTransfer(controller, wantBalance());
     }
