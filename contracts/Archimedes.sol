@@ -31,7 +31,7 @@ interface IController {
     function decimals() external view returns (uint);
     function farm() external view returns (address);
     function deposit(address _depositor, uint _amount) external;
-    function withdraw(address _depositor, uint _shares) external;
+    function withdraw(address _depositor, uint _shares) external returns (uint);
 }
 
 contract Archimedes is Ownable, ReentrancyGuard {
@@ -257,7 +257,8 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint _before = wantBalance(pool.want);
         // this should burn shares and control the amount
-        controller(_pid).withdraw(msg.sender, _shares);
+        uint withdrawn = controller(_pid).withdraw(msg.sender, _shares);
+        require(withdrawn > 0, "Can't withdraw from controller...");
 
         uint _wantBalance = wantBalance(pool.want) - _before;
 

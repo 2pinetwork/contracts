@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IUniswapRouter.sol";
@@ -73,6 +73,13 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // Max referral commission rate: 5%.
     uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 50; // 5%
     uint16 public constant COMMISSION_RATE_PRECISION = 1000;
+
+    uint constant public RATIO_PRECISION = 10000; // 100%
+
+    // In the case of leverage we should withdraw when the
+    // amount to withdraw is 50%
+    uint public swap_slippage_ratio = 100; // 1%
+
 
     event Deposit(uint indexed pid, address indexed user, uint amount);
     event Withdraw(uint indexed pid, address indexed user, uint amount);
@@ -341,8 +348,15 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
         if (_amount > 0) {
             piToken.safeApprove(exchange, _amount);
+
+            // Chainlink doesn't have PiToken oracle at the moment
+            uint[] memory _amounts = IUniswapRouter(exchange).getAmountsOut(
+                _amount, piTokenToWantRoute[_pid]
+            );
+            uint expected = _amounts[_amounts.length - 1] * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+
             uint[] memory outAmounts = IUniswapRouter(exchange).swapExactTokensForTokens(
-                _amount, 1, piTokenToWantRoute[_pid], address(this), block.timestamp + 60
+                _amount, expected, piTokenToWantRoute[_pid], address(this), block.timestamp + 60
             );
 
             // Only last amount is needed

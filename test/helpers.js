@@ -230,6 +230,7 @@ afterEach(async () => {
     (await global.Aave.dataProvider.reset()).wait(),
     (await global.CurvePool.reset()).wait(),
     (await global.CurveRewardsGauge.reset()).wait(),
+    (await global.exchange.reset()).wait(),
     network.provider.send('evm_setAutomine', [true])
   ])
 })

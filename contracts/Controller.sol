@@ -17,7 +17,7 @@ interface Farm {
 interface IStrategy {
     function balance() external view returns (uint);
     function deposit() external;
-    function withdraw(uint _amount) external;
+    function withdraw(uint _amount) external returns (uint);
     function paused() external view returns (bool);
     function retireStrat() external;
 }
@@ -126,25 +126,34 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     // Withdraw partial funds, normally used with a vault withdrawal
-    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant {
+    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant returns (uint) {
         // This line has to be calc before burn
         uint _withdraw = (balance() * _shares) / totalSupply();
 
         _burn(_senderUser, _shares);
 
         uint _balance = wantBalance();
+        uint withdrawn;
 
         if (_balance < _withdraw) {
             uint _diff = _withdraw - _balance;
 
-            IStrategy(strategy).withdraw(_diff);
+            // withdraw will revert if anyything weird happend with the
+            // transfer back but just in case we ensure that the withdraw is
+            // positive
+            withdrawn = IStrategy(strategy).withdraw(_diff);
+            require(withdrawn > 0, "Can't withdraw from strategy...");
         }
 
         uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
-        want.safeTransfer(farm, _withdraw - withdrawalFee);
+        withdrawn = _withdraw - withdrawalFee;
+
+        want.safeTransfer(farm, withdrawn);
         want.safeTransfer(treasury, withdrawalFee);
 
         if (!_strategyPaused()) { _strategyDeposit(); }
+
+        return withdrawn;
     }
 
     function _strategyPaused() internal view returns (bool){
