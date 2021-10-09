@@ -70,6 +70,8 @@ describe('ArchimedesAPI', () => {
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
+    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
+    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
 
     expect(await archimedes.piToken()).to.equal(piToken.address)
     expect(await archimedes.poolLength()).to.equal(0)

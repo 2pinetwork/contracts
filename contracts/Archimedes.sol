@@ -54,18 +54,14 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // IPiToken already have safe transfer from SuperToken
     IPiToken public piToken;
-    bytes private constant txData = new bytes(0); // just to support SuperToken mint
 
     // Used to made multiplications and divitions over shares
     uint public constant SHARE_PRECISION = 1e18;
 
-    // PI tokens created per block for community, 31.4M minted in 2 years
-    // This Archimedes has 2/3 of the total LM
-    uint public communityLeftToMint = 2.09e25;
-
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes tokens.
+    // Users can't transfer controller's minted tokens
     mapping(uint => mapping(address => uint)) public userPaidRewards;
     // Total weighing. Must be the sum of all pools weighing.
     uint public totalWeighing;
@@ -142,7 +138,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
         uint sharesTotal = controller(_pid).totalSupply();
 
-        if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0 && communityLeftToMint > 0) {
+        if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0 && piToken.communityLeftToMint() > 0) {
             uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
             uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
@@ -163,8 +159,13 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         // If same block as last update return
         if (blockNumber() <= pool.lastRewardBlock) { return; }
+
         // If community Mint is already finished
-        if (communityLeftToMint <= 0) { return; }
+        uint communityLeftToMint = piToken.communityLeftToMint();
+        if (communityLeftToMint <= 0) {
+            pool.lastRewardBlock = blockNumber();
+            return;
+        }
 
         uint sharesTotal = controller(_pid).totalSupply();
 
@@ -187,8 +188,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
             piTokenReward = communityLeftToMint;
         }
 
-        communityLeftToMint -= piTokenReward;
-        piToken.mint(address(this), piTokenReward, txData);
+        piToken.communityMint(address(this), piTokenReward);
 
         pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         pool.lastRewardBlock = blockNumber();
@@ -393,13 +393,14 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
             uint commissionAmount = (_pending * referralCommissionRate) / COMMISSION_RATE_PRECISION;
             if (referrer != address(0) && commissionAmount > 0) {
+                uint communityLeftToMint = piToken.communityLeftToMint();
+
                 if (communityLeftToMint < commissionAmount) {
                     commissionAmount = communityLeftToMint;
                 }
 
                 if (commissionAmount > 0) {
-                    communityLeftToMint -= commissionAmount;
-                    piToken.mint(referrer, commissionAmount, txData);
+                    piToken.communityMint(referrer, commissionAmount);
                     referralMgr.referralPaid(referrer, commissionAmount); // sum paid
                 }
             }
@@ -453,7 +454,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // check if any holder has pending tokens then call this fn
     // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
     function redeemStuckedPiTokens() external onlyOwner {
-        require(communityLeftToMint <= 0, "still minting");
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
         require(blockNumber() <= (startBlock + 32850000), "Still waiting");

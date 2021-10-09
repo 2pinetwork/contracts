@@ -4,92 +4,56 @@ pragma solidity 0.8.4;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
 
 contract PiToken is NativeSuperTokenProxy, AccessControl {
+    // mint/burn roles
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
+    // ERC777 registration in ERC1820
     bytes32 internal constant ERC777Recipient = keccak256("ERC777TokensRecipient");
-
     IERC1820Registry constant internal _ERC1820_REGISTRY =
         IERC1820Registry(0x1820a4B7618BdE71Dce8cdc73aAB6C95905faD24);
 
     uint public constant MAX_SUPPLY = 6.28e25; // (2 * pi) 62.8M tokens
     uint public constant INITIAL_SUPPLY = (
-        2512000 + // Airdrop + incentives
-         942000 + // Exchange
-        7536000   // Future rounds (investors)
+        2512000 +  // Airdrop + incentives 2.512M
+         942000 +  // Exchange 942K
+        7536000 +  // Future rounds (investors) 7.536M
+        9420000 +  // Timelock Founders 9.42M
+        9420000 +  // Timelock Investors 9.42M
+        1570000    // Timelock Treasury 1.57M
     ) * (10 ** 18);
 
-    uint public currentTranche = 0; // first month rate
-
     // Rates to mint per block
-    uint[] public TRANCHES_COMMUNITY_MINT_PER_BLOCK = new uint[](6);
-    uint[] public TRANCHES_API_MINT_PER_BLOCK = new uint[](6);
-
-    uint[] public EXPECTED_MINTED_PER_TRANCHE = new uint[](6);
-    uint public constant INVESTORS_MINT_RATIO = 0.71689e18; // 9.42M in 1 year
-    uint public constant FOUNDERS_MINT_RATIO =  0.35844e18; // 9.42M in 2 years
-    uint public constant TREASURY_MINT_RATIO =  0.11948e18; // 1.57M in 1 year
+    uint public communityMintPerBlock;
+    uint public apiMintPerBlock;
 
     // variable to keep track in which block the current tranche
     // was initialized.
-    uint private tranchesBlock;
+    uint internal tranchesBlock;
+    uint internal mintedForCurrentTranch = INITIAL_SUPPLY;
+    uint internal restFromLastTranch;
 
     constructor() {
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[0] = 0.19383e18; // for 1 month
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[1] = 0.38765e18; // for 2 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[2] = 0.48457e18; // for 6 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[3] = 0.83069e18; // for 3 months, first year =D
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[4] = 0.83069e18; // for 4 months
-        TRANCHES_COMMUNITY_MINT_PER_BLOCK[5] = 1.21142e18; // for 8 months until the end
-
-        TRANCHES_API_MINT_PER_BLOCK[0] = 0.09691e18; // for 1 month
-        TRANCHES_API_MINT_PER_BLOCK[1] = 0.19383e18; // for 2 months
-        TRANCHES_API_MINT_PER_BLOCK[2] = 0.24228e18; // for 6 months
-        TRANCHES_API_MINT_PER_BLOCK[3] = 0.41534e18; // for 3 months, first year =D
-        TRANCHES_API_MINT_PER_BLOCK[4] = 0.41534e18; // for 4 months
-        TRANCHES_API_MINT_PER_BLOCK[5] = 0.60571e18; // for 8 months until the end
-
-        // ACCUMULATED TOKENS for minting everything
-        EXPECTED_MINTED_PER_TRANCHE[0] =  1622333e18 + INITIAL_SUPPLY; // for 1 month
-        EXPECTED_MINTED_PER_TRANCHE[1] =  5495000e18 + INITIAL_SUPPLY; // for 2 months
-        EXPECTED_MINTED_PER_TRANCHE[2] = 16000000e18 + INITIAL_SUPPLY; // for 6 months
-        EXPECTED_MINTED_PER_TRANCHE[3] = 23000000e18 + INITIAL_SUPPLY; // for 3 months
-        EXPECTED_MINTED_PER_TRANCHE[4] = 30000000e18 + INITIAL_SUPPLY; // for 4 months until the end
-        EXPECTED_MINTED_PER_TRANCHE[5] = MAX_SUPPLY; // for 8 months until the end
-
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    event Mint(uint amount);
-    event Burn(uint amount);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Sent(
-        address indexed operator,
-        address indexed from,
-        address indexed to,
-        uint256 amount,
-        bytes data,
-        bytes operatorData
-    );
+    // Events from SuperToken
+    // Minted, Burned, Transfer, Sent
 
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
         _;
     }
 
+    // Should be called from a wallet
     function init() external onlyAdmin {
         require(self().totalSupply() <= 0, "Already initialized");
 
-        ISuperToken(address(this)).initialize(
-            IERC20(address(0x0)),
-            18, // shouldn't matter if there's no wrapped token
-            '2Pi',
-            '2Pi'
-        );
+        self().initialize(IERC20(address(0x0)), 18, '2Pi', '2Pi');
 
         _ERC1820_REGISTRY.setInterfaceImplementer(
             address(this),
@@ -97,7 +61,11 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
             address(this)
         );
 
-        ISuperToken(address(this)).selfMint(msg.sender, INITIAL_SUPPLY, new bytes(0));
+        self().selfMint(msg.sender, INITIAL_SUPPLY, abi.encodePacked(keccak256("Tokens for INITIAL SUPPLY")));
+    }
+
+    function addMinter(address newMinter) external onlyAdmin {
+        _setupRole(MINTER_ROLE, newMinter);
     }
 
     function initRewardsOn(uint _blockNumber) external onlyAdmin {
@@ -105,49 +73,114 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         tranchesBlock = _blockNumber;
     }
 
-    // will be changed only when the entire amount for the tranche has been minted
-    function increaseCurrentTranche() external onlyAdmin {
-        require(
-            EXPECTED_MINTED_PER_TRANCHE[currentTranche] <= self().totalSupply(),
-            "not yet"
-        );
-        require(currentTranche < 5, "Mint is finished");
+    function _beforeChangeMint() internal {
+        if (tranchesBlock > 0 && blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
+            uint _maxMintableSupply = (blockNumber() - tranchesBlock) * (apiMintPerBlock + communityMintPerBlock);
 
-        currentTranche += 1;
-        tranchesBlock = blockNumber();
+            // For the max mintable supply, we rest the "already minted"
+            _maxMintableSupply -= (self().totalSupply() - mintedForCurrentTranch);
+
+            restFromLastTranch += _maxMintableSupply;
+        }
     }
 
-    function addMinter(address newMinter) external onlyAdmin {
-        _setupRole(MINTER_ROLE, newMinter);
+    function setCommunityMintPerBlock(uint _rate) external onlyAdmin {
+        _beforeChangeMint();
+        communityMintPerBlock = _rate;
+        _updateCurrentTranch();
     }
 
-    function mint(address _receiver, uint _supply, bytes calldata data) external {
+    function setApiMintPerBlock(uint _rate) external onlyAdmin {
+        _beforeChangeMint();
+        apiMintPerBlock = _rate;
+        _updateCurrentTranch();
+    }
+
+    function _updateCurrentTranch() internal {
+        // Update variables to making calculations from this moment
+        if (tranchesBlock > 0 && blockNumber() > tranchesBlock) {
+            tranchesBlock = blockNumber();
+        }
+
+        mintedForCurrentTranch = self().totalSupply();
+    }
+
+    // This function is made to mint an arbitrary amount for other chains
+    function mintForMultiChain(uint _amount, bytes calldata data) external onlyAdmin {
+        require(self().totalSupply() + _amount <= MAX_SUPPLY, "Cant' mint more than cap");
+
+        _beforeChangeMint();
+
+        // Mint + transfer to skip the 777-receiver callback
+        self().selfMint(address(this), _amount, data);
+        // SuperToken transfer is safe
+        self().transfer(msg.sender, _amount);
+
+        _updateCurrentTranch();
+    }
+
+    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal view {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
         require(tranchesBlock > 0, "Rewards not initialized");
         require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
+        require(_ratePerBlock > 0, "Mint ratio is 0");
         require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.5M");
 
-        // double check for mint
-        uint _minted = self().totalSupply();
+        // Get the max mintable supply for the current tranche
+        uint _maxMintableSupply = _leftToMintInBlock(apiMintPerBlock + communityMintPerBlock);
 
-        // If the current trance is the first one we need to rest the initial supply only
-        // but if it's greater than 0, we have to rest the expected minted to have
-        // the maximum amount to mint for the current block.
-        if (currentTranche > 0) {
-            _minted -= EXPECTED_MINTED_PER_TRANCHE[currentTranche - 1];
-        } else {
-            _minted -= INITIAL_SUPPLY;
-        }
+        // For the max mintable supply, we rest the "already minted"
+        _maxMintableSupply -= _mintedInTranch();
 
-        // Get the mintPerBlock for the current tranche
-        uint _maxMintableSupply = (blockNumber() - tranchesBlock) * totalMintPerBlock() - _supply;
-        require(_maxMintableSupply >= _minted, "Can't mint more than expected");
+        // Check that "supply to be minted" is less or equal to max mintable in this tranch
+        require(_supply <= _maxMintableSupply, "Can't mint more than expected");
+    }
 
-        self().selfMint(address(this), _supply, data);
-        require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
-        emit Mint(_supply);
+    function communityMint(address _receiver, uint _supply) external {
+        _checkMintFor(_receiver, _supply, communityMintPerBlock);
+
+        // Mint + transfer to skip the 777-receiver callback
+        self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for Community")));
+        // require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
+        // SuperToken transfer is safe
+        self().transfer(_receiver, _supply);
+    }
+
+    function apiMint(address _receiver, uint _supply) external {
+        _checkMintFor(_receiver, _supply, apiMintPerBlock);
+
+        // Mint + transfer to skip the 777-receiver callback
+        self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for API")));
+        // require(self().transfer(_receiver, _supply), "Can't transfer minted tokens");
+        // SuperToken transfer is safe
+        self().transfer(_receiver, _supply);
+    }
+
+    function communityLeftToMint() public view returns (uint) {
+        return _leftToMint(communityMintPerBlock);
+    }
+
+    function apiLeftToMint() public view returns (uint) {
+        return _leftToMint(apiMintPerBlock);
+    }
+
+    function _mintedInTranch() internal view returns (uint) {
+        return self().totalSupply() - mintedForCurrentTranch;
+    }
+    function _leftToMintInBlock(uint ratePerBlock) internal view returns (uint) {
+        return ((blockNumber() - tranchesBlock) * ratePerBlock) + restFromLastTranch;
+    }
+
+    function _leftToMint(uint ratePerBlock) internal view returns (uint) {
+        uint totalLeft = MAX_SUPPLY - self().totalSupply();
+        uint leftToMint = _leftToMintInBlock(ratePerBlock);
+        uint _alreadyMinted = _mintedInTranch();
+
+        if (_alreadyMinted <= leftToMint) { leftToMint -= _alreadyMinted; }
+
+        return (totalLeft < leftToMint) ? totalLeft : leftToMint;
     }
 
     function tokensReceived(
@@ -172,7 +205,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(hasRole(BURNER_ROLE, msg.sender), "Only burners");
 
         self().selfBurn(msg.sender, _amount, data);
-        emit Burn(_amount);
     }
 
     function self() internal view returns (ISuperToken) {
@@ -181,41 +213,6 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
 
     function cap() external pure returns (uint) {
         return MAX_SUPPLY;
-    }
-
-    function communityMintPerBlock() external view returns (uint) {
-        // Community has 2/3 parts of the total "community" reward
-        if (self().totalSupply() < MAX_SUPPLY) {
-            return TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche];
-        } else {
-            return 0;
-        }
-    }
-
-    function apiMintPerBlock() external view returns (uint) {
-        // API has 1/3 parts of the total "community" reward
-        if (self().totalSupply() < MAX_SUPPLY) {
-            return TRANCHES_API_MINT_PER_BLOCK[currentTranche];
-        } else {
-            return 0;
-        }
-    }
-
-    function totalMintPerBlock() public view returns (uint) {
-        if (self().totalSupply() < MAX_SUPPLY) {
-            uint perBlock = (TRANCHES_COMMUNITY_MINT_PER_BLOCK[currentTranche] +
-                             TRANCHES_API_MINT_PER_BLOCK[currentTranche] + FOUNDERS_MINT_RATIO);
-
-            // 0, 1, 2, 3 is the first year so it has to
-            // include investors & treasury ratio
-            if (currentTranche < 4) {
-                perBlock += (INVESTORS_MINT_RATIO + TREASURY_MINT_RATIO);
-            }
-
-            return perBlock;
-        } else {
-            return 0;
-        }
     }
 
     // Implemented to be mocked in tests

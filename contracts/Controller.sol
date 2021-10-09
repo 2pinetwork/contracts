@@ -60,11 +60,11 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     // Prevent transfer to avoid claim rewards from different depositors
     // If needed to change owner, just withdraw+transfer+deposit
     function transfer(address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-        return false;
+        revert("Can't transfer share tokens");
     }
 
     function transferFrom(address /* sender */, address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-        return false;
+        revert("Can't transfer share tokens");
     }
 
 

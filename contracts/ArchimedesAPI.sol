@@ -52,14 +52,10 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // Used to made multiplications and divitions over shares
     uint public constant SHARE_PRECISION = 1e18;
 
-    // PI tokens created per block for community, 31.4M / 3 minted in 2 years
-    uint public apiLeftToMint = 1.05e25;
-
     // Info of each pool.
     PoolInfo[] public poolInfo;
-    // Pool existence mapping to prevent duplication
-    // mapping(IERC20 => uint) public poolExistence; // anti duplication?
     // Info of each user that stakes tokens.
+    // Users can't transfer controller's minted tokens
     mapping(uint => mapping(address => uint)) public userPaidRewards;
     // Total weighing. Must be the sum of all pools weighing.
     uint public totalWeighing;
@@ -125,9 +121,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
 
         // Update pools before a weighing change
-        if (_massUpdate) {
-            massUpdatePools();
-        }
+        if (_massUpdate) { massUpdatePools(); }
 
         uint lastRewardBlock = blockNumber() > startBlock ? blockNumber() : startBlock;
 
@@ -142,7 +136,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         }));
     }
 
-    // Update the given pool's PI allocation point and deposit fee. Can only be called by the owner.
+    // Update the given pool's PI allocation weighing
     function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyOwner {
         // Update pools before a weighing change
         if (_massUpdate) {
@@ -174,7 +168,11 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         // If same block as last update return
         if (blockNumber() <= pool.lastRewardBlock) { return; }
         // If community Mint is already finished
-        if (apiLeftToMint <= 0) { return; }
+        uint apiLeftToMint = piToken.apiLeftToMint();
+        if (apiLeftToMint <= 0) {
+            pool.lastRewardBlock = blockNumber();
+            return;
+        }
 
         uint sharesTotal = controller(_pid).totalSupply();
 
@@ -197,8 +195,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
             piTokenReward = apiLeftToMint;
         }
 
-        apiLeftToMint -= piTokenReward;
-        piToken.mint(address(this), piTokenReward, txData);
+        piToken.apiMint(address(this), piTokenReward);
 
         pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         pool.lastRewardBlock = blockNumber();
@@ -384,13 +381,13 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
             if (referrer != address(0) && commissionAmount > 0) {
                 // Instead of mint to the user, we call mint, swap and transfer
+                uint apiLeftToMint = piToken.apiLeftToMint();
                 if (apiLeftToMint < commissionAmount) {
                     commissionAmount = apiLeftToMint;
                 }
 
                 if (commissionAmount > 0) {
-                    apiLeftToMint -= commissionAmount;
-                    piToken.mint(address(this), commissionAmount, txData);
+                    piToken.apiMint(address(this), commissionAmount);
 
                     uint _reward = swapForWant(_pid, commissionAmount);
 
@@ -450,14 +447,12 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     // check if any holder has pending tokens then call this fn
     // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
     function redeemStuckedPiTokens() external onlyOwner {
-        require(apiLeftToMint <= 0, "still minting");
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
         require(blockNumber() <= (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 
-        if (_balance > 0)
-            piToken.transfer(owner(), _balance);
+        if (_balance > 0) { piToken.safeTransfer(owner(), _balance); }
     }
 }

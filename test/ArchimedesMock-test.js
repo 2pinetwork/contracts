@@ -23,6 +23,8 @@ describe('ArchimedesMock', () => {
 
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
+    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
+    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
 
     const controller = await createController(piToken, archimedes)
 

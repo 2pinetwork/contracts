@@ -10,7 +10,7 @@
 - contracts/ControllerCurveStrat is the curve strategy to work with Archimedes controller
 - contracts/PiVault is the vault to stake 2Pi tokens
 - contracts/FeeManager is in charge of receive the performance fee and "buyback" 2Pi tokens and deposit in the PiVault (and send a part to the treasury)
-- contracts/MintAndSend is in charge to mint and deposit in the PiVault the vested tokens for investors and founders (and send the stk2Pi tokens to the wallets). And to mint and transfer to treasury tokens to be used in advisors/logistic/etc.
+- contracts/Distributor is a "timelock" in charge to deposit in the PiVault the vested tokens for investors and founders (and send the stk2Pi tokens to the wallets). And to transfer to treasury tokens to be used in advisors/logistic/etc.
 - test/*-test.js all tests for contracts
 
 
@@ -19,6 +19,15 @@ The ArchimedesAPI will have the _same_ behavior than Archimedes BUT will be only
 an specific contract (Handler) that will keep a track of who transfer tokens via API.
 Other point about ArchimedesAPI is that instead of _distribute_ 2Pi tokens will swap them for
 want-tokens and re invest (or transfer to the referer in case of referral commision)
+
+## BridgedPiToken
+Will "emulate" the PiToken behavior. The idea is in other chains (via a bridge) deposit the
+bridged 2PiTokens in the BridgedPiToken and let Archimedes work "in the same way" that works in
+the "main network".
+
+### Note MintAndDeposit => Distributor rename
+This contract in the flow draw (below) mint and distribute, but in the current flow the contract just
+receive all the tokens and distribute like before.
 
 ## Contracts
 ![Contracts](https://github.com/2pifinance/contracts/blob/master/contracts.png?raw=true)

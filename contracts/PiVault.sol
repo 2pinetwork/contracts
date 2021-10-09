@@ -66,15 +66,15 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev A helper function to call deposit() with all the sender's funds.
      */
-    function depositAll() external {
-        deposit(piToken.balanceOf(msg.sender));
+    function depositAll() external returns (uint) {
+        return deposit(piToken.balanceOf(msg.sender));
     }
 
     /**
      * @dev The entrypoint of funds into the system. People deposit with this function
      * into the vault.
      */
-    function deposit(uint _amount) public nonReentrant {
+    function deposit(uint _amount) public nonReentrant returns (uint) {
         uint shares = 0;
         uint _pool = balance();
 
@@ -91,6 +91,8 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
 
         _mint(msg.sender, shares);
         emit Deposit(msg.sender, _amount);
+
+        return shares;
     }
 
     /**

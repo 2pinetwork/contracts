@@ -1,12 +1,12 @@
 //SPDX-License-Identifier: MIT
 pragma solidity 0.8.4;
 
-import "../MintAndSend.sol";
+import "../Distributor.sol";
 
-contract MintAndSendMock is MintAndSend {
+contract DistributorMock is Distributor {
     uint private mockedBlockNumber;
 
-    constructor(address _piToken, address _piVault, address _treasury, uint _startBlock) MintAndSend(_piToken, _piVault, _treasury, _startBlock) {}
+    constructor(address _piToken, address _piVault, address _treasury) Distributor(_piToken, _piVault, _treasury) {}
 
     function setBlockNumber(uint _n) public {
         mockedBlockNumber = _n;

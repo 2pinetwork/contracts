@@ -202,6 +202,14 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(10000) // from deposit
+
+      // Ensure the shares can't be transferd
+      await expect(controller.connect(bob).transfer(owner.address, 10)).to.be.revertedWith(
+        "Can't transfer share tokens"
+      )
+      await expect(controller.connect(bob).transferFrom(bob.address, owner.address, 10)).to.be.revertedWith(
+        "Can't transfer share tokens"
+      )
     })
   })
 

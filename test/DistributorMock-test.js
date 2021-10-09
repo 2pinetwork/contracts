@@ -2,7 +2,7 @@ const {
   createPiToken, getBlock, waitFor, deploy
 } = require('./helpers')
 
-describe('MintAndSendMock', () => {
+describe('DistributorMock', () => {
   let bob, alice
   let piToken
   let piVault
@@ -28,7 +28,7 @@ describe('MintAndSendMock', () => {
 
     piVault = await deploy('PiVault', piToken.address, now, now)
     mintAndSend = await deploy(
-      'MintAndSendMock', piToken.address, piVault.address, owner.address, rewardsBlock
+      'DistributorMock', piToken.address, piVault.address, owner.address, rewardsBlock
     )
     totalForFounders = await mintAndSend.leftTokensForFounders()
     investorPerBlock = await mintAndSend.INVESTOR_PER_BLOCK()

@@ -260,11 +260,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
             uint expected = balance * ratio / tokenDiffPrecision;
 
-            console.log("SwapMatic balance: ", balance);
-            console.log("SwapMatic prec: ", tokenDiffPrecision);
-            console.log("SwapMatic ratio: ", ratio);
-            console.log("SwapMatic expected: ", expected);
-
             // BTC price is too high so sometimes it requires a lot of rewards to swap
             if (expected > 1) {
                 IERC20(WNATIVE).safeApprove(exchange, balance);
