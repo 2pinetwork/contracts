@@ -170,7 +170,11 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         return self().totalSupply() - mintedForCurrentTranch;
     }
     function _leftToMintInBlock(uint ratePerBlock) internal view returns (uint) {
-        return ((blockNumber() - tranchesBlock) * ratePerBlock) + restFromLastTranch;
+        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) {
+            return 0;
+        } else {
+            return ((blockNumber() - tranchesBlock) * ratePerBlock) + restFromLastTranch;
+        }
     }
 
     function _leftToMint(uint ratePerBlock) internal view returns (uint) {

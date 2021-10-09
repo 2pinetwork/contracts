@@ -3,8 +3,8 @@
   "jobs":       4,
   "slow":       "1500", // 1.5s
   "full-trace": true,
-  "bail":       true,
-  /* "inspect":    false, */
+  "bail":       false,
+  "inspect":    false,
   "timeout":    60000,
   "exit":       true,
   "require":    ["hardhat/register"]

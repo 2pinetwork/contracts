@@ -57,27 +57,27 @@ contract Distributor is Ownable, ReentrancyGuard {
         founders[1] = address(0xd);
         founders[2] = address(0xe);
 
-        investors[0] = address(0x1); // NIV
-        investors[1] = address(0x2); // Kosm
-        investors[2] = address(0x3); // NC
-        investors[3] = address(0x4); // DG
-        investors[4] = address(0x5); // DG
-        investors[5] = address(0x6); // Meld
-        investors[6] = address(0x7); // Ariel
-        investors[7] = address(0x8); // Beefy
-        investors[8] = address(0x9); // Toubkal
-        investors[9] = address(0xa); // kenzi
+        investors[0] = address(0x1);
+        investors[1] = address(0x2);
+        investors[2] = address(0x3);
+        investors[3] = address(0x4);
+        investors[4] = address(0x5);
+        investors[5] = address(0x6);
+        investors[6] = address(0x7);
+        investors[7] = address(0x8);
+        investors[8] = address(0x9);
+        investors[9] = address(0xa);
 
-        investorTickets[investors[0]] = 4; // NIV
-        investorTickets[investors[1]] = 2; // Kosm
-        investorTickets[investors[2]] = 2; // NC
-        investorTickets[investors[3]] = 1; // DG
-        investorTickets[investors[4]] = 1; // DG
-        investorTickets[investors[5]] = 1; // Meld
-        investorTickets[investors[6]] = 1; // Ariel
-        investorTickets[investors[7]] = 1; // Beefy
-        investorTickets[investors[8]] = 1; // Toubkal
-        investorTickets[investors[9]] = 1; // Kenzi
+        investorTickets[investors[0]] = 4;
+        investorTickets[investors[1]] = 2;
+        investorTickets[investors[2]] = 2;
+        investorTickets[investors[3]] = 1;
+        investorTickets[investors[4]] = 1;
+        investorTickets[investors[5]] = 1;
+        investorTickets[investors[6]] = 1;
+        investorTickets[investors[7]] = 1;
+        investorTickets[investors[8]] = 1;
+        investorTickets[investors[9]] = 1;
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);

@@ -76,6 +76,7 @@ describe('Distributor', () => {
   let investors = {}
   let totalForFounders
   let totalForInvestors
+  let totalForTreasury
   let totalTickets
   let treasury
   let treasuryPerBlock
@@ -92,12 +93,15 @@ describe('Distributor', () => {
     distributor = await deploy(
       'Distributor', piToken.address, piVault.address, treasury
     )
-    TOTAL_TO_DISTRIBUTE = (await distributor.leftTokensForFounders())
-      .add(await distributor.leftTokensForInvestors())
-      .add(await distributor.leftTokensForTreasury())
-    await waitFor(piToken.transfer(distributor.address, TOTAL_TO_DISTRIBUTE))
-    totalForInvestors = await distributor.leftTokensForInvestors()
+
     totalForFounders = await distributor.leftTokensForFounders()
+    totalForInvestors = await distributor.leftTokensForInvestors()
+    totalForTreasury = await distributor.leftTokensForTreasury()
+
+    TOTAL_TO_DISTRIBUTE = totalForInvestors.add(totalForInvestors).add(totalForTreasury)
+
+    await waitFor(piToken.transfer(distributor.address, TOTAL_TO_DISTRIBUTE))
+
     investorPerBlock = await distributor.INVESTOR_PER_BLOCK()
     founderPerBlock = await distributor.FOUNDER_PER_BLOCK()
     treasuryPerBlock = await distributor.TREASURY_PER_BLOCK()
@@ -118,22 +122,23 @@ describe('Distributor', () => {
     it('should receive tokens for 1 block', async () => {
       expect(await piVault.balance()).to.be.equal(0)
 
-      const treasuryBalance = (await piToken.balanceOf(treasury))
-
       for (let wallet of (Object.keys(investors).concat(founders))) {
         expect(await piVault.balanceOf(wallet), `wallet: ${wallet}`).to.be.equal(0)
       }
 
+      const treasuryBalance = (await piToken.balanceOf(treasury))
 
       await waitFor(distributor.distribute())
 
-      expect(await piVault.balance()).to.be.equal(
-        investorPerBlock.mul(totalTickets).add(
-          founderPerBlock.mul(founders.length)
-        ) // .toString()
-      )
+      const depositedPerBlock = investorPerBlock.mul(totalTickets).add(
+        founderPerBlock.mul(founders.length)
+      ) // 2 block
 
-      expect(await piToken.balanceOf(treasury)).to.be.equal(treasuryBalance.add(treasuryPerBlock))
+      expect(await piVault.balance()).to.be.equal(depositedPerBlock.mul(2))
+
+      expect(await piToken.balanceOf(treasury)).to.be.equal(
+        treasuryBalance.add(treasuryPerBlock.mul(2))
+      )
 
       const perShare = (await piVault.getPricePerFullShare()).div(toNumber(1e18))
 
@@ -144,7 +149,9 @@ describe('Distributor', () => {
         expect(await piToken.balanceOf(investor)).to.be.equal(0)
 
         let shares = (await piVault.balanceOf(investor)).mul(perShare)
-        expect(shares).to.be.equal(investorPerBlock.mul(investors[investor]))
+        expect(
+          shares, `${investor} with shares: ${shares}`
+        ).to.be.equal(investorPerBlock.mul(2).mul(investors[investor]))
       }
 
 
@@ -152,7 +159,7 @@ describe('Distributor', () => {
         // Owner already have piTokens so we don't check that
 
         let shares = (await piVault.balanceOf(founder)).mul(perShare)
-        expect(shares).to.be.equal(founderPerBlock)
+        expect(shares, `${founder} with shares: ${shares}`).to.be.equal(founderPerBlock.mul(2))
       }
     })
 
@@ -174,7 +181,7 @@ describe('Distributor', () => {
           investorPerBlock.mul(totalTickets).add(
             founderPerBlock.mul(founders.length)
           ).mul(2) // 2 blocks
-        ).toString()
+        )
       )
 
       const perShare = (await piVault.getPricePerFullShare())
@@ -183,16 +190,11 @@ describe('Distributor', () => {
       for (let investor in investors) {
         expect(await piToken.balanceOf(investor)).to.be.equal(0)
 
-        // Should be more than just 3 blocks
+        // Should be more than just 4 blocks
         expect(
           (await piVault.balanceOf(investor)).mul(perShare).div(investors[investor]).div(toNumber(1e18))
-        ).to.be.above(
-          investorPerBlock.mul(3)
-        )
-        expect(
-          (await piVault.balanceOf(investor)).mul(perShare).div(investors[investor]).div(toNumber(1e18))
-        ).to.be.below(
-          investorPerBlock.mul(4)
+        ).to.be.within(
+          investorPerBlock.mul(4), investorPerBlock.mul(5)
         )
       }
 
@@ -200,12 +202,7 @@ describe('Distributor', () => {
         expect(
           (await piVault.balanceOf(founder)).mul(perShare).div(toNumber(1e18))
         ).to.be.above(
-          founderPerBlock.mul(3)
-        )
-        expect(
-          (await piVault.balanceOf(founder)).mul(perShare).div(toNumber(1e18))
-        ).to.be.below(
-          founderPerBlock.mul(4)
+          founderPerBlock.mul(4), founderPerBlock.mul(5)
         )
       }
 
@@ -217,17 +214,17 @@ describe('Distributor', () => {
           investorPerBlock.mul(totalTickets).add(
             founderPerBlock.mul(founders.length)
           ).mul(3) // 3 blocks
-        ).toString()
+        )
       )
 
       expect(await distributor.leftTokensForInvestors()).to.be.equal(
         totalForInvestors.sub(
-          investorPerBlock.mul(totalTickets).mul(4)
+          investorPerBlock.mul(totalTickets).mul(5)
         )
       )
       expect(await distributor.leftTokensForFounders()).to.be.equal(
         totalForFounders.sub(
-          founderPerBlock.mul(founders.length).mul(4)
+          founderPerBlock.mul(founders.length).mul(5)
         )
       )
     })

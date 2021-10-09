@@ -29,8 +29,12 @@ the "main network".
 This contract in the flow draw (below) mint and distribute, but in the current flow the contract just
 receive all the tokens and distribute like before.
 
+### Note2 Swap ratio
+Instead of make a previous calculation off-chain and send a ratio to harvest strategies, the contract
+call an on-chain oracle and calculate that in the same way (with some slippage).
+
 ## Contracts
-![Contracts](https://github.com/2pifinance/contracts/blob/master/contracts.png?raw=true)
+![Contracts](https://github.com/2pifinance/contracts/blob/audit-sept/contracts.jpg?raw=true)
 
 
 ## We use

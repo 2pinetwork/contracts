@@ -311,7 +311,9 @@ describe('Controller', () => {
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
 
       // Call transfer
-      await waitFor(controller.transfer(bob.address, 50))
+      await expect(controller.transfer(bob.address, 50)).to.be.revertedWith(
+        "Can't transfer share tokens"
+      )
 
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
       expect(await controller.balanceOf(bob.address)).to.be.equal(0)
@@ -327,7 +329,9 @@ describe('Controller', () => {
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
 
       // Call transfer
-      await waitFor(controller.transferFrom(owner.address, bob.address, 50))
+      await expect(controller.transferFrom(owner.address, bob.address, 50)).to.be.revertedWith(
+        "Can't transfer share tokens"
+      )
 
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
       expect(await controller.balanceOf(bob.address)).to.be.equal(0)
