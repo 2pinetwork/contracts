@@ -86,28 +86,28 @@ const createController = async (token, archimedes, stratName) => {
 
   stratName = stratName || 'ControllerAaveStrat'
 
-  switch(stratName) {
-    case 'ControllerAaveStrat':
-      strategy = await deploy(
-        'ControllerAaveStrat',
-        token.address,
-        0,
-        10000,
-        0,
-        0,
-        controller.address,
-        global.exchange.address,
-        owner.address
-      )
-      break
-    case 'ControllerCurveStrat':
-      strategy = await deploy(
-        'ControllerCurveStrat',
-        controller.address,
-        global.exchange.address,
-        owner.address
-      )
-      break
+  switch (stratName) {
+      case 'ControllerAaveStrat':
+        strategy = await deploy(
+          'ControllerAaveStrat',
+          token.address,
+          0,
+          10000,
+          0,
+          0,
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
+      case 'ControllerCurveStrat':
+        strategy = await deploy(
+          'ControllerCurveStrat',
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))
@@ -147,8 +147,8 @@ module.exports = {
 }
 
 // Global setup for all the test-set
-setupSuperFluid = async () => {
-   const errorHandler = err => {
+const setupSuperFluid = async () => {
+  const errorHandler = err => {
     if (err) throw err;
   };
 
@@ -161,7 +161,7 @@ setupSuperFluid = async () => {
   );
 }
 
-setupNeededTokens = async () => {
+const setupNeededTokens = async () => {
   console.log('Deploying WMatic')
   global.WMATIC = await deployWithMainDeployer('WETHMock')
   expect(global.WMATIC.address).to.be.equal('0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f')
@@ -231,6 +231,9 @@ afterEach(async () => {
     (await global.CurvePool.reset()).wait(),
     (await global.CurveRewardsGauge.reset()).wait(),
     (await global.exchange.reset()).wait(),
-    network.provider.send('evm_setAutomine', [true])
+    // Reset hardhat "state"
+    network.provider.send('evm_setAutomine', [true]),
+    network.provider.send('evm_setIntervalMining', [0]),
+    network.provider.send('evm_mine'),
   ])
 })

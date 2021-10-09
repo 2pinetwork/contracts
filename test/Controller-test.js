@@ -67,7 +67,8 @@ describe('Controller', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     controller = await createController(piToken, archimedes)

@@ -126,7 +126,7 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         require(tranchesBlock > 0, "Rewards not initialized");
         require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
         require(_ratePerBlock > 0, "Mint ratio is 0");
-        require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.5M");
+        require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.8M");
 
         // Get the max mintable supply for the current tranche
         uint _maxMintableSupply = _leftToMintInBlock(apiMintPerBlock + communityMintPerBlock);

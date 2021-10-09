@@ -21,7 +21,7 @@ describe('Distributor setup', () => {
     )
   })
 
-  describe('deploy', async () => {
+  describe('deploy', () => {
     it('should set everything', async () => {
       for (let i = 0; i < 10; i++) {
         let wallet = await distributor.investors(i)
@@ -41,8 +41,7 @@ describe('Distributor setup', () => {
     })
   })
 
-
-  describe('setTreasury', async () => {
+  describe('setTreasury', () => {
     it('should set treasury', async () => {
       await expect(distributor.setTreasury(alice.address)).to.emit(
         distributor, 'NewTreasury'
@@ -59,7 +58,7 @@ describe('Distributor setup', () => {
     })
   })
 
-  describe('distributor', async () => {
+  describe('distributor', () => {
     it('should be reverted without funds', async () => {
       expect(distributor.distribute()).to.be.revertedWith('SuperfluidToken: move amount exceeds balance')
     })
@@ -118,7 +117,7 @@ describe('Distributor', () => {
     }
   })
 
-  describe('distributor', async () => {
+  describe('distributor', () => {
     it('should receive tokens for 1 block', async () => {
       expect(await piVault.balance()).to.be.equal(0)
 

@@ -12,13 +12,13 @@ describe('Archimedes setup', () => {
   })
 
   it('should revert of 0 address piToken', async () => {
-    await expect(Archimedes.deploy(zeroAddress, 1)).to.be.revertedWith(
+    await expect(Archimedes.deploy(zeroAddress, 1, WMATIC.address)).to.be.revertedWith(
       "Pi address can't be zero address"
     )
   })
 
   it('should revert for old block number', async () => {
-    await expect(Archimedes.deploy(PiToken.address, 0)).to.be.revertedWith(
+    await expect(Archimedes.deploy(PiToken.address, 0, WMATIC.address)).to.be.revertedWith(
       'StartBlock should be in the future'
     )
   })
@@ -44,7 +44,8 @@ describe('Archimedes', () => {
     archimedes = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     refMgr = await deploy('Referral', archimedes.address)
@@ -75,7 +76,8 @@ describe('Archimedes', () => {
       const otherFarm = await deploy(
         'Archimedes',
         piToken.address,
-        rewardsBlock
+        rewardsBlock,
+        WMATIC.address
       )
 
       const otherCtroller = await createController(piToken, otherFarm)

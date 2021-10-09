@@ -10,23 +10,8 @@ import "hardhat/console.sol";
 
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IUniswapRouter.sol";
-
-interface IReferral {
-    function recordReferral(address, address referrer) external;
-    function referralPaid(address user, uint amount) external;
-    function getReferrer(address user) external view returns (address);
-}
-
-interface IController {
-    function strategy() external view returns (address);
-    function totalSupply() external view returns (uint);
-    function balance() external view returns (uint);
-    function balanceOf(address _user) external view returns (uint);
-    function decimals() external view returns (uint);
-    function farm() external view returns (address);
-    function deposit(address _depositor, uint _amount) external;
-    function withdraw(address _depositor, uint _shares) external;
-}
+import "../interfaces/IController.sol";
+import "../interfaces/IReferral.sol";
 
 contract ArchimedesAPI is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -136,7 +121,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         }));
     }
 
-    // Update the given pool's PI allocation weighing
+    // Update the given pool's PI rewards weighing
     function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyOwner {
         // Update pools before a weighing change
         if (_massUpdate) {
@@ -242,7 +227,8 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         calcPendingAndSwapRewards(_pid, _user);
 
         // this should burn shares and control the amount
-        controller(_pid).withdraw(_user, _shares);
+        uint withdrawn = controller(_pid).withdraw(_user, _shares);
+        require(withdrawn > 0, "Can't withdraw from controller");
 
         uint _wantBalance = wantBalance(pool.want) - _before;
 
@@ -280,7 +266,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint _pid, address _user) external nonReentrant {
-        require(msg.sender == _user || msg.sender == owner() || msg.sender == handler, "Not autorized");
+        require(msg.sender == _user || msg.sender == owner() || msg.sender == handler, "Not authorized");
         IERC20 want = poolInfo[_pid].want;
 
         userPaidRewards[_pid][_user] = 0;
@@ -449,7 +435,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     function redeemStuckedPiTokens() external onlyOwner {
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
-        require(blockNumber() <= (startBlock + 32850000), "Still waiting");
+        require(blockNumber() > (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 

@@ -47,7 +47,7 @@ describe('PiTokenMock', () => {
 
       await expect(
         piToken.connect(bob).communityMint(bob.address, 1)
-      ).to.be.revertedWith('Mint capped to 62.5M')
+      ).to.be.revertedWith('Mint capped to 62.8M')
     })
   })
 })

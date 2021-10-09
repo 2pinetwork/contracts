@@ -63,7 +63,8 @@ describe('Controller Curve Strat', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     controller = await createController(BTC, archimedes, 'ControllerCurveStrat')
@@ -107,6 +108,12 @@ describe('Controller Curve Strat', () => {
       contract = await deploy('TokenMock', 'Another Test Token', 'ATT')
     })
 
+    it('Should revert set the treasury for zero addr', async () => {
+      await expect(strat.setTreasury(zeroAddress)).to.be.revertedWith(
+        '!Zero address'
+      )
+    })
+
     it('Should set the treasury', async () => {
       expect(await strat.treasury()).to.not.equal(contract.address)
 
@@ -121,6 +128,12 @@ describe('Controller Curve Strat', () => {
       await expect(
         strat.connect(bob).setTreasury(contract.address)
       ).to.be.revertedWith('Not an admin')
+    })
+
+    it('Should revert set the exchange for zero addr', async () => {
+      await expect(strat.setExchange(zeroAddress)).to.be.revertedWith(
+        '!Zero address'
+      )
     })
 
     it('Should set the exchange', async () => {
@@ -375,6 +388,12 @@ describe('Controller Curve Strat', () => {
       )
     })
 
+    it('should be reverted for max perf fee', async () => {
+      await expect(strat.setPerformanceFee(100000)).to.be.revertedWith(
+        'Fee is greater than expected'
+      )
+    })
+
     it('should change performance fee', async () => {
       const original = await strat.performanceFee()
 
@@ -385,6 +404,60 @@ describe('Controller Curve Strat', () => {
       ).withArgs(original, 1)
 
       expect(await strat.performanceFee()).to.be.equal(1)
+    })
+  })
+
+  describe('setPoolSlippageRatio', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setPoolSlippageRatio(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setPoolSlippageRatio(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.pool_slippage_ratio()).to.not.be.equal(123)
+      await waitFor(strat.setPoolSlippageRatio(123))
+      expect(await strat.pool_slippage_ratio()).to.be.equal(123)
+    })
+  })
+
+  describe('setSwapSlippageRatio', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setSwapSlippageRatio(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setSwapSlippageRatio(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.swap_slippage_ratio()).to.not.be.equal(123)
+      await waitFor(strat.setSwapSlippageRatio(123))
+      expect(await strat.swap_slippage_ratio()).to.be.equal(123)
+    })
+  })
+
+  describe('setRatioForFullWithdraw', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setRatioForFullWithdraw(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setRatioForFullWithdraw(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.ratio_for_full_withdraw()).to.not.be.equal(123)
+      await waitFor(strat.setRatioForFullWithdraw(123))
+      expect(await strat.ratio_for_full_withdraw()).to.be.equal(123)
     })
   })
 

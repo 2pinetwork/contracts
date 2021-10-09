@@ -85,6 +85,20 @@ describe('ArchimedesAPI', () => {
     await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
   })
 
+  describe('setExchange', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(archimedes.connect(bob).setExchange(zeroAddress)).to.be.revertedWith(
+        'Ownable: caller is not the owner'
+      )
+    })
+
+    it('should be reverted for 0 address', async () => {
+      await expect(archimedes.setExchange(zeroAddress)).to.be.revertedWith(
+        "Can't be 0 address"
+      )
+    })
+  })
+
   describe('setHandler', async () => {
     it('should revert for 0 address', async () => {
       await expect(archimedes.setHandler(zeroAddress)).to.be.revertedWith(
@@ -466,6 +480,27 @@ describe('ArchimedesAPI', () => {
       expect(
         await archimedes.getPricePerFullShare(1)
       ).to.be.equal(1.1e6)
+    })
+  })
+
+  describe('setRoute', async () => {
+    it('should be reverted for non piToken first token', async () => {
+      await expect(archimedes.setRoute(0, [WMATIC.address, WMATIC.address])).to.be.revertedWith(
+        'First token is not PiToken'
+      )
+    })
+    it('should be reverted for non want last token', async () => {
+      await expect(archimedes.setRoute(0, [piToken.address, piToken.address])).to.be.revertedWith(
+        'Last token is not want'
+      )
+    })
+  })
+
+  describe('emergencyWithdraw', async () => {
+    it('should be reverted for not auth user', async () => {
+      await expect(archimedes.connect(bob).emergencyWithdraw(0, alice.address)).to.be.revertedWith(
+        'Not authorized'
+      )
     })
   })
 })

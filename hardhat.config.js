@@ -68,6 +68,11 @@ module.exports = {
     arbrinkeby: {
       url: 'https://rinkeby.arbitrum.io/rpc',
       accounts: accounts
+    },
+    avax_test: {
+      url: 'https://api.avax-test.network/ext/bc/C/rpc',
+      network_id: 43113,
+      accounts: accounts
     }
   },
   gasReporter: {

@@ -6,42 +6,24 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 import "../interfaces/IPiToken.sol";
-
-interface IReferral {
-    function recordReferral(address, address referrer) external;
-    function referralPaid(address user, uint amount) external;
-    function getReferrer(address user) external view returns (address);
-}
+import "../interfaces/IController.sol";
+import "../interfaces/IReferral.sol";
 
 // Wrap-Unwrap native Matic
-interface IWMATIC is IERC20 {
+interface IWNative is IERC20 {
     function deposit() external payable;
     function withdraw(uint wad) external;
-}
-
-// Want-token controller
-interface IController {
-    function strategy() external view returns (address);
-    function totalSupply() external view returns (uint);
-    function balance() external view returns (uint);
-    function balanceOf(address _user) external view returns (uint);
-    function decimals() external view returns (uint);
-    function farm() external view returns (address);
-    function deposit(address _depositor, uint _amount) external;
-    function withdraw(address _depositor, uint _shares) external returns (uint);
 }
 
 contract Archimedes is Ownable, ReentrancyGuard {
     // using Address for address;
     using SafeERC20 for IERC20;
 
-    // Used for MATIC (native token) deposits/withdraws
-    IWMATIC public constant WMATIC = IWMATIC(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
-    // IWMATIC public constant WMATIC = IWMATIC(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
-    // IWMATIC public constant WMATIC = IWMATIC(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // Polygon
+    // Used for native token deposits/withdraws
+    IWNative public immutable WNative;
 
     // Info of each pool.
     struct PoolInfo {
@@ -80,12 +62,13 @@ contract Archimedes is Ownable, ReentrancyGuard {
     event Withdraw(uint indexed pid, address indexed user, uint amount);
     event EmergencyWithdraw(uint indexed pid, address indexed user, uint amount);
 
-    constructor( IPiToken _piToken, uint _startBlock) {
+    constructor(IPiToken _piToken, uint _startBlock, IWNative _wNative) {
         require(address(_piToken) != address(0), "Pi address can't be zero address");
         require(_startBlock > blockNumber(), "StartBlock should be in the future");
 
         piToken = _piToken;
         startBlock = _startBlock;
+        WNative = _wNative;
     }
 
     // Deposit MATIC
@@ -113,7 +96,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         }));
     }
 
-    // Update the given pool's PI allocation point and deposit fee. Can only be called by the owner.
+    // Update the given pool's rewards weighing .
     function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyOwner {
         // Update pools before a weighing change
         if (_massUpdate) {
@@ -198,7 +181,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function depositMATIC(uint _pid, address _referrer) external payable nonReentrant {
         uint _amount = msg.value;
         require(_amount > 0, "Insufficient deposit");
-        require(address(poolInfo[_pid].want) == address(WMATIC), "Only MATIC pool");
+        require(address(poolInfo[_pid].want) == address(WNative), "Only MATIC pool");
 
         // Update pool rewards
         updatePool(_pid);
@@ -210,7 +193,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         calcPendingAndPayRewards(_pid);
 
         // With that Archimedes already has the wmatics
-        WMATIC.deposit{value: _amount}();
+        WNative.deposit{value: _amount}();
 
         // Deposit in the controller
         _depositInStrategy(_pid, _amount);
@@ -237,7 +220,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     function depositAll(uint _pid, address _referrer) external {
-        require(address(poolInfo[_pid].want) != address(WMATIC), "Can't deposit all Matic");
+        require(address(poolInfo[_pid].want) != address(WNative), "Can't deposit all Matic");
         uint _balance = poolInfo[_pid].want.balanceOf(msg.sender);
 
         deposit(_pid, _balance, _referrer);
@@ -262,10 +245,10 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         uint _wantBalance = wantBalance(pool.want) - _before;
 
-        // In case we have WMATIC we unwrap to matic
-        if (address(pool.want) == address(WMATIC)) {
-            // Unwrap WMATIC => MATIC
-            WMATIC.withdraw(_wantBalance);
+        // In case we have WNative we unwrap to matic
+        if (address(pool.want) == address(WNative)) {
+            // Unwrap WNative => MATIC
+            WNative.withdraw(_wantBalance);
 
             payable(msg.sender).transfer(_wantBalance);
         } else {
@@ -456,7 +439,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function redeemStuckedPiTokens() external onlyOwner {
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
-        require(blockNumber() <= (startBlock + 32850000), "Still waiting");
+        require(blockNumber() > (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 

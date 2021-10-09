@@ -18,7 +18,8 @@ describe('ArchimedesMock', () => {
     archimedes = await deploy(
       'ArchimedesMock',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     await waitFor(piToken.initRewardsOn(rewardsBlock))
@@ -64,7 +65,7 @@ describe('ArchimedesMock', () => {
   })
 
   describe('redeemStuckedPiTokens', async () => {
-    it.skip('should redeem stucked piTokens', async () => {
+    it('should redeem stucked piTokens', async () => {
       await waitFor(piToken.approve(archimedes.address, 100))
       await waitFor(archimedes.deposit(0, 100, zeroAddress))
       await waitFor(piToken.addMinter(owner.address))
@@ -75,9 +76,9 @@ describe('ArchimedesMock', () => {
 
       const left = (await piToken.MAX_SUPPLY()).sub(await piToken.totalSupply())
 
-      await waitFor(piToken.communityMint(owner.address, left))
+      if (left > 0)
+        await waitFor(piToken.communityMint(owner.address, left))
 
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
       expect(await piToken.totalSupply()).to.be.equal(await piToken.MAX_SUPPLY())
 
       const balance = await piToken.balanceOf(archimedes.address)
@@ -85,6 +86,17 @@ describe('ArchimedesMock', () => {
 
       expect(balance).to.be.above(0)
 
+      let future = rewardsBlock + 32850000
+
+      await waitFor(piToken.setBlockNumber(future))
+      await waitFor(archimedes.setBlockNumber(future))
+
+      await expect(archimedes.redeemStuckedPiTokens()).to.be.revertedWith(
+        'Still waiting'
+      )
+
+      await waitFor(piToken.setBlockNumber(future + 1))
+      await waitFor(archimedes.setBlockNumber(future + 1))
       await waitFor(archimedes.redeemStuckedPiTokens())
 
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
@@ -99,16 +111,15 @@ describe('ArchimedesMock', () => {
       )
     })
 
-    it.skip('should revert with PiToken still minting', async () => {
+    it('should revert with PiToken still minting', async () => {
       await waitFor(piToken.approve(archimedes.address, 100))
       await waitFor(archimedes.deposit(0, 100, zeroAddress))
       await waitFor(piToken.addMinter(owner.address))
-      await waitFor(piToken.setBlockNumber(toNumber(2e10)))
-      await waitFor(archimedes.setBlockNumber(toNumber(2e10)))
+      await waitFor(piToken.setBlockNumber(50))
+      await waitFor(archimedes.setBlockNumber(50))
 
       await waitFor(archimedes.updatePool(0))
 
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
       expect(await piToken.totalSupply()).to.be.not.equal(await piToken.MAX_SUPPLY())
 
       await expect(archimedes.redeemStuckedPiTokens()).to.be.revertedWith('PiToken still minting')
@@ -160,7 +171,7 @@ describe('ArchimedesMock', () => {
   })
 
   describe('pendingPiToken', async () => {
-    it.skip('should return 0 when community rewards are done', async () => {
+    it('should return 0 when community rewards are done', async () => {
       // Deposit will not claim rewards yet
       await waitFor(piToken.approve(archimedes.address, toNumber(1e18)))
       await waitFor(archimedes.deposit(0, toNumber(1e18), zeroAddress))
@@ -196,7 +207,7 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
 
       expect(await archimedes.pendingPiToken(0)).to.be.above(0)
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0)
 
       await waitFor(archimedes.harvestAll())
       expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
@@ -205,7 +216,7 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
       expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
-      expect(await archimedes.communityLeftToMint()).to.be.equal(0)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0)
     })
   })
 })

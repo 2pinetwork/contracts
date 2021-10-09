@@ -81,7 +81,8 @@ describe('Controller Aave Strat', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     controller = await createController(piToken, archimedes)
@@ -415,6 +416,12 @@ describe('Controller Aave Strat', () => {
       )
     })
 
+    it('should be reverted for max perf fee', async () => {
+      await expect(strat.setPerformanceFee(100000)).to.be.revertedWith(
+        'Fee is greater than expected'
+      )
+    })
+
     it('should change performance fee', async () => {
       const original = await strat.performanceFee()
 
@@ -427,6 +434,43 @@ describe('Controller Aave Strat', () => {
       expect(await strat.performanceFee()).to.be.equal(1)
     })
   })
+
+  describe('setSwapSlippageRatio', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setSwapSlippageRatio(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setSwapSlippageRatio(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.swap_slippage_ratio()).to.not.be.equal(123)
+      await waitFor(strat.setSwapSlippageRatio(123))
+      expect(await strat.swap_slippage_ratio()).to.be.equal(123)
+    })
+  })
+
+  describe('setRatioForFullWithdraw', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setRatioForFullWithdraw(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setRatioForFullWithdraw(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.ratio_for_full_withdraw()).to.not.be.equal(123)
+      await waitFor(strat.setRatioForFullWithdraw(123))
+      expect(await strat.ratio_for_full_withdraw()).to.be.equal(123)
+    })
+  })
+
 
   describe('Other functions', () => {
     it('Should not increase health factor', async () => {
