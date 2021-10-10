@@ -1,7 +1,7 @@
 {
   "parallel":   true,
   "jobs":       4,
-  "slow":       "1500", // 1.5s
+  "slow":       "1500",
   "full-trace": true,
   "bail":       false,
   "inspect":    false,

@@ -1,6 +1,7 @@
 /* eslint no-console: 0 */
 
-const { createPiToken, setupSuperFluid } = require('../helpers')
+const { Framework } = require('@superfluid-finance/js-sdk');
+const { createPiToken, } = require('../helpers')
 
 const setWMaticBalanceFor = async (address, amount) => {
   const wmaticSlot = 3
@@ -35,7 +36,7 @@ const createPiTokenExchangePair = async () => {
   const factory      = await ethers.getContractAt(factoryAbi, '0xE7Fb3e833eFE5F9c441105EB65Ef8b261266423B')
   const allowance    = '1' + '0'.repeat(59)
   const piTokens     = '942000' + '0'.repeat(18)
-  const wmaticTokens = '100' + '0'.repeat(parseInt(await global.WMATIC.decimals()), 10)
+  const wmaticTokens = '100' + '0'.repeat(parseInt(await global.WMATIC.decimals(), 10), 10)
 
   await setWMaticBalanceFor(owner.address, '1000')
   await global.PiToken.transfer(owner.address, piTokens + '0')
@@ -58,7 +59,7 @@ const createPiTokenExchangePair = async () => {
   ).wait()
 }
 
-setupNeededTokens = async () => {
+const setupNeededTokens = async () => {
   console.log('Fetching WMatic')
   const wmaticAbi = require('./abis/wmatic.json')
   global.WMATIC = await ethers.getContractAt(wmaticAbi, '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270')
@@ -126,7 +127,17 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
     global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
-    await setupSuperFluid()
+    // Little hack to use deployed SuperFluid contracts
+    const superWeb3 = web3
+    superWeb3.eth.net.getId = async () => { return 137 }
+
+    const sf = new Framework({ web3: superWeb3 })
+    await sf.initialize()
+
+    global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
+      await sf.host.getSuperTokenFactory.call()
+    )
+
     await setupNeededTokens()
 
     console.log('===============  SETUP DONE  ===============\n\n')

@@ -6,6 +6,7 @@
     "coverage": "rm -Rf coverage.json coverage/ cache/ && npx hardhat coverage",
     "ptest": "npx mocha",
     "test": "npx hardhat test && HARDHAT_INTEGRATION_TESTS=true npx hardhat test",
+    "itest": "HARDHAT_INTEGRATION_TESTS=true npx hardhat test",
     "lint": "eslint test/",
     "build-contracts": "sol-merger \"./contracts/*.sol\" ./build",
     "code-checker": "docker run --rm -v $PWD:/app trailofbits/eth-security-toolbox /app/scripts/code_checker.sh"

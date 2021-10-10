@@ -1,4 +1,3 @@
-/* global task*/
 require('@nomiclabs/hardhat-waffle')
 require('@tenderly/hardhat-tenderly')
 require('@nomiclabs/hardhat-etherscan')
@@ -19,6 +18,10 @@ const integrationNetworkConfig = {
   }
 }
 
+const mochaSettings = JSON.parse(fs.readFileSync('.mocharc.json'))
+if (isIntegration)
+  mochaSettings.timeout = 80000
+
 const transformLine = (hre, line) => {
   if (isIntegration) {
     let newLine = line
@@ -28,9 +31,9 @@ const transformLine = (hre, line) => {
     }
 
     return newLine
-  } else {
-    return line
   }
+
+  return line
 }
 
 module.exports = {
@@ -60,15 +63,10 @@ module.exports = {
       url:      'https://polygon-rpc.com',
       accounts: accounts
     },
-    mumbai:  {
-      url:           'https://rpc-mumbai.maticvigil.com',
-      // url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
-      accounts:      accounts,
-      network_id:    80001,
-      gas:           5500000
-      // confirmations: 2,
-      // timeoutBlocks: 200,
-      // skipDryRun:    true
+    mumbai: {
+      url:        'https://rpc-mumbai.maticvigil.com',
+      accounts:   accounts,
+      network_id: 80001,
     },
     kovan: {
       url:      process.env.KOVAN_URL || '',
@@ -97,9 +95,7 @@ module.exports = {
   paths: {
     tests: isIntegration ? './test/integration' : './test/contracts'
   },
-  mocha: {
-    timeout: isIntegration ? 80000 : 20000
-  },
+  mocha:      mochaSettings,
   preprocess: {
     eachLine: hre => ({
       transform: line => transformLine(hre, line)
