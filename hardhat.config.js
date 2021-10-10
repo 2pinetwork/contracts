@@ -1,24 +1,37 @@
 /* global task*/
 require('@nomiclabs/hardhat-waffle')
 require('@tenderly/hardhat-tenderly')
-require('@nomiclabs/hardhat-etherscan');
-require('@nomiclabs/hardhat-web3');
-require('@nomiclabs/hardhat-truffle5');
-require('solidity-coverage');
-require('hardhat-gas-reporter');
+require('@nomiclabs/hardhat-etherscan')
+require('@nomiclabs/hardhat-web3')
+require('@nomiclabs/hardhat-truffle5')
+require('solidity-coverage')
+require('hardhat-gas-reporter')
+require('hardhat-preprocessor')
 
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
-task('accounts', 'Prints the list of accounts', async () => {
-  const accounts = await ethers.getSigners()
-
-  for (const account of accounts) {
-    console.log(account.address)
+const fs                       = require('fs')
+const accounts                 = JSON.parse(fs.readFileSync('.accounts'))
+const isIntegration            = process.env.HARDHAT_INTEGRATION_TESTS
+const stringReplacements       = require('./test/integration/replacements.json')
+const integrationNetworkConfig = {
+  forking: {
+    url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+    blockNumber: 19880876
   }
-})
+}
 
-const fs = require('fs')
-const accounts = JSON.parse(fs.readFileSync('.accounts'))
+const transformLine = (hre, line) => {
+  if (isIntegration) {
+    let newLine = line
+
+    for (let [string, replacement] of Object.entries(stringReplacements)) {
+      newLine = newLine.replace(string, replacement)
+    }
+
+    return newLine
+  } else {
+    return line
+  }
+}
 
 module.exports = {
   etherscan: {
@@ -42,9 +55,9 @@ module.exports = {
     }
   },
   networks: {
-    hardhat: { hardfork: 'berlin' },
+    hardhat: isIntegration ? integrationNetworkConfig : { hardfork: 'berlin' },
     polygon: {
-      url: 'https://polygon-rpc.com',
+      url:      'https://polygon-rpc.com',
       accounts: accounts
     },
     mumbai:  {
@@ -66,13 +79,13 @@ module.exports = {
       accounts: accounts
     },
     arbrinkeby: {
-      url: 'https://rinkeby.arbitrum.io/rpc',
+      url:      'https://rinkeby.arbitrum.io/rpc',
       accounts: accounts
     },
     avax_test: {
-      url: 'https://api.avax-test.network/ext/bc/C/rpc',
+      url:        'https://api.avax-test.network/ext/bc/C/rpc',
       network_id: 43113,
-      accounts: accounts
+      accounts:   accounts
     }
   },
   gasReporter: {
@@ -80,5 +93,16 @@ module.exports = {
     currency:      'USD',
     coinmarketcap: 'dd4b2cc6-a407-42a0-bc5d-ef6fc5a5a813',
     gasPrice:      1 // to compare between tests
+  },
+  paths: {
+    tests: isIntegration ? './test/integration' : './test/contracts'
+  },
+  mocha: {
+    timeout: isIntegration ? 80000 : 20000
+  },
+  preprocess: {
+    eachLine: hre => ({
+      transform: line => transformLine(hre, line)
+    })
   }
 }

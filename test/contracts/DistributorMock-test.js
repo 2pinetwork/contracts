@@ -1,4 +1,4 @@
-const { createPiToken, getBlock, waitFor, deploy } = require('./helpers')
+const { createPiToken, getBlock, waitFor, deploy } = require('../helpers')
 
 describe('DistributorMock', () => {
   let piToken

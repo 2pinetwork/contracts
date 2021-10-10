@@ -1,7 +1,7 @@
 const {
   toNumber, createPiToken, getBlock, waitFor, deploy, zeroAddress,
   impersonateContract, createController
-} = require('./helpers')
+} = require('../helpers')
 
 describe('ArchimedesAPIMock', () => {
   let piToken
