@@ -140,12 +140,6 @@ const impersonateContract = async (addr) => {
 
 const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935'
 
-module.exports = {
-  toNumber, getBlock, mineNTimes,
-  createPiToken, waitFor, deploy, zeroAddress, expectedOnlyAdmin,
-  sleep, impersonateContract, createController, MAX_UINT
-}
-
 // Global setup for all the test-set
 const setupSuperFluid = async () => {
   const errorHandler = err => {
@@ -206,34 +200,52 @@ const setupNeededTokens = async () => {
   expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
 }
 
-before(async () => {
-  // Not change signer because if the deployer/nonce changes
-  // the deployed address will change too
-  // All signers have 10k ETH
-  // global variable is like "window"
-  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
-  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
-  global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
+if (! process.env.HARDHAT_INTEGRATION_TESTS) {
+  before(async () => {
+    // Not change signer because if the deployer/nonce changes
+    // the deployed address will change too
+    // All signers have 10k ETH
+    // global variable is like "window"
+    global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
+    global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
+    global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
-  // If PiToken fails change this to wait for SuperFluid
-  await Promise.all([
-    setupSuperFluid(),
-    setupNeededTokens()
-  ])
+    // If PiToken fails change this to wait for SuperFluid
+    await Promise.all([
+      setupSuperFluid(),
+      setupNeededTokens()
+    ])
 
-  console.log('===============  SETUP DONE  ===============\n\n')
-})
+    console.log('===============  SETUP DONE  ===============\n\n')
+  })
 
-afterEach(async () => {
-  await Promise.all([
-    (await global.Aave.pool.reset()).wait(),
-    (await global.Aave.dataProvider.reset()).wait(),
-    (await global.CurvePool.reset()).wait(),
-    (await global.CurveRewardsGauge.reset()).wait(),
-    (await global.exchange.reset()).wait(),
-    // Reset hardhat "state"
-    network.provider.send('evm_setAutomine', [true]),
-    network.provider.send('evm_setIntervalMining', [0]),
-    network.provider.send('evm_mine'),
-  ])
-})
+  afterEach(async () => {
+    await Promise.all([
+      (await global.Aave.pool.reset()).wait(),
+      (await global.Aave.dataProvider.reset()).wait(),
+      (await global.CurvePool.reset()).wait(),
+      (await global.CurveRewardsGauge.reset()).wait(),
+      (await global.exchange.reset()).wait(),
+      // Reset hardhat "state"
+      network.provider.send('evm_setAutomine', [true]),
+      network.provider.send('evm_setIntervalMining', [0]),
+      network.provider.send('evm_mine')
+    ])
+  })
+}
+
+module.exports = {
+  createController,
+  createPiToken,
+  deploy,
+  expectedOnlyAdmin,
+  getBlock,
+  impersonateContract,
+  mineNTimes,
+  setupSuperFluid,
+  sleep,
+  toNumber,
+  waitFor,
+  zeroAddress,
+  MAX_UINT
+}

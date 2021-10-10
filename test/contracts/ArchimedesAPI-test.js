@@ -2,7 +2,7 @@ const {
   toNumber, createPiToken, getBlock, mineNTimes,
   waitFor, deploy, zeroAddress, createController,
   MAX_UINT
-} = require('./helpers')
+} = require('../helpers')
 
 describe('ArchimedesAPI setup', () => {
   let ArchimedesAPI

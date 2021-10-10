@@ -1,7 +1,7 @@
 const {
   toNumber, createPiToken, expectedOnlyAdmin,
   getBlock, zeroAddress, waitFor, mineNTimes
-} = require('./helpers')
+} = require('../helpers')
 
 describe('PiToken', () => {
   let piToken

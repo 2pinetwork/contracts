@@ -8,7 +8,7 @@ const {
   impersonateContract,
   waitFor,
   zeroAddress,
-} = require('./helpers')
+} = require('../helpers')
 
 describe('Controller Aave Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {

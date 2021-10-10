@@ -1,7 +1,7 @@
 const {
   toNumber, createPiToken, getBlock, waitFor, deploy, zeroAddress,
   impersonateContract, createController
-} = require('./helpers')
+} = require('../helpers')
 const { MINT_DATA } = require('./contract_constants')
 
 describe('ArchimedesMock', () => {

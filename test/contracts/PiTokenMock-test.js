@@ -1,4 +1,4 @@
-const { createPiToken, waitFor } = require('./helpers')
+const { createPiToken, waitFor } = require('../helpers')
 
 describe('PiTokenMock', () => {
   let piToken
