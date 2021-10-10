@@ -28,17 +28,18 @@ describe('PiToken', () => {
   describe('setMintPerBlock', async () => {
     it('Should change community and accumulate on 2nd change', async () => {
       await waitFor(piToken.addMinter(owner.address))
-      // console.log(`Current block: ${await getBlock()}`)
+
+      expect(await piToken.communityLeftToMint()).to.be.equal(0)
       await waitFor(piToken.initRewardsOn(await getBlock()))
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
-      // console.log("Community a 0.5")
+
       await waitFor(piToken.setCommunityMintPerBlock(0.2e18 + ''))
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
 
       await mineNTimes(1)
 
       expect(await piToken.communityLeftToMint()).to.be.equal(0.2e18 + '')
-      // console.log("Community a 1.0")
+
       await waitFor(piToken.setCommunityMintPerBlock(1e18 + ''))
       // Accumulated 1e18 (2 blocks * 0.5)
       expect(await piToken.communityLeftToMint()).to.be.equal(0.4e18 + '')

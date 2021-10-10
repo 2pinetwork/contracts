@@ -371,6 +371,10 @@ describe('ArchimedesAPI', () => {
     it('Should revert without shares', async () => {
       expect(archimedes.withdraw(0, alice.address, 10)).to.be.revertedWith('withdraw: not sufficient found')
     })
+
+    it('should be reverted for non-handler call', async () => {
+      expect(archimedes.connect(bob).withdraw(0, bob.address, 10)).to.be.revertedWith('Only handler')
+    })
   })
 
   describe('getPricePerFullShare', async () => {

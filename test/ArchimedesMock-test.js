@@ -103,6 +103,14 @@ describe('ArchimedesMock', () => {
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
         ownerBalance.add(balance)
       )
+
+      // Call again without change
+      await waitFor(archimedes.redeemStuckedPiTokens())
+
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        ownerBalance.add(balance)
+      )
     })
 
     it('should revert with community left to mint', async () => {
