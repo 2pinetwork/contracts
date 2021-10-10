@@ -8,7 +8,7 @@ const {
   impersonateContract,
   waitFor,
   zeroAddress,
-} = require('./helpers')
+} = require('../helpers')
 
 describe('Controller Aave Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
@@ -418,7 +418,7 @@ describe('Controller Aave Strat', () => {
 
     it('should be reverted for max perf fee', async () => {
       await expect(strat.setPerformanceFee(100000)).to.be.revertedWith(
-        'Fee is greater than expected'
+        "Can't be greater than max"
       )
     })
 

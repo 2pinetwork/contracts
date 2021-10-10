@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor, MAX_UINT } = require('./helpers')
+const { createPiToken, deploy, waitFor, MAX_UINT } = require('../helpers')
 
 describe('FeeManager setup', () => {
   let piToken

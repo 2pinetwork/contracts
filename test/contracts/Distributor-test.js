@@ -1,4 +1,4 @@
-const { toNumber, createPiToken, waitFor, deploy } = require('./helpers')
+const { toNumber, createPiToken, waitFor, deploy } = require('../helpers')
 
 describe('Distributor setup', () => {
   let alice

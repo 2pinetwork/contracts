@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor, toNumber } = require('./helpers')
+const { createPiToken, deploy, waitFor, toNumber } = require('../helpers')
 
 describe('PiVault', () => {
   let tomorrow
