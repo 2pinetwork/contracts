@@ -119,7 +119,11 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         _updateCurrentTranch();
     }
 
-    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal view {
+    // This function checks for "most of revert scenarios" to prevent more minting than
+    // expected. It's not 100% accurate (but it's better than nothing), because
+    // it doesn't differenciate a limit for api and community ratePerBlock.
+    // The check joins the max amount to mint both rates in the same block.
+    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
@@ -131,11 +135,23 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         // Get the max mintable supply for the current tranche
         uint _maxMintableSupply = _leftToMintInBlock(apiMintPerBlock + communityMintPerBlock);
 
-        // For the max mintable supply, we rest the "already minted"
+        // For the max mintable supply for current block, we rest the "already minted".
+        // NOTE: this rest shouldn't be "out of bounds" because of the tranch logic and
+        // the maxMintableSupply is calculated with both ratePerBlock .
         _maxMintableSupply -= _mintedInTranch();
 
-        // Check that "supply to be minted" is less or equal to max mintable in this tranch
-        require(_supply <= _maxMintableSupply, "Can't mint more than expected");
+        // if the _supply (mint amount) is less than the expected "everything is fine"
+        if (_supply <= _maxMintableSupply) {
+            return;
+        } else {
+            // If the supply is greater than expected, then check for the extra reserve
+            uint rest = _supply - _maxMintableSupply;
+
+            // If the reserve is not enough, the tx should be reverted
+            require(rest <= restFromLastTranch, "Can't mint more than expected");
+            // drop the minted "extra" amount from history reserve
+            restFromLastTranch -= rest;
+        }
     }
 
     function communityMint(address _receiver, uint _supply) external {
@@ -173,16 +189,18 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
         if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) {
             return 0;
         } else {
-            return ((blockNumber() - tranchesBlock) * ratePerBlock) + restFromLastTranch;
+            return ((blockNumber() - tranchesBlock) * ratePerBlock);
         }
     }
 
     function _leftToMint(uint ratePerBlock) internal view returns (uint) {
         uint totalLeft = MAX_SUPPLY - self().totalSupply();
-        uint leftToMint = _leftToMintInBlock(ratePerBlock);
-        uint _alreadyMinted = _mintedInTranch();
+        uint leftToMint = _leftToMintInBlock(ratePerBlock) + restFromLastTranch;
 
-        if (_alreadyMinted <= leftToMint) { leftToMint -= _alreadyMinted; }
+        // This could be less because of the different ratePerBlock api/community
+        if (leftToMint <= _mintedInTranch()) { return 0; }
+
+        leftToMint -= _mintedInTranch();
 
         return (totalLeft < leftToMint) ? totalLeft : leftToMint;
     }

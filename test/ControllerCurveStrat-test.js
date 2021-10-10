@@ -390,7 +390,7 @@ describe('Controller Curve Strat', () => {
 
     it('should be reverted for max perf fee', async () => {
       await expect(strat.setPerformanceFee(100000)).to.be.revertedWith(
-        'Fee is greater than expected'
+        "Can't be greater than max"
       )
     })
 

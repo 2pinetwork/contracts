@@ -1,8 +1,4 @@
-const {
-  toNumber, createPiToken,
-  waitFor
-} = require('./helpers')
-const { MINT_DATA } = require('./contract_constants')
+const { createPiToken, waitFor } = require('./helpers')
 
 describe('PiTokenMock', () => {
   let piToken
@@ -28,13 +24,11 @@ describe('PiTokenMock', () => {
 
     expect(await piToken.totalSupply()).to.equal(INITIAL_SUPPLY)
     expect(await piToken.balanceOf(owner.address)).to.equal(INITIAL_SUPPLY)
+
+    await piToken.addMinter(bob.address)
   })
 
   describe('Minting', async () => {
-    beforeEach(async () => {
-      await piToken.addMinter(bob.address)
-    })
-
     it('Should only mint until MAX SUPPLY', async () => {
       await piToken.initRewardsOn(1);
       await piToken.setBlockNumber(1e10) // stupid amount of blocks =)
@@ -48,6 +42,33 @@ describe('PiTokenMock', () => {
       await expect(
         piToken.connect(bob).communityMint(bob.address, 1)
       ).to.be.revertedWith('Mint capped to 62.8M')
+    })
+
+    it('Should not mint same for same block', async () => {
+      const MAX_MINT_PER_BLOCK = (await piToken.apiMintPerBlock()).add(
+        await piToken.communityMintPerBlock()
+      )
+
+      await piToken.initRewardsOn(1)
+
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(0)
+
+      await waitFor(piToken.setBlockNumber(2))
+      await waitFor(piToken.connect(bob).communityMint(bob.address, MAX_MINT_PER_BLOCK))
+
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(MAX_MINT_PER_BLOCK)
+
+      // Mint in the same block
+      await expect(
+        piToken.connect(bob).communityMint(bob.address, MAX_MINT_PER_BLOCK)
+      ).to.be.revertedWith("Can't mint more than expected")
+
+      // Mint in the same block just 1
+      await expect(
+        piToken.connect(bob).communityMint(bob.address, 1)
+      ).to.be.revertedWith("Can't mint more than expected")
+
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(MAX_MINT_PER_BLOCK)
     })
   })
 })
