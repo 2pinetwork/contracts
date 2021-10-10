@@ -142,7 +142,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
-        require(_fee <= MAX_PERFORMANCE_FEE, "Fee is greater than expected");
+        require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 
         performanceFee = _fee;

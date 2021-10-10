@@ -32,30 +32,32 @@ describe('PiToken', () => {
       await waitFor(piToken.initRewardsOn(await getBlock()))
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
       // console.log("Community a 0.5")
-      await waitFor(piToken.setCommunityMintPerBlock(0.5e18 + ''))
+      await waitFor(piToken.setCommunityMintPerBlock(0.2e18 + ''))
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
 
       await mineNTimes(1)
 
-      expect(await piToken.communityLeftToMint()).to.be.equal(0.5e18 + '')
+      expect(await piToken.communityLeftToMint()).to.be.equal(0.2e18 + '')
       // console.log("Community a 1.0")
       await waitFor(piToken.setCommunityMintPerBlock(1e18 + ''))
       // Accumulated 1e18 (2 blocks * 0.5)
-      expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
-
-      const balance = await piToken.balanceOf(owner.address)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0.4e18 + '')
 
       await expect(
-        piToken.communityMint(owner.address, 2.1e18 + '')
+        piToken.communityMint(owner.address, 1.41e18 + '')
       ).to.be.revertedWith(
         "Can't mint more than expected"
       )
 
-      await waitFor(piToken.communityMint(owner.address, 2.0e18 + ''))
+      // Mint only 2 blocks
+      await waitFor(piToken.communityMint(owner.address, 0.2e18 + ''))
 
-      expect(await piToken.balanceOf(owner.address)).to.be.equal(balance.add(2.0e18 + ''))
+      expect(await piToken.communityLeftToMint()).to.be.equal(2.2e18 + '')
+      // Mint everything + reserve
+      await waitFor(piToken.communityMint(owner.address, 3.0e18 + ''))
 
-      expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
+      // After mint everything in the block should be left 0
+      expect(await piToken.communityLeftToMint()).to.be.equal(0)
     })
 
     it('Should change community and accumulate on api change', async () => {

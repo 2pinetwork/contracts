@@ -5,16 +5,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 contract BridgedPiToken is AccessControl {
     using SafeERC20 for IERC20;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-
-    // Rates to mint per block
-    uint public communityPerBlock;
-    uint public apiPerBlock;
 
     IERC20 public immutable piToken;
 
@@ -49,13 +45,13 @@ contract BridgedPiToken is AccessControl {
 
     function setCommunityMintPerBlock(uint _rate) external onlyAdmin {
         _beforeChangeMint();
-        communityPerBlock = _rate;
+        communityMintPerBlock = _rate;
         _updateCurrentTranch();
     }
 
     function setApiMintPerBlock(uint _rate) external onlyAdmin {
         _beforeChangeMint();
-        apiPerBlock = _rate;
+        apiMintPerBlock = _rate;
         _updateCurrentTranch();
     }
 
@@ -88,7 +84,11 @@ contract BridgedPiToken is AccessControl {
         return piToken.balanceOf(address(this));
     }
 
-    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal view {
+    // This function checks for "most of revert scenarios" to prevent more minting than
+    // expected. It's not 100% accurate (but it's better than nothing), because
+    // it doesn't differenciate a limit for api and community ratePerBlock.
+    // The check joins the max amount to mint both rates in the same block.
+    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
@@ -98,20 +98,30 @@ contract BridgedPiToken is AccessControl {
         require(_supply <= available(), "Can't mint more than available");
 
         // Get the max mintable supply for the current tranche
-        uint _maxMintableSupply = (blockNumber() - tranchesBlock) * (apiMintPerBlock + communityMintPerBlock) + restFromLastTranch;
+        uint _maxMintableSupply = _leftToMintInBlock(apiMintPerBlock + communityMintPerBlock);
 
-        // For the max mintable supply, we rest the "already minted"
-        _maxMintableSupply -= (totalMinted - mintedForCurrentTranch);
+        // For the max mintable supply for current block, we rest the "already minted".
+        // NOTE: thanks to the tranch logic this rest shouldn't be "out of bounds".
+        _maxMintableSupply -= _mintedInTranch();
 
-        // Check that "supply to be minted" is less or equal to max mintable in this tranch
-        require(_supply <= _maxMintableSupply, "Can't mint more than expected");
+        // if the _supply (mint amount) is less than the expected "everything is fine"
+        if (_supply <= _maxMintableSupply) {
+            return;
+        } else {
+            // If the supply is greater than expected, then check for the extra reserve
+            uint rest = _supply - _maxMintableSupply;
+
+            // If the reserve is not enough, the tx should be reverted
+            require(rest <= restFromLastTranch, "Can't mint more than expected");
+            // drop the minted "extra" amount from history reserve
+            restFromLastTranch -= rest;
+        }
     }
 
     // This function is called mint for contract compatibility but it doesn't mint,
     // it only transfers piTokens
     function communityMint(address _receiver, uint _supply) external {
         _checkMintFor(_receiver, _supply, communityMintPerBlock);
-        require(_supply <= communityLeftToMint(), "Can't mint more than available");
 
         piToken.safeTransfer(_receiver, _supply);
         // emulate totalSupply
@@ -120,31 +130,48 @@ contract BridgedPiToken is AccessControl {
 
     function apiMint(address _receiver, uint _supply) external {
         _checkMintFor(_receiver, _supply, apiMintPerBlock);
-        require(_supply <= apiLeftToMint(), "Can't mint more than available");
 
         piToken.safeTransfer(_receiver, _supply);
         // emulate totalSupply
         totalMinted += _supply;
     }
 
-    function communityLeftToMint() public view returns (uint) {
-        if (apiMintPerBlock <= 0 && communityMintPerBlock > 0) {
-            return available();
-        } else if (apiPerBlock > 0 && communityMintPerBlock > 0) {
-            return (available() + communityMintPerBlock) / (apiMintPerBlock + communityMintPerBlock);
-        } else {
+    function _mintedInTranch() internal view returns (uint) {
+        return totalMinted - mintedForCurrentTranch;
+    }
+
+    function _leftToMintInBlock(uint ratePerBlock) internal view returns (uint) {
+        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) {
             return 0;
+        } else {
+            return ((blockNumber() - tranchesBlock) * ratePerBlock);
         }
     }
 
+    function _leftToMint(uint ratePerBlock) internal view returns (uint) {
+        if (ratePerBlock <= 0) { return 0; }
+
+        uint totalLeft = available();
+        uint leftToMint = _leftToMintInBlock(ratePerBlock) + restFromLastTranch;
+
+        // This could be less because of the different ratePerBlock api/community
+        if (leftToMint <= _mintedInTranch()) { return 0; }
+
+        leftToMint -= _mintedInTranch();
+
+        return (totalLeft < leftToMint) ? totalLeft : leftToMint;
+    }
+
+    function communityLeftToMint() public view returns (uint) {
+        return _leftToMint(communityMintPerBlock);
+    }
+
     function apiLeftToMint() public view returns (uint) {
-        if (communityMintPerBlock <= 0 && apiMintPerBlock > 0) {
-            return available();
-        } else if (apiPerBlock > 0 && communityMintPerBlock > 0) {
-            return (available() + apiMintPerBlock) / (apiMintPerBlock + communityMintPerBlock);
-        } else {
-            return 0;
-        }
+        return _leftToMint(apiMintPerBlock);
+    }
+
+    function balanceOf(address account) public view returns (uint) {
+        return piToken.balanceOf(account);
     }
 
     // Implemented to be mocked in tests
