@@ -295,7 +295,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         borrowRate = _borrowRate;
         borrowDepth = _borrowDepth;
 
-        _leverage();
+        if (wantBalance() > 0) { _leverage(); }
     }
 
     // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
