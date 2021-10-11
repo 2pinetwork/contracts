@@ -33,7 +33,7 @@ const setWbtcBalanceFor = async (address, amount) => {
 const createPiTokenExchangePair = async () => {
   const currentBlock = await hre.ethers.provider.getBlock()
   const factoryAbi   = require('./abis/uniswap-factory.json')
-  const factory      = await ethers.getContractAt(factoryAbi, '0xE7Fb3e833eFE5F9c441105EB65Ef8b261266423B')
+  const factory      = await ethers.getContractAt(factoryAbi, '0xc35DADB65012eC5796536bD9864eD8773aBc74C4')
   const allowance    = '1' + '0'.repeat(59)
   const piTokens     = '942000' + '0'.repeat(18)
   const wmaticTokens = '100' + '0'.repeat(parseInt(await global.WMATIC.decimals(), 10), 10)
@@ -44,7 +44,12 @@ const createPiTokenExchangePair = async () => {
   await global.WMATIC.connect(owner).approve(global.exchange.address, allowance)
   await global.PiToken.connect(owner).approve(global.exchange.address, allowance)
 
-  await factory.createPair(global.WMATIC.address, global.PiToken.address)
+  await (
+    await factory.createPair(global.WMATIC.address, global.PiToken.address)
+  ).wait()
+
+  const pair = await factory.getPair(global.WMATIC.address, global.PiToken.address)
+
   await (
     await global.exchange.addLiquidity(
       global.WMATIC.address,
@@ -57,6 +62,8 @@ const createPiTokenExchangePair = async () => {
       currentBlock.timestamp + 600
     )
   ).wait()
+
+  return pair
 }
 
 const setupNeededTokens = async () => {
@@ -73,8 +80,8 @@ const setupNeededTokens = async () => {
   // DEPLOY exchange
   console.log('Fetching Exchange')
   const uniswapAbi = require('./abis/uniswap-router.json')
-  global.exchange = await ethers.getContractAt(uniswapAbi, '0xA102072A4C07F06EC3B4900FDC4C7B80b6c57429')
-  expect(global.exchange.address).to.be.equal('0xA102072A4C07F06EC3B4900FDC4C7B80b6c57429')
+  global.exchange = await ethers.getContractAt(uniswapAbi, '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506')
+  expect(global.exchange.address).to.be.equal('0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506')
 
   // Aave complement contracts
   console.log('Fetching Aave')
