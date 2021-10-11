@@ -33,6 +33,13 @@ receive all the tokens and distribute like before.
 Instead of make a previous calculation off-chain and send a ratio to harvest strategies, the contract
 call an on-chain oracle and calculate that in the same way (with some slippage).
 
+## Test
+`yarn install` before anything
+- `yarn test` to run only unit tests
+- `yarn itest` to run only integration tests (ALCHEMY_API_KEY env needed)
+- `yarn full_test` to run unit + integration tests (ALCHEMY_API_KEY env needed)
+- `yarn ptest` to run only unit tests in parallel (it fails sometimes ?)
+
 ## Contracts
 ![Contracts](https://github.com/2pifinance/contracts/blob/audit-sept/contracts.jpg?raw=true)
 
