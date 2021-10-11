@@ -170,7 +170,7 @@ describe('ArchimedesAPI', () => {
   })
 
   describe('FullFlow', async () => {
-    it.skip('Full flow with 2 accounts && just 1 referral', async () => {
+    it.only('Full flow with 2 accounts && just 1 referral', async () => {
       const pair = await createPiTokenExchangePair()
 
       let referralPaid = 0
@@ -209,7 +209,7 @@ describe('ArchimedesAPI', () => {
       await waitFor(archimedes.updatePool(0))
 
 
-      const piPerBlock = toNumber(await archimedes.piTokenPerBlock())
+      const piPerBlock = await archimedes.piTokenPerBlock()
 
       await balanceEqualTo(piToken, archimedes, piPerBlock)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
@@ -231,19 +231,48 @@ describe('ArchimedesAPI', () => {
       await balanceEqualTo(piToken, archimedes, 0)
       await balanceEqualTo(piToken, bob, 0)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      await balanceEqualTo(controller, bob, bobBalance.add(1))
+      // Get swapped-shares
+
+      // 2 blocks
+      const swappedPi = piPerBlock.mul(2)
+
+      // PiToken / WMatic => 942000 / 100
+      const swappedWant = swappedPi.mul(100).div(942000)
+
+      const slippageRatio = await archimedes.swap_slippage_ratio()
+      const slippagePrecision = await archimedes.RATIO_PRECISION()
+      const slippage = slippagePrecision.sub(slippageRatio)
+
+      expect(await controller.balanceOf(bob.address)).to.be.within(
+        bobBalance.add(swappedWant).mul(slippage).div(slippagePrecision),
+        bobBalance.add(swappedWant),
+      )
 
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
+      // 1% of already minted
+      const refSwappedPi = swappedPi.mul(
+        await archimedes.referralCommissionRate()
+      ).div(
+        await archimedes.COMMISSION_RATE_PRECISION()
+      )
+
+      // PiToken / WMatic => 942000 / 100
+      const refSwappedWant = refSwappedPi.mul(100).div(942000)
+
       // Rewards are swapped and transferred to the wallet
       await balanceEqualTo(piToken, alice, 0)
-      await balanceEqualTo(WMATIC, alice, 1)
+      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
+        refSwappedWant.mul(slippage).div(slippagePrecision),
+        refSwappedWant
+      )
 
       let aliceBalance = await controller.balanceOf(alice.address)
 
       // Work with Alice
-      aliceBalance = aliceBalance.add(9)
       await waitFor(archimedes.deposit(0, alice.address, 9, zeroAddress))
+      // The pricePerShare >1 gives less shares on deposit
+      aliceBalance = aliceBalance.add(8)
 
       await balanceEqualTo(piToken, archimedes, piPerBlock)
       await balanceEqualTo(piToken, alice, 0)
@@ -253,8 +282,13 @@ describe('ArchimedesAPI', () => {
       // Should not give to owner the referal when alice already deposited without one
       // deposit method claim the pending rewards, so the last rewards block
       // are half for the alice and the other half for bob (2º call)
-      aliceBalance = aliceBalance.add(10) // 9 + 1 of swap
 
+      // REVISAR DE ACA PARA ADELANTE
+      return 'SKIP'
+
+      // The pricePerShare >1 gives less shares on deposit
+      // 8 shares + swapped
+      aliceBalance = aliceBalance.add(8 + swappedWant)
       let nextReward = (
         piPerBlock
         * (await controller.balanceOf(alice.address))
@@ -264,6 +298,7 @@ describe('ArchimedesAPI', () => {
       exchBalance = exchBalance.plus('' + nextReward)
 
       await waitFor(archimedes.deposit(0, alice.address, 9, owner.address))
+
 
       await balanceEqualTo(WMATIC, alice, 1) // same than before
       await balanceEqualTo(controller, alice, aliceBalance) // 9 + 9 + 1 reward
