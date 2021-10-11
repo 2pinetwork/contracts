@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
@@ -269,4 +269,12 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     function blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
+
+    // Just to ignore SuperFluid inheritance functions
+    // function initialize(string calldata /*name*/, string calldata /*symbol*/, uint /*initialSupply*/) external override {
+    //     revert("Not implemented");
+    // }
+    // function initializeProxy(address /*initialAddress*/) external {
+    //     revert("Not implemented");
+    // }
 }
