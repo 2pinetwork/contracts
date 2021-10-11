@@ -14,18 +14,22 @@ contract BridgedPiToken is AccessControl {
 
     IERC20 public immutable piToken;
 
-    // First block in tranch
-    uint public tranchesBlock;
-    // Total "minted" in current tranch
-    uint public mintedForCurrentTranch;
-    // emulate totalSupply
-    uint public totalMinted;
-    // Last tranch rest accumulator
-    uint internal restFromLastTranch;
-
-    // Rates to "mint/transfer" per block
+    // Rates to mint per block
     uint public communityMintPerBlock;
     uint public apiMintPerBlock;
+
+    // Keep track in which block started the current tranche
+    uint internal tranchesBlock;
+
+    // Keep track of minted per type for current tranch
+    uint internal apiMintedForCurrentTranch;
+    uint internal communityMintedForCurrentTranch;
+    // Keep track of un-minted per type for old tranches
+    uint internal apiReserveFromOldTranches;
+    uint internal communityReserveFromOldTranches;
+
+    uint internal API_TYPE = 0;
+    uint internal COMMUNITY_TYPE = 1;
 
 
     constructor(IERC20 _piToken) {
@@ -43,29 +47,27 @@ contract BridgedPiToken is AccessControl {
         tranchesBlock = _blockNumber;
     }
 
+    // Before change api or community RatePerBlock or before mintForMultiChain is called
+    // Calculate and accumulate the un-minted amounts.
+    function _beforeChangeMintRate() internal {
+        if (tranchesBlock > 0 && blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
+            // Accumulate both proportions to keep track of "un-minted" amounts
+            apiReserveFromOldTranches += _leftToMintForCurrentBlock(API_TYPE);
+            communityReserveFromOldTranches += _leftToMintForCurrentBlock(COMMUNITY_TYPE);
+        }
+    }
+
     function setCommunityMintPerBlock(uint _rate) external onlyAdmin {
-        _beforeChangeMint();
+        _beforeChangeMintRate();
         communityMintPerBlock = _rate;
         _updateCurrentTranch();
     }
 
     function setApiMintPerBlock(uint _rate) external onlyAdmin {
-        _beforeChangeMint();
+        _beforeChangeMintRate();
         apiMintPerBlock = _rate;
         _updateCurrentTranch();
     }
-
-    function _beforeChangeMint() internal {
-        if (tranchesBlock > 0 && blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
-            uint _maxMintableSupply = (blockNumber() - tranchesBlock) * (apiMintPerBlock + communityMintPerBlock);
-
-            // For the max mintable supply, we rest the "already minted"
-            _maxMintableSupply -= (totalMinted - mintedForCurrentTranch);
-
-            restFromLastTranch += _maxMintableSupply;
-        }
-    }
-
 
     function _updateCurrentTranch() internal {
         // Update variables to making calculations from this moment
@@ -73,8 +75,11 @@ contract BridgedPiToken is AccessControl {
             tranchesBlock = blockNumber();
         }
 
-        mintedForCurrentTranch = totalMinted;
+        // mintedForCurrentTranch = self().totalSupply();
+        apiMintedForCurrentTranch = 0;
+        communityMintedForCurrentTranch = 0;
     }
+
 
     function addMinter(address newMinter) external onlyAdmin {
         _setupRole(MINTER_ROLE, newMinter);
@@ -84,91 +89,108 @@ contract BridgedPiToken is AccessControl {
         return piToken.balanceOf(address(this));
     }
 
-    // This function checks for "most of revert scenarios" to prevent more minting than
-    // expected. It's not 100% accurate (but it's better than nothing), because
-    // it doesn't differenciate a limit for api and community ratePerBlock.
-    // The check joins the max amount to mint both rates in the same block.
-    function _checkMintFor(address _receiver, uint _supply, uint _ratePerBlock) internal {
+    // This function checks for "most of revert scenarios" to prevent more minting than expected.
+    // And keep track of minted / un-minted amounts
+    function _checkMintFor(address _receiver, uint _supply, uint _type) internal {
         require(hasRole(MINTER_ROLE, msg.sender), "Only minters");
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
         require(tranchesBlock > 0, "Rewards not initialized");
         require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
+        require(available() >= _supply, "Can't mint more than available");
+
+        uint _ratePerBlock = communityMintPerBlock;
+        if (_type == API_TYPE) { _ratePerBlock = apiMintPerBlock; }
+
         require(_ratePerBlock > 0, "Mint ratio is 0");
-        require(_supply <= available(), "Can't mint more than available");
 
         // Get the max mintable supply for the current tranche
-        uint _maxMintableSupply = _leftToMintInBlock(apiMintPerBlock + communityMintPerBlock);
+        uint _maxMintableSupply = _leftToMintForCurrentBlock(_type);
 
-        // For the max mintable supply for current block, we rest the "already minted".
-        // NOTE: thanks to the tranch logic this rest shouldn't be "out of bounds".
-        _maxMintableSupply -= _mintedInTranch();
+        // Create other variable to add to the MintedForCurrentTranch
+        uint _toMint = _supply;
 
-        // if the _supply (mint amount) is less than the expected "everything is fine"
-        if (_supply <= _maxMintableSupply) {
-            return;
+        // if the _supply (mint amount) is less than the expected "everything is fine" but
+        // if its greater we have to check the "ReserveFromOldTranches"
+        if (_toMint > _maxMintableSupply) {
+            // fromReserve is the amount that will be "minted" from the old tranches reserve
+            uint fromReserve = _toMint - _maxMintableSupply;
+
+            // Drop the "reserve" amount to track only the "real" tranch minted amount
+            _toMint -= fromReserve;
+
+            // Check reserve for type
+            if (_type == API_TYPE) {
+                require(fromReserve <= apiReserveFromOldTranches, "Can't mint more than expected");
+
+                // drop the minted "extra" amount from old tranches reserve
+                apiReserveFromOldTranches -= fromReserve;
+            } else {
+                require(fromReserve <= communityReserveFromOldTranches, "Can't mint more than expected");
+
+                // drop the minted "extra" amount from history reserve
+                communityReserveFromOldTranches -= fromReserve;
+            }
+        }
+
+        if (_type == API_TYPE) {
+            apiMintedForCurrentTranch += _toMint;
         } else {
-            // If the supply is greater than expected, then check for the extra reserve
-            uint rest = _supply - _maxMintableSupply;
-
-            // If the reserve is not enough, the tx should be reverted
-            require(rest <= restFromLastTranch, "Can't mint more than expected");
-            // drop the minted "extra" amount from history reserve
-            restFromLastTranch -= rest;
+            communityMintedForCurrentTranch += _toMint;
         }
     }
 
     // This function is called mint for contract compatibility but it doesn't mint,
     // it only transfers piTokens
     function communityMint(address _receiver, uint _supply) external {
-        _checkMintFor(_receiver, _supply, communityMintPerBlock);
+        _checkMintFor(_receiver, _supply, COMMUNITY_TYPE);
 
         piToken.safeTransfer(_receiver, _supply);
-        // emulate totalSupply
-        totalMinted += _supply;
     }
 
     function apiMint(address _receiver, uint _supply) external {
-        _checkMintFor(_receiver, _supply, apiMintPerBlock);
+        _checkMintFor(_receiver, _supply, API_TYPE);
 
         piToken.safeTransfer(_receiver, _supply);
-        // emulate totalSupply
-        totalMinted += _supply;
     }
 
-    function _mintedInTranch() internal view returns (uint) {
-        return totalMinted - mintedForCurrentTranch;
+    function _leftToMintForCurrentBlock(uint _type) internal view returns (uint) {
+        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) { return 0; }
+
+       uint left = blockNumber() - tranchesBlock;
+
+       if (_type == API_TYPE) {
+           left *= apiMintPerBlock;
+           left -= apiMintedForCurrentTranch;
+       } else {
+           left *= communityMintPerBlock;
+           left -= communityMintedForCurrentTranch;
+       }
+
+       return left;
     }
 
-    function _leftToMintInBlock(uint ratePerBlock) internal view returns (uint) {
-        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) {
-            return 0;
-        } else {
-            return ((blockNumber() - tranchesBlock) * ratePerBlock);
-        }
-    }
-
-    function _leftToMint(uint ratePerBlock) internal view returns (uint) {
-        if (ratePerBlock <= 0) { return 0; }
-
+    function _leftToMint(uint _type) internal view returns (uint) {
         uint totalLeft = available();
-        uint leftToMint = _leftToMintInBlock(ratePerBlock) + restFromLastTranch;
+        if (totalLeft <= 0) { return 0; }
 
-        // This could be less because of the different ratePerBlock api/community
-        if (leftToMint <= _mintedInTranch()) { return 0; }
+        // Get the max mintable supply for the current tranche
+        uint _maxMintableSupply = _leftToMintForCurrentBlock(_type);
 
-        leftToMint -= _mintedInTranch();
+        // Add the _type accumulated un-minted supply
+        _maxMintableSupply += (_type == API_TYPE ? apiReserveFromOldTranches : communityReserveFromOldTranches);
 
-        return (totalLeft < leftToMint) ? totalLeft : leftToMint;
+        return (totalLeft <= _maxMintableSupply ? totalLeft : _maxMintableSupply);
     }
 
     function communityLeftToMint() public view returns (uint) {
-        return _leftToMint(communityMintPerBlock);
+        return _leftToMint(COMMUNITY_TYPE);
     }
 
     function apiLeftToMint() public view returns (uint) {
-        return _leftToMint(apiMintPerBlock);
+        return _leftToMint(API_TYPE);
     }
+
 
     function balanceOf(address account) public view returns (uint) {
         return piToken.balanceOf(account);

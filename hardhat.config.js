@@ -19,21 +19,25 @@ const integrationNetworkConfig = {
 }
 
 const mochaSettings = JSON.parse(fs.readFileSync('.mocharc.json'))
-if (isIntegration)
-  mochaSettings.timeout = 80000
+const preProcessSettings = {}
 
-const transformLine = (hre, line) => {
-  if (isIntegration) {
-    let newLine = line
+const transformLine = (_hre, line) => {
+  let newLine = line
 
-    for (let [string, replacement] of Object.entries(stringReplacements)) {
-      newLine = newLine.replace(string, replacement)
-    }
-
-    return newLine
+  for (let [string, replacement] of Object.entries(stringReplacements)) {
+    newLine = newLine.replace(string, replacement)
   }
 
-  return line
+  return newLine
+}
+
+if (isIntegration) {
+  mochaSettings.timeout = 80000
+
+  // Change contract address test <=> production
+  preProcessSettings.eachLine = hre => ({
+    transform: line => transformLine(hre, line)
+  })
 }
 
 module.exports = {
@@ -96,9 +100,5 @@ module.exports = {
     tests: isIntegration ? './test/integration' : './test/contracts'
   },
   mocha:      mochaSettings,
-  preprocess: {
-    eachLine: hre => ({
-      transform: line => transformLine(hre, line)
-    })
-  }
+  preprocess: preProcessSettings
 }

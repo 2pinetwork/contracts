@@ -507,4 +507,43 @@ describe('ArchimedesAPI', () => {
       )
     })
   })
+
+  describe('updatePool', async () => {
+    it('should be called and update lastRewardBlock without shares', async () => {
+      await mineNTimes((await archimedes.startBlock()).sub(await getBlock()).add(1))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      const lastReward = await archimedes.poolInfo(0)
+
+      await waitFor(WMATIC.connect(owner).deposit({ value: 100 }))
+      await waitFor(WMATIC.connect(owner).approve(archimedes.address, 10))
+      // deposit => updatePool
+      await waitFor(archimedes.deposit(0, owner.address, 10, zeroAddress))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      expect(
+        (await archimedes.poolInfo(0)).lastRewardBlock
+      ).to.be.above(lastReward.lastRewardBlock)
+    })
+
+    it('should harvest nothing without weighing', async () => {
+      await waitFor(archimedes.changePoolWeighing(0, 0, true))
+
+      await mineNTimes((await archimedes.startBlock()).sub(await getBlock()).add(1))
+
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      const lastReward = await archimedes.poolInfo(0)
+
+      await waitFor(WMATIC.connect(owner).deposit({ value: 100 }))
+      await waitFor(WMATIC.connect(owner).approve(archimedes.address, 10))
+      // deposit => updatePool
+      await waitFor(archimedes.deposit(0, owner.address, 10, zeroAddress))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      expect(
+        (await archimedes.poolInfo(0)).lastRewardBlock
+      ).to.be.above(lastReward.lastRewardBlock)
+    })
+  })
 })

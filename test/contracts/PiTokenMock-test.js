@@ -45,9 +45,7 @@ describe('PiTokenMock', () => {
     })
 
     it('Should not mint same for same block', async () => {
-      const MAX_MINT_PER_BLOCK = (await piToken.apiMintPerBlock()).add(
-        await piToken.communityMintPerBlock()
-      )
+      const MAX_MINT_PER_BLOCK = await piToken.communityMintPerBlock()
 
       await piToken.initRewardsOn(1)
 

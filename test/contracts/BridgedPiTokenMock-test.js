@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor } = require('./helpers')
+const { createPiToken, deploy, waitFor } = require('../helpers')
 
 describe('BridgedPiTokenMock', () => {
   let piToken
@@ -31,22 +31,20 @@ describe('BridgedPiTokenMock', () => {
 
   describe('Minting', async () => {
     it('Should not mint same for same block', async () => {
-      const MAX_MINT_PER_BLOCK = (await bridgedPiToken.apiMintPerBlock()).add(
-        await bridgedPiToken.communityMintPerBlock()
-      )
+      const communityPerBlock = await bridgedPiToken.communityMintPerBlock()
 
       await bridgedPiToken.initRewardsOn(1)
 
       expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(0)
 
       await waitFor(bridgedPiToken.setBlockNumber(2))
-      await waitFor(bridgedPiToken.connect(bob).communityMint(bob.address, MAX_MINT_PER_BLOCK))
+      await waitFor(bridgedPiToken.connect(bob).communityMint(bob.address, communityPerBlock))
 
-      expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(MAX_MINT_PER_BLOCK)
+      expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(communityPerBlock)
 
       // Mint in the same block
       await expect(
-        bridgedPiToken.connect(bob).communityMint(bob.address, MAX_MINT_PER_BLOCK)
+        bridgedPiToken.connect(bob).communityMint(bob.address, communityPerBlock)
       ).to.be.revertedWith("Can't mint more than expected")
 
       // Mint in the same block just 1
@@ -54,11 +52,24 @@ describe('BridgedPiTokenMock', () => {
         bridgedPiToken.connect(bob).communityMint(bob.address, 1)
       ).to.be.revertedWith("Can't mint more than expected")
 
+      expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(communityPerBlock)
+
+      let apiPerBlock = await bridgedPiToken.apiMintPerBlock()
+
+      await waitFor(
+        bridgedPiToken.connect(bob).apiMint(bob.address, apiPerBlock)
+      )
+
+      await expect(
+        bridgedPiToken.connect(bob).apiMint(bob.address, apiPerBlock)
+      ).to.be.revertedWith("Can't mint more than expected")
       await expect(
         bridgedPiToken.connect(bob).apiMint(bob.address, 1)
       ).to.be.revertedWith("Can't mint more than expected")
 
-      expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(MAX_MINT_PER_BLOCK)
+      expect(await bridgedPiToken.balanceOf(bob.address)).to.be.equal(
+        communityPerBlock.add(apiPerBlock)
+      )
     })
   })
 })

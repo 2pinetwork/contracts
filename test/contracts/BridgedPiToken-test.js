@@ -1,7 +1,7 @@
 const {
   deploy, toNumber, expectedOnlyAdmin, createPiToken,
   getBlock, zeroAddress, waitFor, mineNTimes
-} = require('./helpers')
+} = require('../helpers')
 
 describe('BridgedPiToken', () => {
   let bridgedPiToken
@@ -30,11 +30,54 @@ describe('BridgedPiToken', () => {
       await waitFor(bridgedPiToken.addMinter(owner.address))
 
       await waitFor(bridgedPiToken.initRewardsOn(await getBlock()))
-      await waitFor(bridgedPiToken.setCommunityMintPerBlock(100e18 + ''))
+      await waitFor(bridgedPiToken.setCommunityMintPerBlock(101e18 + ''))
+
+      await mineNTimes(1)
 
       await expect(bridgedPiToken.communityMint(owner.address, 101e18 + '')).to.be.revertedWith(
         "Can't mint more than available"
       )
+    })
+
+    it('Should change api and accumulate on 2nd change', async () => {
+      await waitFor(bridgedPiToken.addMinter(owner.address))
+
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
+
+      await waitFor(bridgedPiToken.initRewardsOn(await getBlock()))
+
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
+
+      await waitFor(bridgedPiToken.setApiMintPerBlock(0.2e18 + ''))
+      expect(await bridgedPiToken.apiMintPerBlock()).to.be.equal(0.2e18 + '')
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0) // same block
+
+      await mineNTimes(1)
+
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0.2e18 + '')
+      await waitFor(bridgedPiToken.setApiMintPerBlock(1e18 + ''))
+      // Accumulated 0.4e18 (2 blocks * 0.2)
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0.4e18 + '')
+
+      // try to mint 1 block + reserve
+      await expect(
+        bridgedPiToken.apiMint(owner.address, 1.41e18 + '')
+      ).to.be.revertedWith(
+        "Can't mint more than expected"
+      )
+
+      // Mint only 1 block
+      await waitFor(bridgedPiToken.apiMint(owner.address, 1.0e18 + ''))
+
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(1.4e18 + '')
+      // Mint everything + reserve (+ e little more to revert"
+      await expect(bridgedPiToken.apiMint(owner.address, 2.41e18 + '')).to.be.revertedWith(
+        "Can't mint more than expected"
+      ) // this mint 1 block anyway
+      await waitFor(bridgedPiToken.apiMint(owner.address, 3.4e18 + ''))
+
+      // After mint everything in the block should be left 0
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
     })
 
     it('Should change community and accumulate on 2nd change', async () => {
@@ -48,28 +91,31 @@ describe('BridgedPiToken', () => {
 
       await waitFor(bridgedPiToken.setCommunityMintPerBlock(0.2e18 + ''))
       expect(await bridgedPiToken.communityMintPerBlock()).to.be.equal(0.2e18 + '')
-      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0)
+      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0) // same block
 
       await mineNTimes(1)
 
       expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0.2e18 + '')
-      // console.log("Community a 1.0")
       await waitFor(bridgedPiToken.setCommunityMintPerBlock(1e18 + ''))
-      // Accumulated 1e18 (2 blocks * 0.5)
+      // Accumulated 0.4e18 (2 blocks * 0.2)
       expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0.4e18 + '')
 
+      // try to mint 1 block + reserve
       await expect(
         bridgedPiToken.communityMint(owner.address, 1.41e18 + '')
       ).to.be.revertedWith(
         "Can't mint more than expected"
       )
 
-      // Mint only 2 blocks
-      await waitFor(bridgedPiToken.communityMint(owner.address, 0.2e18 + ''))
+      // Mint only 1 block
+      await waitFor(bridgedPiToken.communityMint(owner.address, 1.0e18 + ''))
 
-      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(2.2e18 + '')
-      // Mint everything + reserve
-      await waitFor(bridgedPiToken.communityMint(owner.address, 3.0e18 + ''))
+      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(1.4e18 + '')
+      // Mint everything + reserve (+ e little more to revert"
+      await expect(bridgedPiToken.communityMint(owner.address, 2.41e18 + '')).to.be.revertedWith(
+        "Can't mint more than expected"
+      ) // this mint 1 block anyway
+      await waitFor(bridgedPiToken.communityMint(owner.address, 3.4e18 + ''))
 
       // After mint everything in the block should be left 0
       expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0)
@@ -88,28 +134,27 @@ describe('BridgedPiToken', () => {
       expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(0.5e18 + '')
       expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
 
-      // This call will store 1e18 in reserve and change mintPerBlock
+      // This call will store 1e18 in CommunityReserve and change mintPerBlock
       await waitFor(bridgedPiToken.setApiMintPerBlock(1e18 + '')) // rewards + 3
 
-      // Both 1.0e18 from reserve
+      // CommunityReserve 1.0e18
       expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
-      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(1.0e18 + '')
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
 
       const balance = await bridgedPiToken.balanceOf(owner.address)
 
-      // Will try to mint 1 reserve + (1 block api + comm) + 0.1
-      await expect(bridgedPiToken.apiMint(owner.address, 2.6e18 + '')).to.be.revertedWith(
+      // Will try to mint 1 reserve + (1 block api) + 0.01
+      await expect(bridgedPiToken.apiMint(owner.address, 2.01e18 + '')).to.be.revertedWith(
         "Can't mint more than expected"
       )
+      await waitFor(bridgedPiToken.apiMint(owner.address, 2e18 + ''))
 
-      await waitFor(bridgedPiToken.apiMint(owner.address, 1.0e18 + ''))
+      expect(await bridgedPiToken.balanceOf(owner.address)).to.be.equal(balance.add(2.0e18 + ''))
 
-      expect(await bridgedPiToken.balanceOf(owner.address)).to.be.equal(balance.add(1.0e18 + ''))
-
-      // 2 block * 0.5
-      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
-      // 1 block * 1.0 + reserve
-      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(2e18 + '')
+      // 4 block * 0.5
+      expect(await bridgedPiToken.communityLeftToMint()).to.be.equal(2.0e18 + '')
+      // 3 block * 1.0 - 1.0
+      expect(await bridgedPiToken.apiLeftToMint()).to.be.equal(0)
     })
 
     it('should revert mint for 0 perBlock', async () => {
@@ -191,10 +236,9 @@ describe('BridgedPiToken', () => {
         bridgedPiToken.connect(alice).apiMint(alice.address, 1)
       ).to.be.revertedWith('Only minters')
 
-      await bridgedPiToken.connect(bob).communityMint(alice.address, 100)
-      await bridgedPiToken.connect(bob).apiMint(alice.address, 100)
-
-      expect(await bridgedPiToken.totalMinted()).to.equal(200)
+      // Ensure doesn't revert
+      await waitFor(bridgedPiToken.connect(bob).communityMint(alice.address, 100))
+      await waitFor(bridgedPiToken.connect(bob).apiMint(alice.address, 100))
     })
 
     it('Should revert for zero address receiver', async () => {
@@ -225,9 +269,7 @@ describe('BridgedPiToken', () => {
     })
 
     it('Should only mint until max mint per block', async () => {
-      const MAX_MINT_PER_BLOCK = (await bridgedPiToken.apiMintPerBlock()).add(
-        await bridgedPiToken.communityMintPerBlock()
-      )
+      const MAX_MINT_PER_BLOCK = await bridgedPiToken.communityMintPerBlock()
 
       await bridgedPiToken.initRewardsOn(block - 5)
 

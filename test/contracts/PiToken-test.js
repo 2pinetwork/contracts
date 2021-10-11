@@ -26,6 +26,48 @@ describe('PiToken', () => {
   })
 
   describe('setMintPerBlock', async () => {
+    it('Should change api and accumulate on 2nd change', async () => {
+      await waitFor(piToken.addMinter(owner.address))
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+      await waitFor(piToken.initRewardsOn(await getBlock()))
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+
+      await waitFor(piToken.setApiMintPerBlock(0.2e18 + ''))
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+
+      await mineNTimes(1)
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0.2e18 + '')
+
+      await waitFor(piToken.setApiMintPerBlock(1e18 + ''))
+      // Accumulated 1e18 (2 blocks * 0.2)
+      expect(await piToken.apiLeftToMint()).to.be.equal(0.4e18 + '')
+
+      await expect(
+        piToken.apiMint(owner.address, 1.41e18 + '')
+      ).to.be.revertedWith(
+        "Can't mint more than expected"
+      )
+
+      // Mint only 1 block
+      await waitFor(piToken.apiMint(owner.address, 1.0e18 + ''))
+
+      const balance = await piToken.balanceOf(owner.address)
+
+      // ApiReserve 0.4 + Api 1.0 (1 blocks)
+      expect(await piToken.apiLeftToMint()).to.be.equal(1.4e18 + '')
+      // Mint everything + reserve
+      await waitFor(piToken.apiMint(owner.address, 2.4e18 + ''))
+
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.add(2.4e18 + '')
+      )
+
+      // Only mint per block
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+    })
+
     it('Should change community and accumulate on 2nd change', async () => {
       await waitFor(piToken.addMinter(owner.address))
 
@@ -41,7 +83,7 @@ describe('PiToken', () => {
       expect(await piToken.communityLeftToMint()).to.be.equal(0.2e18 + '')
 
       await waitFor(piToken.setCommunityMintPerBlock(1e18 + ''))
-      // Accumulated 1e18 (2 blocks * 0.5)
+      // Accumulated 1e18 (2 blocks * 0.2)
       expect(await piToken.communityLeftToMint()).to.be.equal(0.4e18 + '')
 
       await expect(
@@ -50,14 +92,21 @@ describe('PiToken', () => {
         "Can't mint more than expected"
       )
 
-      // Mint only 2 blocks
-      await waitFor(piToken.communityMint(owner.address, 0.2e18 + ''))
+      // Mint only 1 block
+      await waitFor(piToken.communityMint(owner.address, 1.0e18 + ''))
 
-      expect(await piToken.communityLeftToMint()).to.be.equal(2.2e18 + '')
+      const balance = await piToken.balanceOf(owner.address)
+
+      // CommunityReserve 0.4 + Community 1.0 (1 blocks)
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.4e18 + '')
       // Mint everything + reserve
-      await waitFor(piToken.communityMint(owner.address, 3.0e18 + ''))
+      await waitFor(piToken.communityMint(owner.address, 2.4e18 + ''))
 
-      // After mint everything in the block should be left 0
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.add(2.4e18 + '')
+      )
+
+      // Only mint per block
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
     })
 
@@ -65,26 +114,28 @@ describe('PiToken', () => {
       await waitFor(piToken.addMinter(owner.address))
       await waitFor(piToken.initRewardsOn(await getBlock()))
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
-      await waitFor(piToken.setCommunityMintPerBlock(0.5e18 + '')) // reward +1
-      expect(await piToken.communityLeftToMint()).to.be.equal(0)
+      await waitFor(piToken.setCommunityMintPerBlock(0.5e18 + ''))
+      await mineNTimes(1)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0.5e18 + '') // Reserve
       expect(await piToken.apiLeftToMint()).to.be.equal(0)
 
-      await mineNTimes(1) // rewards +2
+      await mineNTimes(1)
 
-      expect(await piToken.communityLeftToMint()).to.be.equal(0.5e18 + '')
+      // Community 0.5 * 2
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
       expect(await piToken.apiLeftToMint()).to.be.equal(0)
 
       // This call will store 1e18 in reserve and change mintPerBlock
       await waitFor(piToken.setApiMintPerBlock(1e18 + '')) // rewards + 3
 
-      // Both 1.0e18 from reserve
-      expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
-      expect(await piToken.apiLeftToMint()).to.be.equal(1.0e18 + '')
+      // CommunityReserve 1.5
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.5e18 + '')
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
 
       const balance = await piToken.balanceOf(owner.address)
 
-      // Will try to mint 1 reserve + (1 block api + comm) + 0.1
-      await expect(piToken.apiMint(owner.address, 2.6e18 + '')).to.be.revertedWith(
+      // Will try to mint "more" than 1 block
+      await expect(piToken.apiMint(owner.address, 1.1e18 + '')).to.be.revertedWith(
         "Can't mint more than expected"
       )
 
@@ -92,10 +143,10 @@ describe('PiToken', () => {
 
       expect(await piToken.balanceOf(owner.address)).to.be.equal(balance.add(1.0e18 + ''))
 
-      // 2 block * 0.5
-      expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
-      // 1 block * 1.0 + reserve
-      expect(await piToken.apiLeftToMint()).to.be.equal(2e18 + '')
+      // CommunityReserve 1.5 + Community 1.0 (2 blocks)
+      expect(await piToken.communityLeftToMint()).to.be.equal(2.5e18 + '')
+      // API 1 block
+      expect(await piToken.apiLeftToMint()).to.be.equal(1e18 + '')
     })
 
     it('should revert mint for 0 perBlock', async () => {
@@ -109,6 +160,12 @@ describe('PiToken', () => {
   })
 
   describe('mintForMultiChain', async () => {
+    it('should be reverted for mint 0', async () => {
+      await expect(
+        piToken.mintForMultiChain(0, ethers.utils.toUtf8Bytes('Tokens for testnet'))
+      ).to.be.revertedWith('Insufficient supply')
+    })
+
     it('should revert to mint more than MAX SUPPLY', async () => {
       const left = (await piToken.MAX_SUPPLY()).sub(INITIAL_SUPPLY)
 
@@ -128,7 +185,6 @@ describe('PiToken', () => {
       await mineNTimes(1)
       expect(await piToken.communityLeftToMint()).to.be.equal(1.0e18 + '')
 
-      // console.log("Minteamos a webo a 0.5")
       await waitFor(piToken.mintForMultiChain(100, ethers.utils.toUtf8Bytes('Tokens for testnet')))
 
       // 1.0e18 from "restFromLastTranch" + 1.0 from last block reward
@@ -344,23 +400,16 @@ describe('PiToken', () => {
     })
 
     it('Should only mint until max mint per block', async () => {
-      const MAX_MINT_PER_BLOCK = (await piToken.apiMintPerBlock()).add(
-        await piToken.communityMintPerBlock()
-      )
+      // 5 + 1 per initRewardsOn call + 1 per current block
+      const n = (await piToken.communityMintPerBlock()).mul(7)
 
       await piToken.initRewardsOn(block - 5)
 
-      // 5 + 1 per initRewardsOn call + 1 per current block
-      let n  = toNumber(7 * MAX_MINT_PER_BLOCK)
-
-      await piToken.connect(bob).communityMint(bob.address, n)
-
-      // 1 more than max per block
-      n = toNumber(MAX_MINT_PER_BLOCK).replace(/\d$/, '1')
-
       await expect(
-        piToken.connect(bob).communityMint(bob.address, n)
+        piToken.connect(bob).communityMint(bob.address, n.add(1))
       ).to.be.revertedWith("Can't mint more than expected")
+
+      await waitFor(piToken.connect(bob).communityMint(bob.address, n))
     })
   })
 

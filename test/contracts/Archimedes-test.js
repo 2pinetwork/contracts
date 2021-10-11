@@ -494,21 +494,44 @@ describe('Archimedes', () => {
     })
   })
 
-  describe('Harvest', async () => {
-    it('should harvest nothing without shares', async () => {
+  describe('updatePool', async () => {
+    it('should be called and update lastRewardBlock without shares', async () => {
+      await mineNTimes((await archimedes.startBlock()).sub(await getBlock()).add(1))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
-      await waitFor(archimedes.harvest(0))
+
+      const lastReward = await archimedes.poolInfo(0)
+
+      await piToken.approve(archimedes.address, 10)
+      // deposit => updatePool
+      await waitFor(archimedes.deposit(0, 10, zeroAddress))
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      expect(
+        (await archimedes.poolInfo(0)).lastRewardBlock
+      ).to.be.above(lastReward.lastRewardBlock)
     })
 
     it('should harvest nothing without weighing', async () => {
-      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
       await waitFor(archimedes.changePoolWeighing(0, 0, true))
-      await waitFor(archimedes.harvest(0))
+
+      await mineNTimes((await archimedes.startBlock()).sub(await getBlock()).add(1))
+
       expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      const lastReward = await archimedes.poolInfo(0)
+
+      await piToken.approve(archimedes.address, 10)
+      // deposit => updatePool
+      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      expect(
+        (await archimedes.poolInfo(0)).lastRewardBlock
+      ).to.be.above(lastReward.lastRewardBlock)
     })
+  })
 
-
+  describe('Harvest', async () => {
     it('should not receive double reward harvest', async () => {
       // Deposit without rewards yet
       await piToken.transfer(bob.address, 10)
