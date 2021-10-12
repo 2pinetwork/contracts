@@ -110,7 +110,7 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
 
         uint r = balance() * _shares / totalSupply();
 
-        checkWithdraw(r);
+        _checkWithdraw(r);
 
         _burn(msg.sender, _shares);
         piToken.safeTransfer(msg.sender, r);
@@ -127,7 +127,7 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Check if msg.sender is an investor or a founder to release the funds.
      */
-    function checkWithdraw(uint _amount) internal {
+    function _checkWithdraw(uint _amount) internal {
         if (investors[msg.sender]) {
             require(block.timestamp >= investorsLockTime, "Still locked");
         } else if (founders[msg.sender]) {
@@ -140,6 +140,18 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
                 // Accumulate withdrawn for founder
                 // (will revert if the amount is greater than the left to withdraw)
                 foundersLeftToWithdraw[msg.sender] -= _amount;
+            }
+        }
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint /*amount*/) internal virtual override {
+        // Ignore mint/burn
+        if (from != address(0) && to != address(0)) {
+            // Founders & Investors can't transfer shares before timelock
+            if (investors[from]) {
+                require(block.timestamp >= investorsLockTime, "Still locked");
+            } else if (founders[from]) {
+                require(block.timestamp >= foundersLockTime, "Still locked");
             }
         }
     }
