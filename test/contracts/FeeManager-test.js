@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor, MAX_UINT } = require('../helpers')
+const { createPiToken, deploy, waitFor } = require('../helpers')
 
 describe('FeeManager setup', () => {
   let piToken
@@ -30,6 +30,7 @@ describe('FeeManager', () => {
   let piToken
   let feeMgr
   let bob
+  let SWAP_PRECISION
 
   before(async () => {
     [, bob] = await ethers.getSigners()
@@ -43,6 +44,8 @@ describe('FeeManager', () => {
 
     piVault = await deploy('PiVault', piToken.address, tomorrow, nextWeek)
     feeMgr = await deploy('FeeManager', owner.address, piVault.address, global.exchange.address)
+
+    SWAP_PRECISION = await feeMgr.SWAP_PRECISION()
   })
 
   describe('harvest', async () => {
@@ -79,7 +82,11 @@ describe('FeeManager', () => {
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
 
       await waitFor(piToken.transfer(exchange.address, 100))
-      await waitFor(feeMgr.harvest(otherW.address, 1e9))
+      await expect(
+        feeMgr.harvest(otherW.address, SWAP_PRECISION)
+      ).to.emit(
+        feeMgr, 'Harvest'
+      ).withArgs(otherW.address, 100, 100)
 
       const max = await feeMgr.MAX()
       const amount = max.sub(await feeMgr.TREASURY_PART())
@@ -104,7 +111,7 @@ describe('FeeManager', () => {
 
       await waitFor(WMATIC.deposit({ value: 100 }))
       await waitFor(WMATIC.transfer(feeMgr.address, 100))
-      await waitFor(feeMgr.harvest(WMATIC.address, 1e9)) // 1-1 ratio
+      await waitFor(feeMgr.harvest(WMATIC.address, SWAP_PRECISION)) // 1-1 ratio
 
       const max = await feeMgr.MAX()
       const amount = max.sub(await feeMgr.TREASURY_PART())

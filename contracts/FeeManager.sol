@@ -32,6 +32,8 @@ contract FeeManager is AccessControl, ReentrancyGuard {
     uint constant public TREASURY_PART = 150;
     uint constant public MAX = 1000;
 
+    uint constant public SWAP_PRECISION = 1e18;
+
     constructor(address _treasury, address _piVault, address _exchange) {
         require(IPiVault(_piVault).piToken() == piToken, "Not PiToken vault");
         treasury = _treasury;
@@ -44,6 +46,7 @@ contract FeeManager is AccessControl, ReentrancyGuard {
 
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewExchange(address oldExchange, address newExchange);
+    event Harvest(address _token, uint _tokenAmount, uint piTokenAmount);
 
     modifier onlyAdmin {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only Admin");
@@ -56,17 +59,17 @@ contract FeeManager is AccessControl, ReentrancyGuard {
 
         if (_balance <= 0) { return; }
 
-        // _ratio is a 9 decimals ratio number calculated by the
+        // _ratio is a 18 decimals ratio number calculated by the
         // caller before call harvest to get the minimum amount of 2Pi-tokens.
-        // So the _balance is multiplied by the ratio and then divided by 9 decimals
+        // So the _balance is multiplied by the ratio and then divided by 18 decimals
         // to get the same "precision". Then the result should be divided for the
         // decimal diff between tokens.
         // E.g _token is WMATIC with 18 decimals:
         // _ratio = 522_650_000 (0.52265 WMATIC/2Pi)
         // __balance = 1e18 (1.0 WMATIC)
-        // tokenDiffPrecision = 1e9 ((1e18 MATIC decimals / 1e18 2Pi decimals) * 1e9 ratio precision)
-        // expected = 522650000000000000 (1e18 * 522_650_000 / 1e9) [0.52 in 2Pi decimals]
-        uint tokenDiffPrecision = ((10 ** IERC20Metadata(_token).decimals()) / 1e18) * 1e9;
+        // tokenDiffPrecision = 1e18 (1e18 MATIC decimals * 1e18 ratio precision / 1e18 2Pi decimals)
+        // expected = 522650000000000000 (1e18 * 522_650_000 / 1e18) [0.52 in 2Pi decimals]
+        uint tokenDiffPrecision = ((10 ** IERC20Metadata(_token).decimals()) * SWAP_PRECISION) / 1e18;
         uint expected = _balance * _ratio / tokenDiffPrecision;
 
         bool native = _token == wNative;
@@ -91,14 +94,18 @@ contract FeeManager is AccessControl, ReentrancyGuard {
 
         IERC20(piToken).safeTransfer(treasury, treasuryPart);
         IERC20(piToken).safeTransfer(piVault, piBalance - treasuryPart);
+
+        emit Harvest(_token, _balance, piBalance);
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 
         exchange = _exchange;

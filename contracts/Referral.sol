@@ -15,6 +15,7 @@ contract Referral is Ownable {
     mapping(address => uint) public referralsPaid; // referrer address => paid
 
     event ReferralRecorded(address indexed user, address indexed referrer);
+    event ReferralPaid(address indexed user, uint amount);
 
     constructor(address _operator) {
         require(_operator != address(0), "Zero address for operator");
@@ -41,6 +42,8 @@ contract Referral is Ownable {
     function referralPaid(address _referrer, uint _amount) external onlyOperator {
         totalPaid += _amount;
         referralsPaid[_referrer] += _amount;
+
+        emit ReferralPaid(_referrer, _amount);
     }
 
     // Get the referrer address that referred the user
