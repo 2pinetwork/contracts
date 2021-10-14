@@ -6,9 +6,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-// import "hardhat/console.sol";
+
+import "hardhat/console.sol";
 
 interface IFarm {
     function piToken() external view returns (address);
@@ -30,7 +30,9 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     // Address of Archimedes
     address public immutable farm;
     IERC20Metadata public immutable want;
-    uint public pid;
+
+    // Farm controller index
+    uint public pid = type(uint16).max; // 65535 means unassigned
 
     address public strategy;
     address public treasury;
@@ -60,32 +62,32 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return want.decimals();
     }
 
+    // BeforeTransfer callback to harvest the farm rewards for both users
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
         // ignore mint/burn
         if (from != address(0) && to != address(0) && amount > 0) {
-            IFarm(farm).beforeSharesTransfer(pid, from, to, amount);
+            IFarm(farm).beforeSharesTransfer(uint(pid), from, to, amount);
         }
     }
 
+    // AferTransfer callback to update the farm rewards for both users
     function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
         if (from != address(0) && to != address(0) && amount > 0) {
-            IFarm(farm).afterSharesTransfer(pid, from, to, amount);
+            IFarm(farm).afterSharesTransfer(uint(pid), from, to, amount);
         }
     }
-
-    // If needed to change owner, just withdraw+transfer+deposit
-    // function transfer(address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-    //     revert("Can't transfer share tokens");
-    // }
-
-    // function transferFrom(address /* sender */, address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-    //     revert("Can't transfer share tokens");
-    // }
-
 
     modifier onlyFarm() {
         require(msg.sender == farm, "Not from farm");
         _;
+    }
+
+    function setFarmPid(uint _pid) external onlyFarm returns (uint) {
+        require(pid >= type(uint16).max, "pid already assigned");
+
+        pid = _pid;
+
+        return pid;
     }
 
     event NewStrategy(address old_strategy, address new_strategy);

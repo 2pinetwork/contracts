@@ -165,6 +165,12 @@ describe('Controller', () => {
     })
   })
 
+  describe('setFarmPid', async () => {
+    it('should be reverted for not farm', async () => {
+      await expect(controller.setFarmPid(0)).to.be.revertedWith('Not from farm')
+    })
+  })
+
   describe('Deposit', async () => {
     it('should be reverted for not farm)', async () => {
       await expect(controller.deposit(bob.address, 10000)).to.be.revertedWith(
@@ -203,14 +209,6 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal(10000) // from deposit
-
-      // Ensure the shares can't be transferd
-      await expect(controller.connect(bob).transfer(owner.address, 10)).to.be.revertedWith(
-        "Can't transfer share tokens"
-      )
-      await expect(controller.connect(bob).transferFrom(bob.address, owner.address, 10)).to.be.revertedWith(
-        "Can't transfer share tokens"
-      )
     })
   })
 
@@ -304,38 +302,40 @@ describe('Controller', () => {
   })
 
   describe('transfer', async () => {
-    it('should not be transfer', async () => {
+    it('should transfer', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
       await waitFor(piToken.approve(archimedes.address, 100))
       await waitFor(archimedes.deposit(0, 100, zeroAddress))
 
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
-
-      // Call transfer
-      await expect(controller.transfer(bob.address, 50)).to.be.revertedWith(
-        "Can't transfer share tokens"
-      )
-
-      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
       expect(await controller.balanceOf(bob.address)).to.be.equal(0)
+
+      await expect(
+        controller.transfer(bob.address, 50)
+      ).to.be.emit(controller, 'Transfer').withArgs(owner.address, bob.address, 50)
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(50)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(50)
     })
   })
 
   describe('transferFrom', async () => {
-    it('should not be transfer', async () => {
+    it('should transfer', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
       await waitFor(piToken.approve(archimedes.address, 100))
       await waitFor(archimedes.deposit(0, 100, zeroAddress))
 
       expect(await controller.balanceOf(owner.address)).to.be.equal(100)
 
-      // Call transfer
-      await expect(controller.transferFrom(owner.address, bob.address, 50)).to.be.revertedWith(
-        "Can't transfer share tokens"
-      )
+      // Simulate approval for a contract for transferFrom
+      await waitFor(controller.approve(owner.address, 50))
 
-      expect(await controller.balanceOf(owner.address)).to.be.equal(100)
-      expect(await controller.balanceOf(bob.address)).to.be.equal(0)
+      await expect(
+        controller.transferFrom(owner.address, bob.address, 50)
+      ).to.be.emit(controller, 'Transfer').withArgs(owner.address, bob.address, 50)
+
+      expect(await controller.balanceOf(owner.address)).to.be.equal(50)
+      expect(await controller.balanceOf(bob.address)).to.be.equal(50)
     })
   })
 })

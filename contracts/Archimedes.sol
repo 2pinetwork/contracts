@@ -94,6 +94,10 @@ contract Archimedes is Ownable, ReentrancyGuard {
             accPiTokenPerShare: 0,
             controller: _ctroller
         }));
+
+        uint _pid = poolInfo.length - 1;
+        uint _setPid = IController(_ctroller).setFarmPid(_pid);
+        require(_pid == _setPid, "Pid doesn't match");
     }
 
     // Update the given pool's rewards weighing .
@@ -289,33 +293,6 @@ contract Archimedes is Ownable, ReentrancyGuard {
         }
     }
 
-    // Controller Hook
-    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
-        if (amount <= 0) { return; }
-
-        // harvest rewards for
-        _harvest(_pid, _from);
-
-        // Harvest the shares receiver just in case
-        _harvest(_pid, _to);
-    }
-
-    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
-        if (amount <= 0) { return; }
-
-        // Reset users "paidRewards"
-        _updateUserPaidRewards(_pid, _from);
-        _updateUserPaidRewards(_pid, _to);
-    }
-
-    function _updateUserPaidRewards(uint _pid, address _user) internal {
-        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
-    }
-
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw(uint _pid) external nonReentrant {
         IERC20 want = poolInfo[_pid].want;
@@ -334,6 +311,34 @@ contract Archimedes is Ownable, ReentrancyGuard {
         want.safeTransfer(address(msg.sender), _wantBalance);
 
         emit EmergencyWithdraw(_pid, msg.sender, _shares);
+    }
+
+    // Controller callback before transfer to harvest users rewards
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // harvest rewards for
+        _harvest(_pid, _from);
+
+        // Harvest the shares receiver just in case
+        _harvest(_pid, _to);
+    }
+
+    // Controller callback after transfer to update users rewards
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // Reset users "paidRewards"
+        _updateUserPaidRewards(_pid, _from);
+        _updateUserPaidRewards(_pid, _to);
+    }
+
+    function _updateUserPaidRewards(uint _pid, address _user) internal {
+        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
     }
 
     function wantBalance(IERC20 _want) internal view returns (uint) {

@@ -11,4 +11,5 @@ interface IController {
     function farm() external view returns (address);
     function deposit(address _depositor, uint _amount) external;
     function withdraw(address _depositor, uint _shares) external returns (uint);
+    function setFarmPid(uint pid) external returns (uint);
 }

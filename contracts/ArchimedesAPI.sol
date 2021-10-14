@@ -57,8 +57,6 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
     uint constant public RATIO_PRECISION = 10000; // 100%
 
-    // In the case of leverage we should withdraw when the
-    // amount to withdraw is 50%
     uint public swap_slippage_ratio = 100; // 1%
 
 
@@ -119,6 +117,10 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
             accPiTokenPerShare: 0,
             controller: _ctroller
         }));
+
+        uint _pid = poolInfo.length - 1;
+        uint _setPid = IController(_ctroller).setFarmPid(_pid);
+        require(_pid == _setPid, "Pid doesn't match");
     }
 
     // Update the given pool's PI rewards weighing
@@ -235,7 +237,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         pool.want.safeTransfer(_user, _wantBalance);
 
         // This is to "save" like the new amount of shares was paid
-        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * pool.accPiTokenPerShare) / SHARE_PRECISION;
+        _updateUserPaidRewards(_pid, _user);
 
         emit Withdraw(_pid, _user, _shares);
     }
@@ -283,6 +285,34 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         emit EmergencyWithdraw(_pid, _user, _shares);
     }
 
+    // Controller callback before transfer to harvest users rewards
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // harvest rewards for
+        harvest(_pid, _from);
+
+        // Harvest the shares receiver just in case
+        harvest(_pid, _to);
+    }
+
+    // Controller callback after transfer to update users rewards
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // Reset users "paidRewards"
+        _updateUserPaidRewards(_pid, _from);
+        _updateUserPaidRewards(_pid, _to);
+    }
+
+    function _updateUserPaidRewards(uint _pid, address _user) internal {
+        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
+    }
+
     function wantBalance(IERC20 _want) internal view returns (uint) {
         return _want.balanceOf(address(this));
     }
@@ -303,7 +333,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
         controller(_pid).deposit(_user, _amount);
 
         // This is to "save" like the new amount of shares was paid
-        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
+        _updateUserPaidRewards(_pid, _user);
 
         emit Deposit(_pid, _user, _amount);
     }
