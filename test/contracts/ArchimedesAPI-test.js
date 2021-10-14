@@ -70,7 +70,6 @@ describe('ArchimedesAPI', () => {
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
-    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
     await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
 
     expect(await archimedes.piToken()).to.equal(piToken.address)
@@ -544,6 +543,55 @@ describe('ArchimedesAPI', () => {
       expect(
         (await archimedes.poolInfo(0)).lastRewardBlock
       ).to.be.above(lastReward.lastRewardBlock)
+    })
+  })
+
+  describe('Shares transfer', async () => {
+    it('should be reverted for API', async () => {
+      const wmatic = WMATIC.connect(owner)
+
+      // Exchange
+      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
+      await waitFor(WMATIC.transfer(exchange.address, '' + 1e18))
+
+
+      await waitFor(wmatic.deposit({ value: 1e18 + '' }))
+      await waitFor(wmatic.approve(archimedes.address, 1e18 + ''))
+
+      await waitFor(archimedes.deposit(0, bob.address, 10, zeroAddress))
+      await waitFor(archimedes.deposit(0, alice.address, 10, zeroAddress))
+
+      expect(await piToken.balanceOf(archimedes.address)).to.be.equal(0)
+
+      // Still behind the reward block
+      const rewardBlock = parseInt(await archimedes.startBlock(), 10)
+      const currentBlock = parseInt(await getBlock(), 10)
+
+
+      await mineNTimes(rewardBlock - currentBlock)
+      // This should mint a reward of 0.23~ for the first block
+      await waitFor(archimedes.updatePool(0)) // rewardBlock + 1
+
+      const piPerBlock = await archimedes.piTokenPerBlock()
+      expect(
+        await piToken.balanceOf(archimedes.address)
+      ).to.be.equal(
+        piPerBlock
+      )
+      await mineNTimes(5)
+
+      await archimedes.harvest(0, bob.address) // rewardBlock + 2 + 5
+
+      let newUser = (await ethers.getSigners())[8]
+
+      await expect(
+        controller.connect(bob).transfer(newUser.address, 10)
+      ).to.be.revertedWith(
+        'API shares are handled by handler at the moment'
+      )
+
+      expect(await controller.balanceOf(bob.address)).to.be.equal(11) // 10 + harvest
+      expect(await controller.balanceOf(newUser.address)).to.be.equal(0)
     })
   })
 })

@@ -286,27 +286,13 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     // Controller callback before transfer to harvest users rewards
-    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
-        if (amount <= 0) { return; }
-
-        // harvest rewards for
-        harvest(_pid, _from);
-
-        // Harvest the shares receiver just in case
-        harvest(_pid, _to);
+    function beforeSharesTransfer(uint /*_pid*/, address /*_from*/, address /*_to*/, uint /*amount*/) external pure {
+        revert("API shares are handled by handler at the moment");
     }
 
     // Controller callback after transfer to update users rewards
-    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
-        if (amount <= 0) { return; }
-
-        // Reset users "paidRewards"
-        _updateUserPaidRewards(_pid, _from);
-        _updateUserPaidRewards(_pid, _to);
+    function afterSharesTransfer(uint /*_pid*/, address /*_from*/, address /*_to*/, uint /*amount*/) external pure {
+        revert("API shares are handled by handler at the moment");
     }
 
     function _updateUserPaidRewards(uint _pid, address _user) internal {

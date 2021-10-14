@@ -568,7 +568,7 @@ describe('Archimedes', () => {
 
       expect(await controller.balanceOf(bob.address)).to.be.above(9) // at least 10
 
-      // This transfer doesn't work but doesn't revert because of the automine=false
+      // Transfer to test harvest with other user
       await controller.connect(bob).transfer(newUser.address, 10)
       await waitFor(archimedes.connect(newUser).harvest(0))
 

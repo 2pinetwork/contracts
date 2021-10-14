@@ -279,11 +279,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
         updatePool(_pid);
 
-        uint pending = calcPendingAndPayRewards(_pid, _user);
+        calcPendingAndPayRewards(_pid, _user);
 
-        if (pending > 0) {
-            userPaidRewards[_pid][_user] += pending;
-        }
+        _updateUserPaidRewards(_pid, _user);
     }
 
     function harvestAll() external {
@@ -369,11 +367,11 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // Pay rewards
-    function calcPendingAndPayRewards(uint _pid, address _user) internal returns (uint pending) {
+    function calcPendingAndPayRewards(uint _pid, address _user) internal {
         uint _shares = userShares(_pid, _user);
 
         if (_shares > 0) {
-            pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
+            uint pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
 
             if (pending > 0) {
                 safePiTokenTransfer(_user, pending);

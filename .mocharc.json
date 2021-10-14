@@ -1,11 +1,13 @@
 {
   "parallel":   true,
-  "jobs":       4,
+  "jobs":       2,
   "slow":       "1500",
   "full-trace": true,
   "bail":       false,
   "inspect":    false,
   "timeout":    60000,
   "exit":       true,
+  "exclude":    "test/integration",
+  "recursive":  true,
   "require":    ["hardhat/register"]
 }
