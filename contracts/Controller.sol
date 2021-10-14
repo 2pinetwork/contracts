@@ -10,8 +10,10 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 // import "hardhat/console.sol";
 
-interface Farm {
+interface IFarm {
     function piToken() external view returns (address);
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
 }
 
 interface IStrategy {
@@ -28,6 +30,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     // Address of Archimedes
     address public immutable farm;
     IERC20Metadata public immutable want;
+    uint public pid;
 
     address public strategy;
     address public treasury;
@@ -45,7 +48,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         string(abi.encodePacked("2pi-", _want.name())),
         string(abi.encodePacked("2pi", _want.symbol()))
     ) {
-        require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
+        require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
         require(_treasury != address(0), "Treasury can't be 0 address");
 
         want = _want;
@@ -57,15 +60,27 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return want.decimals();
     }
 
-    // Prevent transfer to avoid claim rewards from different depositors
-    // If needed to change owner, just withdraw+transfer+deposit
-    function transfer(address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-        revert("Can't transfer share tokens");
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        // ignore mint/burn
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).beforeSharesTransfer(pid, from, to, amount);
+        }
     }
 
-    function transferFrom(address /* sender */, address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
-        revert("Can't transfer share tokens");
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).afterSharesTransfer(pid, from, to, amount);
+        }
     }
+
+    // If needed to change owner, just withdraw+transfer+deposit
+    // function transfer(address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
+    //     revert("Can't transfer share tokens");
+    // }
+
+    // function transferFrom(address /* sender */, address /* recipient */, uint256 /* amount */) public virtual override returns (bool) {
+    //     revert("Can't transfer share tokens");
+    // }
 
 
     modifier onlyFarm() {

@@ -190,7 +190,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         _recordReferral(_pid, _referrer);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid);
+        calcPendingAndPayRewards(_pid, msg.sender);
 
         // With that Archimedes already has the wmatics
         WNative.deposit{value: _amount}();
@@ -210,7 +210,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         _recordReferral(_pid, _referrer);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid);
+        calcPendingAndPayRewards(_pid, msg.sender);
 
         // Transfer from user => Archimedes
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
@@ -234,7 +234,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         updatePool(_pid);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid);
+        calcPendingAndPayRewards(_pid, msg.sender);
 
         PoolInfo storage pool = poolInfo[_pid];
 
@@ -256,7 +256,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
         }
 
         // This is to "save" like the new amount of shares was paid
-        userPaidRewards[_pid][msg.sender] = (userShares(_pid) * pool.accPiTokenPerShare) / SHARE_PRECISION;
+        _updateUserPaidRewards(_pid, msg.sender);
 
         emit Withdraw(_pid, msg.sender, _shares);
     }
@@ -267,14 +267,18 @@ contract Archimedes is Ownable, ReentrancyGuard {
 
     // Claim rewards for a pool
     function harvest(uint _pid) public nonReentrant {
-        if (userShares(_pid) <= 0) { return; }
+        _harvest(_pid, msg.sender);
+    }
+
+    function _harvest(uint _pid, address _user) internal {
+        if (userShares(_pid, _user) <= 0) { return; }
 
         updatePool(_pid);
 
-        uint pending = calcPendingAndPayRewards(_pid);
+        uint pending = calcPendingAndPayRewards(_pid, _user);
 
         if (pending > 0) {
-            userPaidRewards[_pid][msg.sender] += pending;
+            userPaidRewards[_pid][_user] += pending;
         }
     }
 
@@ -283,6 +287,33 @@ contract Archimedes is Ownable, ReentrancyGuard {
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid);
         }
+    }
+
+    // Controller Hook
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // harvest rewards for
+        _harvest(_pid, _from);
+
+        // Harvest the shares receiver just in case
+        _harvest(_pid, _to);
+    }
+
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+
+        if (amount <= 0) { return; }
+
+        // Reset users "paidRewards"
+        _updateUserPaidRewards(_pid, _from);
+        _updateUserPaidRewards(_pid, _to);
+    }
+
+    function _updateUserPaidRewards(uint _pid, address _user) internal {
+        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
@@ -327,21 +358,21 @@ contract Archimedes is Ownable, ReentrancyGuard {
         controller(_pid).deposit(msg.sender, _amount);
 
         // This is to "save" like the new amount of shares was paid
-        userPaidRewards[_pid][msg.sender] = (userShares(_pid) * pool.accPiTokenPerShare) / SHARE_PRECISION;
+        _updateUserPaidRewards(_pid, msg.sender);
 
         emit Deposit(_pid, msg.sender, _amount);
     }
 
     // Pay rewards
-    function calcPendingAndPayRewards(uint _pid) internal returns (uint pending) {
-        uint _shares = userShares(_pid);
+    function calcPendingAndPayRewards(uint _pid, address _user) internal returns (uint pending) {
+        uint _shares = userShares(_pid, _user);
 
         if (_shares > 0) {
-            pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid);
+            pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
 
             if (pending > 0) {
-                safePiTokenTransfer(msg.sender, pending);
-                payReferralCommission(pending);
+                safePiTokenTransfer(_user, pending);
+                payReferralCommission(_user, pending);
             }
         }
     }
@@ -370,9 +401,9 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // Pay referral commission to the referrer who referred this user.
-    function payReferralCommission(uint _pending) internal {
+    function payReferralCommission(address _user, uint _pending) internal {
         if (address(referralMgr) != address(0) && referralCommissionRate > 0) {
-            address referrer = referralMgr.getReferrer(msg.sender);
+            address referrer = referralMgr.getReferrer(_user);
 
             uint commissionAmount = (_pending * referralCommissionRate) / COMMISSION_RATE_PRECISION;
             if (referrer != address(0) && commissionAmount > 0) {
@@ -398,9 +429,15 @@ contract Archimedes is Ownable, ReentrancyGuard {
     function userShares(uint _pid) public view returns (uint) {
         return controller(_pid).balanceOf(msg.sender);
     }
+    function userShares(uint _pid, address _user) public view returns (uint) {
+        return controller(_pid).balanceOf(_user);
+    }
 
     function paidRewards(uint _pid) public view returns (uint) {
         return userPaidRewards[_pid][msg.sender];
+    }
+    function paidRewards(uint _pid, address _user) public view returns (uint) {
+        return userPaidRewards[_pid][_user];
     }
     function controller(uint _pid) internal view returns (IController) {
         return IController(poolInfo[_pid].controller);
