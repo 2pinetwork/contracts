@@ -29,4 +29,4 @@ jobs:
         echo "[ \"$DEPLOYER\" ]" > .accounts
 
     - name: Test
-      run: yarn test
+      run: yarn full_test
