@@ -541,5 +541,17 @@ describe('Controller Curve Strat', () => {
 
       expect(await BTC.balanceOf(controller.address)).to.be.equal(9.9e8) // 1% slippage
     })
+
+    it('Should be reverted on retire strategy with deposits', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+      await waitFor(BTC.mint(strat.address, 10e8))
+
+      expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(strat.connect(ctrollerSigner).retireStrat())
+
+      expect(await BTC.balanceOf(controller.address)).to.be.equal(9.9e8) // 1% slippage
+    })
   })
 })

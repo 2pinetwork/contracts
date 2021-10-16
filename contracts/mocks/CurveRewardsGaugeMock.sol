@@ -43,6 +43,6 @@ contract CurveRewardsGaugeMock {
     function withdraw(uint _value) external {
         btcCRV.safeTransfer(msg.sender, _value);
 
-        counter[msg.sender] = _value;
+        counter[msg.sender] -= _value;
     }
 }

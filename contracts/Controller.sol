@@ -105,6 +105,10 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
 
         if (strategy != address(0)) {
             IStrategy(strategy).retireStrat();
+            require(
+                IStrategy(strategy).balance() <= 0,
+                "Strategy still has deposits"
+            );
         }
 
         strategy = new_strategy;

@@ -440,10 +440,13 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     // called as part of strat migration. Sends all the available funds back to the vault.
     function retireStrat() external onlyController {
         _pause();
-        _fullDeleverage();
 
+        if (balanceOfPool() > 0) { _fullDeleverage(); }
+
+        // Can be called without rewards
         harvest();
 
+        require(balanceOfPool() <= 0, "Strategy still has deposits");
         IERC20(want).safeTransfer(controller, wantBalance());
     }
 

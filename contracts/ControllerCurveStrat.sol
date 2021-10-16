@@ -173,9 +173,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
             IERC20(BTC).safeApprove(CURVE_POOL, btcBal);
 
-            uint expectedCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, true);
-
-            expectedCrvAmount = (expectedCrvAmount * (RATIO_PRECISION - pool_slippage_ratio)) / RATIO_PRECISION;
+            // Based on virtual_price the pool_slippage_ratio will be the combined
+            // value of virtual_price percentage + slippage to receive tokens.
+            // The expected amount is represented with 18 decimals as crvBtc token
+            // so we have to add 10 decimals to the btc balance.
+            uint expectedCrvAmount = btcBal * 1e10 * (RATIO_PRECISION - pool_slippage_ratio) / RATIO_PRECISION;
 
             ICurvePool(CURVE_POOL).add_liquidity(amounts, expectedCrvAmount, true);
         }
@@ -376,8 +378,10 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         // max withdraw can fail if not staked (in case of panic)
         if (balanceOfPoolInBtc() > 0) { withdrawBtc(0, true); }
 
+        // Can be called without rewards
         harvest();
 
+        require(balanceOfPoolInBtc() <= 0, "Strategy still has deposits");
         IERC20(BTC).safeTransfer(controller, btcBalance());
     }
 
