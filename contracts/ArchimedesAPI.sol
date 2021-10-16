@@ -85,7 +85,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
     }
 
     function setRoute(uint _pid, address[] memory _route) external onlyOwner {
-        // Last address in path shoyuld be the same than pool.want
+        // Last address in path should be the same than pool.want
         require(_route[0] == address(piToken), "First token is not PiToken");
         require(_route[_route.length - 1] == address(poolInfo[_pid].want), "Last token is not want");
 
