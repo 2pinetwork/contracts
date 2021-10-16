@@ -218,7 +218,10 @@ describe('Controller Curve Strat', () => {
       expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
       expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
       expect(await BTC.balanceOf(pool.address)).to.be.equal(100)
-      expect(await CurvePool.balanceOf(CurveRewardsGauge.address)).to.be.equal(100)
+      expect(await CurvePool.balanceOf(CurveRewardsGauge.address)).to.be.within(
+        '' + 100e10 * 99 / 100, // slippage
+        '' + 100e10
+      )
 
       await waitFor(strat.connect(ctrollerSigner).withdraw(95))
 
@@ -419,9 +422,9 @@ describe('Controller Curve Strat', () => {
       ).to.be.revertedWith("can't be more than 100%")
     })
     it('should be changed', async () => {
-      expect(await strat.pool_slippage_ratio()).to.not.be.equal(123)
+      expect(await strat.poolSlippageRatio()).to.not.be.equal(123)
       await waitFor(strat.setPoolSlippageRatio(123))
-      expect(await strat.pool_slippage_ratio()).to.be.equal(123)
+      expect(await strat.poolSlippageRatio()).to.be.equal(123)
     })
   })
 
@@ -437,9 +440,9 @@ describe('Controller Curve Strat', () => {
       ).to.be.revertedWith("can't be more than 100%")
     })
     it('should be changed', async () => {
-      expect(await strat.swap_slippage_ratio()).to.not.be.equal(123)
+      expect(await strat.swapSlippageRatio()).to.not.be.equal(123)
       await waitFor(strat.setSwapSlippageRatio(123))
-      expect(await strat.swap_slippage_ratio()).to.be.equal(123)
+      expect(await strat.swapSlippageRatio()).to.be.equal(123)
     })
   })
 
@@ -455,9 +458,9 @@ describe('Controller Curve Strat', () => {
       ).to.be.revertedWith("can't be more than 100%")
     })
     it('should be changed', async () => {
-      expect(await strat.ratio_for_full_withdraw()).to.not.be.equal(123)
+      expect(await strat.ratioForFullWithdraw()).to.not.be.equal(123)
       await waitFor(strat.setRatioForFullWithdraw(123))
-      expect(await strat.ratio_for_full_withdraw()).to.be.equal(123)
+      expect(await strat.ratioForFullWithdraw()).to.be.equal(123)
     })
   })
 
@@ -476,15 +479,15 @@ describe('Controller Curve Strat', () => {
 
       await waitFor(strat.connect(ctrollerSigner).deposit())
 
-      expect(await strat.balanceOf()).to.be.equal(1000)
+      expect(await strat.balanceOf()).to.be.within(990, 1000) // 1% slip
       expect(await strat.btcBalance()).to.be.equal(0)
-      expect(await strat.balanceOfPoolInBtc()).to.be.equal(1000)
+      expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
 
       await waitFor(BTC.transfer(strat.address, 1000))
 
-      expect(await strat.balanceOf()).to.be.equal(2000)
+      expect(await strat.balanceOf()).to.be.within(1990, 2000)
       expect(await strat.btcBalance()).to.be.equal(1000)
-      expect(await strat.balanceOfPoolInBtc()).to.be.equal(1000)
+      expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
     })
 
     it('Should return pool balance', async () => {
@@ -496,7 +499,7 @@ describe('Controller Curve Strat', () => {
       await waitFor(BTC.transfer(strat.address, 1000))
       await waitFor(strat.connect(ctrollerSigner).deposit())
 
-      expect(await strat.balanceOfPool()).to.be.equal(1000)
+      expect(await strat.balanceOfPool()).to.be.within(99e10, 1000e10)
       expect(await BTC.balanceOf(pool.address)).to.be.equal(1000)
     })
 
@@ -515,7 +518,9 @@ describe('Controller Curve Strat', () => {
       await waitFor(strat.panic())
 
       expect(await strat.paused()).to.be.equal(true)
-      expect(await BTC.balanceOf(strat.address)).to.be.equal(9.9e8) // 1% slippage
+      expect(await BTC.balanceOf(strat.address)).to.be.within(
+        9.9e8, 10e8
+      ) // 1% slippage
     })
 
     it('Should pause and unpause', async () => {
@@ -539,19 +544,9 @@ describe('Controller Curve Strat', () => {
 
       await waitFor(strat.connect(ctrollerSigner).retireStrat())
 
-      expect(await BTC.balanceOf(controller.address)).to.be.equal(9.9e8) // 1% slippage
-    })
-
-    it('Should be reverted on retire strategy with deposits', async () => {
-      const ctrollerSigner = await impersonateContract(controller.address)
-      await waitFor(BTC.mint(strat.address, 10e8))
-
-      expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
-      await waitFor(strat.connect(ctrollerSigner).deposit())
-
-      await waitFor(strat.connect(ctrollerSigner).retireStrat())
-
-      expect(await BTC.balanceOf(controller.address)).to.be.equal(9.9e8) // 1% slippage
+      expect(await BTC.balanceOf(controller.address)).to.be.within(
+        9.9e8, 10e8
+      ) // 1% slippage
     })
   })
 })

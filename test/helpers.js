@@ -198,6 +198,9 @@ const setupNeededTokens = async () => {
   console.log('Deploying Curve RewardsGauge')
   global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock')
   expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
+
+  // Set BTC 8 decimals
+  await waitFor(BTC.setDecimals(8));
 }
 
 if (! process.env.HARDHAT_INTEGRATION_TESTS) {

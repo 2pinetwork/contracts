@@ -57,7 +57,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
 
     uint constant public RATIO_PRECISION = 10000; // 100%
 
-    uint public swap_slippage_ratio = 100; // 1%
+    uint public swapSlippageRatio = 100; // 1%
 
 
     event Deposit(uint indexed pid, address indexed user, uint amount);
@@ -352,7 +352,7 @@ contract ArchimedesAPI is Ownable, ReentrancyGuard {
             uint[] memory _amounts = IUniswapRouter(exchange).getAmountsOut(
                 _amount, piTokenToWantRoute[_pid]
             );
-            uint expected = _amounts[_amounts.length - 1] * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            uint expected = _amounts[_amounts.length - 1] * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
 
             uint[] memory outAmounts = IUniswapRouter(exchange).swapExactTokensForTokens(
                 _amount, expected, piTokenToWantRoute[_pid], address(this), block.timestamp + 60

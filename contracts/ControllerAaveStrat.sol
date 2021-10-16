@@ -58,8 +58,8 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     // In the case of leverage we should withdraw when the
     // amount to withdraw is 50%
-    uint public ratio_for_full_withdraw = 5000; // 50%
-    uint public swap_slippage_ratio = 100; // 1%
+    uint public ratioForFullWithdraw = 5000; // 50%
+    uint public swapSlippageRatio = 100; // 1%
 
     // The healthFactor value has the same representation than supply so
     // to do the math we should remove 12 places from healthFactor to get a HF
@@ -110,8 +110,8 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    event NewTreasury(address old_treasury, address new_treasury);
-    event NewExchange(address old_exchange, address new_exchange);
+    event NewTreasury(address oldTreasury, address newTreasury);
+    event NewExchange(address oldExchange, address newExchange);
     event NewPerformanceFee(uint old_fee, uint new_fee);
 
     modifier onlyController() {
@@ -152,11 +152,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        swap_slippage_ratio = _ratio;
+        swapSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        ratio_for_full_withdraw = _ratio;
+        ratioForFullWithdraw = _ratio;
     }
 
 
@@ -180,7 +180,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
             // will looping for ever.
-            if ((balanceOfPool() * ratio_for_full_withdraw / RATIO_PRECISION) <= _diff) {
+            if ((balanceOfPool() * ratioForFullWithdraw / RATIO_PRECISION) <= _diff) {
                 _fullDeleverage();
             } else {
                 _partialDeleverage(_diff);
@@ -368,7 +368,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * SWAP_PRECISION;
             uint ratio = (
                 (getPriceFor(wNative) * SWAP_PRECISION) / getPriceFor(want)
-            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
             uint expected = _balance * ratio / tokenDiffPrecision;
 
             IERC20(wNative).safeApprove(exchange, _balance);

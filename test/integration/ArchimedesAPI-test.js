@@ -239,7 +239,7 @@ describe('ArchimedesAPI', () => {
       // PiToken / WMatic => 942000 / 100
       const swappedWant = swappedPi.mul(100).div(942000)
 
-      const slippageRatio = await archimedes.swap_slippage_ratio()
+      const slippageRatio = await archimedes.swapSlippageRatio()
       const slippagePrecision = await archimedes.RATIO_PRECISION()
       const slippage = slippagePrecision.sub(slippageRatio)
 

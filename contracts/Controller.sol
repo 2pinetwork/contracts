@@ -91,7 +91,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     event NewStrategy(address old_strategy, address new_strategy);
-    event NewTreasury(address old_treasury, address new_treasury);
+    event NewTreasury(address oldTreasury, address newTreasury);
 
     function setTreasury(address _treasury) external onlyOwner nonReentrant {
         emit NewTreasury(treasury, _treasury);

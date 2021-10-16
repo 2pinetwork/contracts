@@ -447,9 +447,9 @@ describe('Controller Aave Strat', () => {
       ).to.be.revertedWith("can't be more than 100%")
     })
     it('should be changed', async () => {
-      expect(await strat.swap_slippage_ratio()).to.not.be.equal(123)
+      expect(await strat.swapSlippageRatio()).to.not.be.equal(123)
       await waitFor(strat.setSwapSlippageRatio(123))
-      expect(await strat.swap_slippage_ratio()).to.be.equal(123)
+      expect(await strat.swapSlippageRatio()).to.be.equal(123)
     })
   })
 
@@ -465,9 +465,9 @@ describe('Controller Aave Strat', () => {
       ).to.be.revertedWith("can't be more than 100%")
     })
     it('should be changed', async () => {
-      expect(await strat.ratio_for_full_withdraw()).to.not.be.equal(123)
+      expect(await strat.ratioForFullWithdraw()).to.not.be.equal(123)
       await waitFor(strat.setRatioForFullWithdraw(123))
-      expect(await strat.ratio_for_full_withdraw()).to.be.equal(123)
+      expect(await strat.ratioForFullWithdraw()).to.be.equal(123)
     })
   })
 

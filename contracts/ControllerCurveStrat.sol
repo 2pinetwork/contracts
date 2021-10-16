@@ -53,9 +53,13 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     // address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
 
     // Pool settings
-    uint public ratio_for_full_withdraw = 9000; // 90%
-    uint public pool_slippage_ratio = 100; // 1%
-    uint public swap_slippage_ratio = 100; // 1%
+    uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
+    uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
+    uint public swapSlippageRatio = 100; // 1% [Slippage % in swap]
+    // Min % to add/remove to an amount to conver BTC<=>BTCCRV
+    // The virtualPrice will ALWAYS be greater than 1.0 (in other case we're loosing BTC
+    // so we only consider the decimal part
+    uint public poolMinVirtualPrice = 30; // 0.3%
 
     // Routes
     address[] public wNativeToBtcRoute = [WNATIVE, ETH, BTC];
@@ -92,8 +96,8 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         _setupRole(HARVEST_ROLE, _controller); // to retire strat
     }
 
-    event NewTreasury(address old_treasury, address new_treasury);
-    event NewExchange(address old_exchange, address new_exchange);
+    event NewTreasury(address oldTreasury, address newTreasury);
+    event NewExchange(address oldExchange, address newExchange);
     event NewPerformanceFee(uint old_fee, uint new_fee);
 
     modifier onlyController() {
@@ -148,17 +152,22 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         performanceFee = _fee;
     }
 
+    function setPoolMinVirtualPrice(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        poolMinVirtualPrice = _ratio;
+    }
+
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        pool_slippage_ratio = _ratio;
+        poolSlippageRatio = _ratio;
     }
     function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        swap_slippage_ratio = _ratio;
+        swapSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        ratio_for_full_withdraw = _ratio;
+        ratioForFullWithdraw = _ratio;
     }
 
     function deposit() external whenNotPaused onlyController nonReentrant {
@@ -170,16 +179,10 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         if (btcBal > 0) {
             uint[2] memory amounts = [btcBal, 0];
+            uint btcCrvAmount = _btcToBtcCrvDoubleCheck(btcBal, true);
 
             IERC20(BTC).safeApprove(CURVE_POOL, btcBal);
-
-            // Based on virtual_price the pool_slippage_ratio will be the combined
-            // value of virtual_price percentage + slippage to receive tokens.
-            // The expected amount is represented with 18 decimals as crvBtc token
-            // so we have to add 10 decimals to the btc balance.
-            uint expectedCrvAmount = btcBal * 1e10 * (RATIO_PRECISION - pool_slippage_ratio) / RATIO_PRECISION;
-
-            ICurvePool(CURVE_POOL).add_liquidity(amounts, expectedCrvAmount, true);
+            ICurvePool(CURVE_POOL).add_liquidity(amounts, btcCrvAmount, true);
         }
 
         uint _btcCRVBalance = btcCRVBalance();
@@ -197,7 +200,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint poolBalance = balanceOfPoolInBtc();
 
             // If the requested amount is greater than xx% of the founds just withdraw everything
-            if (_amount > (poolBalance * ratio_for_full_withdraw / RATIO_PRECISION)) {
+            if (_amount > (poolBalance * ratioForFullWithdraw / RATIO_PRECISION)) {
                 withdrawBtc(0, true);
             } else {
                 withdrawBtc(_amount, false);
@@ -259,7 +262,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
             uint ratio = (
                 (getPriceFor(WNATIVE) * SWAP_PRECISION) / getPriceFor(BTC)
-            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
             uint expected = balance * ratio / tokenDiffPrecision;
 
             // BTC price is too high so sometimes it requires a lot of rewards to swap
@@ -281,7 +284,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
             uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
             uint ratio = (
                 (getPriceFor(CRV) * SWAP_PRECISION) / getPriceFor(BTC)
-            ) * (RATIO_PRECISION - swap_slippage_ratio) / RATIO_PRECISION;
+            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
             uint expected = balance * ratio / tokenDiffPrecision;
 
             IERC20(CRV).safeApprove(exchange, balance);
@@ -318,27 +321,55 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     // amount is the BTC expected to be withdrawn
     function withdrawBtc(uint _amount, bool _maxWithdraw) internal {
-        uint crvAmount;
+        uint btcCrvAmount;
 
         if (_maxWithdraw) {
-            crvAmount = balanceOfPool();
+            btcCrvAmount = balanceOfPool();
         } else {
-            // BTC has 8 decimals and crvBTC has 18, so we need a convertion to
-            // withdraw the correct amount of crvBTC
-            uint[2] memory amounts = [_amount, 0];
-            crvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, false);
+            // To know how much we have to un-stake we use the same method to
+            // calculate the expected
+            btcCrvAmount = _btcToBtcCrvDoubleCheck(_amount, false);
         }
 
-        IRewardsGauge(REWARDS_GAUGE).withdraw(crvAmount);
+        // Remove staked from gauge
+        IRewardsGauge(REWARDS_GAUGE).withdraw(btcCrvAmount);
 
         // remove_liquidity
         uint balance = btcCRVBalance();
         // Calculate at least xx% of the expected. The function doesn't
         // consider the fee.
-        uint expected = (calc_withdraw_one_coin(balance) * (RATIO_PRECISION - pool_slippage_ratio)) / RATIO_PRECISION;
+        uint expected = (calc_withdraw_one_coin(balance) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
+
+        // Double check for expected value
+        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap BTCCRV => BTC
+        uint minExpected = balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
+        if (minExpected > expected) { expected = minExpected; }
+
         require(expected > 0, "remove_liquidity should expect more than 0");
 
         ICurvePool(CURVE_POOL).remove_liquidity_one_coin(balance, 0,  expected, true);
+    }
+
+    function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
+        // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
+        // the expected amount is represented with 18 decimals as crvBtc token
+        // so we have to add 10 decimals to the btc balance.
+        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 BTCCRV tokens
+        return _amount * 1e10 * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+    }
+
+    function _btcToBtcCrvDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint btcCrvAmount) {
+        uint[2] memory amounts = [_amount, 0];
+        // calc_token_amount doesn't consider fee
+        btcCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, _isDeposit);
+        // Remove max fee
+        btcCrvAmount = btcCrvAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
+
+        // In case the pool is unbalanced (attack), make a double check for
+        // the expected amount with minExpected set ratios.
+        uint btcToBtcCrv = _minBtcToBtcCrv(_amount);
+
+        if (btcToBtcCrv > btcCrvAmount) { btcCrvAmount = btcToBtcCrv; }
     }
 
     function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
@@ -376,12 +407,12 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         _pause();
 
         // max withdraw can fail if not staked (in case of panic)
-        if (balanceOfPoolInBtc() > 0) { withdrawBtc(0, true); }
+        if (balanceOfPool() > 0) { withdrawBtc(0, true); }
 
         // Can be called without rewards
         harvest();
 
-        require(balanceOfPoolInBtc() <= 0, "Strategy still has deposits");
+        require(balanceOfPool() <= 0, "Strategy still has deposits");
         IERC20(BTC).safeTransfer(controller, btcBalance());
     }
 
