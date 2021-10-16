@@ -466,26 +466,26 @@ describe('Controller Curve Strat', () => {
 
   describe('Other functions', () => {
     it('Should get balanceOf strat', async () => {
-      expect(await strat.balanceOf()).to.be.equal(0)
+      expect(await strat.balance()).to.be.equal(0)
 
       const ctrollerSigner = await impersonateContract(controller.address)
 
       await waitFor(BTC.transfer(strat.address, 1000))
 
       // btcBalance
-      expect(await strat.balanceOf()).to.be.equal(1000)
+      expect(await strat.balance()).to.be.equal(1000)
       expect(await strat.btcBalance()).to.be.equal(1000)
       expect(await strat.balanceOfPoolInBtc()).to.be.equal(0)
 
       await waitFor(strat.connect(ctrollerSigner).deposit())
 
-      expect(await strat.balanceOf()).to.be.within(990, 1000) // 1% slip
+      expect(await strat.balance()).to.be.within(990, 1000) // 1% slip
       expect(await strat.btcBalance()).to.be.equal(0)
       expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
 
       await waitFor(BTC.transfer(strat.address, 1000))
 
-      expect(await strat.balanceOf()).to.be.within(1990, 2000)
+      expect(await strat.balance()).to.be.within(1990, 2000)
       expect(await strat.btcBalance()).to.be.equal(1000)
       expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
     })

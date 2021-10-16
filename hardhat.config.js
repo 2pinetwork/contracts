@@ -33,7 +33,7 @@ const transformLine = (_hre, line) => {
 }
 
 if (isIntegration) {
-  mochaSettings.timeout = 80000
+  mochaSettings.timeout = 300000 // 5 minutes
 
   // Change contract address test <=> production
   preProcessSettings.eachLine = hre => ({

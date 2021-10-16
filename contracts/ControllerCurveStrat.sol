@@ -194,9 +194,9 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
-        uint balance = btcBalance();
+        uint _balance = btcBalance();
 
-        if (balance < _amount) {
+        if (_balance < _amount) {
             uint poolBalance = balanceOfPoolInBtc();
 
             // If the requested amount is greater than xx% of the founds just withdraw everything
@@ -206,10 +206,11 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
                 withdrawBtc(_amount, false);
             }
 
-            balance = btcBalance();
+            _balance = btcBalance();
 
-            if (balance < _amount) { _amount = balance; }
+            if (_balance < _amount) { _amount = _balance; }
         }
+
 
         IERC20(BTC).safeTransfer(controller, _amount);
 
@@ -255,42 +256,42 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
      * expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
      */
     function swapWMaticRewards() internal {
-        uint balance = wNativeBalance();
+        uint _balance = wNativeBalance();
 
-        if (balance > 0) {
+        if (_balance > 0) {
             // WNATIVE 18 decimals BTC => 8 decimals
             uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
             uint ratio = (
                 (getPriceFor(WNATIVE) * SWAP_PRECISION) / getPriceFor(BTC)
             ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
-            uint expected = balance * ratio / tokenDiffPrecision;
+            uint expected = _balance * ratio / tokenDiffPrecision;
 
             // BTC price is too high so sometimes it requires a lot of rewards to swap
             if (expected > 1) {
-                IERC20(WNATIVE).safeApprove(exchange, balance);
+                IERC20(WNATIVE).safeApprove(exchange, _balance);
 
                 IUniswapRouter(exchange).swapExactTokensForTokens(
-                    balance, expected, wNativeToBtcRoute, address(this), block.timestamp + 60
+                    _balance, expected, wNativeToBtcRoute, address(this), block.timestamp + 60
                 );
             }
         }
     }
 
     function swapCrvRewards() internal {
-        uint balance = crvBalance();
+        uint _balance = crvBalance();
 
-        if (balance > 0) {
+        if (_balance > 0) {
             // CRV 18 decimals BTC => 8 decimals
             uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
             uint ratio = (
                 (getPriceFor(CRV) * SWAP_PRECISION) / getPriceFor(BTC)
             ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
-            uint expected = balance * ratio / tokenDiffPrecision;
+            uint expected = _balance * ratio / tokenDiffPrecision;
 
-            IERC20(CRV).safeApprove(exchange, balance);
+            IERC20(CRV).safeApprove(exchange, _balance);
 
             IUniswapRouter(exchange).swapExactTokensForTokens(
-                balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
+                _balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
             );
         }
     }
@@ -335,19 +336,19 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         IRewardsGauge(REWARDS_GAUGE).withdraw(btcCrvAmount);
 
         // remove_liquidity
-        uint balance = btcCRVBalance();
+        uint _balance = btcCRVBalance();
         // Calculate at least xx% of the expected. The function doesn't
         // consider the fee.
-        uint expected = (calc_withdraw_one_coin(balance) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
+        uint expected = (calc_withdraw_one_coin(_balance) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
 
         // Double check for expected value
         // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap BTCCRV => BTC
-        uint minExpected = balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
+        uint minExpected = _balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
         if (minExpected > expected) { expected = minExpected; }
 
         require(expected > 0, "remove_liquidity should expect more than 0");
 
-        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(balance, 0,  expected, true);
+        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
     }
 
     function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
@@ -392,7 +393,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     function btcCRVBalance() public view returns (uint) {
         return IERC20(BTCCRV).balanceOf(address(this));
     }
-    function balanceOf() public view returns (uint) {
+    function balance() public view returns (uint) {
         return btcBalance() + balanceOfPoolInBtc();
     }
     function balanceOfPool() public view returns (uint) {
