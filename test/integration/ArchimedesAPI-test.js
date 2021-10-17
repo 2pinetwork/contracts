@@ -192,8 +192,14 @@ describe('ArchimedesAPI', () => {
     it.only('with 2 accounts && just 1 referral', async () => {
       await waitFor(piToken.initRewardsOn(rewardsBlock))
 
+      const piPerBlock = await archimedes.piTokenPerBlock()
       const pair = await createPiTokenExchangePair()
+      const one = '' + 1e18
+      const five = '' + 5e18
+      const nine = '' + 9e18
+      const ten = '' + 10e18
 
+      let accPiTokenPerShare = ethers.BigNumber.from(0)
       let bobPiPaid = ethers.BigNumber.from(0)
       let referralPaid = 0
       let exchBalance = new BigNumber(
@@ -207,9 +213,9 @@ describe('ArchimedesAPI', () => {
       // Deposit without rewards yet
       await waitFor(WMATIC.connect(owner).approve(archimedes.address, MAX_UINT))
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
-console.log(210)
-      await (await archimedes.deposit(0, bob.address, 10, alice.address)).wait()
-console.log(212)
+      console.log(210)
+      await (await archimedes.deposit(0, bob.address, ten, alice.address)).wait()
+      console.log(212)
       expect(await refMgr.referrers(bob.address)).to.be.equal(alice.address)
       expect(await refMgr.referralsCount(alice.address)).to.be.equal(1)
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(0)
@@ -219,24 +225,34 @@ console.log(212)
       await balanceEqualTo(WMATIC, archimedes, 0)
 
       // Reward block is in the past
+      const rewardBlock = parseInt(await archimedes.startBlock(), 10)
       const currentBlock = parseInt(await getBlock(), 10)
+
       if (currentBlock < rewardsBlock) {
         await mineNTimes(rewardsBlock - currentBlock)
       }
-console.log(228)
+
+      console.log(228)
+
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
 
       // This should mint a reward of 0.23~ for the first block
       await waitFor(archimedes.updatePool(0))
 
-      const piPerBlock = await archimedes.piTokenPerBlock()
-
       await balanceEqualTo(piToken, archimedes, piPerBlock)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
 
-      let bobBalance = ethers.BigNumber.from(10)
+      let bobBalance = ethers.BigNumber.from(ten)
 
       // Ref transfer
       await balanceEqualTo(WMATIC, alice, 0)
+
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
+
       // This will harvest the previous updated pool + one new
       // because each modifying call mine a new block
       console.log(1)
@@ -278,28 +294,35 @@ console.log(228)
         await archimedes.COMMISSION_RATE_PRECISION()
       )
 
-      // PiToken / WMATIC => 942000 / 100
-      const refSwappedWant = refSwappedPi.mul(100).div(942000)
+      // PiToken / WMatic => 942000 / 100
+      let aliceExpectedBalance = refSwappedPi.mul(100).div(942000)
 
       // Rewards are swapped and transferred to the wallet
       await balanceEqualTo(piToken, alice, 0)
       expect(await WMATIC.balanceOf(alice.address)).to.be.within(
-        refSwappedWant.mul(slippage).div(slippagePrecision),
-        refSwappedWant
+        aliceExpectedBalance.mul(slippage).div(slippagePrecision),
+        aliceExpectedBalance
       )
 
       let aliceBalance = await controller.balanceOf(alice.address)
 
-      console.log(2)
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
+
       // Work with Alice
-      await waitFor(archimedes.deposit(0, alice.address, 9, zeroAddress))
-      // The pricePerShare > 1 gives less shares on deposit
-      aliceBalance = aliceBalance.add(8)
+      console.log(2)
+      await waitFor(archimedes.deposit(0, alice.address, nine, zeroAddress))
+      aliceBalance = aliceBalance.add(nine)
 
       await balanceEqualTo(piToken, archimedes, piPerBlock)
       await balanceEqualTo(piToken, alice, 0)
-      await balanceEqualTo(controller, alice, aliceBalance)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
+      expect(await controller.balanceOf(alice.address)).to.be.within(
+        // The pricePerShare > 1 gives less shares on deposit
+        aliceBalance.mul(99999).div(100000),
+        aliceBalance
+      )
 
       // Should not give to owner the referral when alice already deposited without one
       // deposit method claim the pending rewards, so the last rewards block
@@ -314,28 +337,40 @@ console.log(228)
       )
 
       // The pricePerShare > 1 gives less shares on deposit
-      // This is because 9 becomes 8, which makes 8 + 4 (reward), which again turns 11
-      const truncationOffset = 2
-      aliceBalance = aliceBalance.add(
-        (9 + (nextReward * swapRatio) - truncationOffset).toFixed()
+      aliceBalance = aliceBalance.add(nine).add(
+        (nextReward * swapRatio).toFixed()
       )
 
       exchBalance = exchBalance.plus('' + nextReward.toFixed())
 
-      console.log(3)
-      await waitFor(archimedes.deposit(0, alice.address, 9, owner.address))
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
 
       expect(await WMATIC.balanceOf(alice.address)).to.be.within(
-        refSwappedWant.mul(slippage).div(slippagePrecision),
-        refSwappedWant
-      )
-      await balanceEqualTo(controller, alice, aliceBalance)
-      await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      expect(await piToken.balanceOf(archimedes.address)).to.be.within(
-        piPerBlock.mul(2).mul(slippage).div(slippagePrecision),
-        piPerBlock.mul(2)
+        aliceExpectedBalance.mul(slippage).div(slippagePrecision),
+        aliceExpectedBalance
       )
 
+      const truncationOffset = 12 // "round margin"
+      let archReserve = piPerBlock.mul(2).sub('' + nextReward.toFixed())
+
+      console.log(3)
+      await waitFor(archimedes.deposit(0, alice.address, nine, owner.address))
+
+      expect(await piToken.balanceOf(pair)).to.be.within(
+        // There is a deviation since shares are not exactly 1 to 1
+        exchBalance.times(99999).div(100000).toFixed(0),
+        exchBalance.toFixed(0)
+      )
+      expect(await piToken.balanceOf(archimedes.address)).to.be.within(
+        archReserve.sub(truncationOffset), archReserve.add(truncationOffset)
+      )
+      expect(await controller.balanceOf(alice.address)).to.be.within(
+        // The pricePerShare > 1 gives less shares on deposit
+        aliceBalance.mul(99999).div(100000),
+        aliceBalance
+      )
       expect(await refMgr.referrers(owner.address)).to.be.equal(zeroAddress)
 
       let aliceRewards = new BigNumber(nextReward)
@@ -346,16 +381,26 @@ console.log(228)
         / (await controller.totalSupply())
       )
 
-
-      // Same use of truncation offset, two times 1 share each
-      aliceBalance = aliceBalance.add((nextReward * swapRatio - truncationOffset).toFixed())
+      aliceBalance = aliceBalance.add((nextReward * swapRatio).toFixed())
       aliceRewards = aliceRewards.plus(nextReward)
       exchBalance = exchBalance.plus('' + nextReward.toFixed())
 
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
+
       await waitFor(archimedes.harvest(0, alice.address))
       await balanceEqualTo(piToken, alice, 0)
-      await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      await balanceEqualTo(controller, alice, aliceBalance)
+      expect(await piToken.balanceOf(pair)).to.be.within(
+        // There is a deviation since shares are not exactly 1 to 1
+        exchBalance.times(999).div(1000).toFixed(0),
+        exchBalance.toFixed(0)
+      )
+      expect(await controller.balanceOf(alice.address)).to.be.within(
+        // The pricePerShare > 1 gives less shares on deposit
+        aliceBalance.mul(99999).div(100000),
+        aliceBalance
+      )
 
       // Just to be sure that the referral is not paid
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
@@ -373,10 +418,15 @@ console.log(228)
 
       // bobBalance = bobBalance.add(2)
 
-      // REVISAR ESTO PORQUE EL piPerBlock son 4 bloques pero no es el100%
+      // REVISAR ESTO PORQUE EL piPerBlock son 4 bloques pero no es el 100%
       // para bob...
       bobPiPaid = bobPiPaid.add(ethers.BigNumber.from((piPerBlock * 4).toFixed()))
       bobBalance = bobBalance.add(bobPiPaid.mul(100).div(942000))
+
+      accPiTokenPerShare = accPiTokenPerShare.add(
+        piPerBlock.mul(one).div(await controller.totalSupply())
+      )
+
       await waitFor(archimedes.harvest(0, bob.address))
 
       await balanceEqualTo(piToken, bob, 0)
@@ -390,26 +440,26 @@ console.log(228)
       expect(
         await piToken.balanceOf(pair)
       ).within(
-        ethers.BigNumber.from(exchBalance.toFixed(0)).add(
-          new BigNumber(toNumber(piPerBlock * 0.02)).toFixed(0)
-        ),
-        ethers.BigNumber.from(exchBalance.toFixed(0)).add(
-          new BigNumber(toNumber(piPerBlock * 0.04)).toFixed(0)
-        )
+        exchBalance.plus(toNumber(piPerBlock * 0.02)).toFixed(0),
+        exchBalance.plus(toNumber(piPerBlock * 0.04)).toFixed(0)
       )
 
       exchBalance = new BigNumber(
         await piToken.balanceOf(exchange.address)
       )
 
+      aliceExpectedBalance = aliceExpectedBalance.add(
+        (bobBalance.mul(accPiTokenPerShare).div(one).div(100).sub(refSwappedPi)).mul(100).div(942000)
+      )
+
       await balanceEqualTo(piToken, alice, 0)
       // swap for ref reward
       expect(await WMATIC.balanceOf(alice.address)).to.be.within(
-        refSwappedWant.mul(3).mul(slippage).div(slippagePrecision),
-        refSwappedWant.mul(3)
+        aliceExpectedBalance.mul(slippage).div(slippagePrecision),
+        aliceExpectedBalance
       )
 
-      referralPaid = (new BigNumber(referralPaid)).plus(toNumber(piPerBlock * 0.03))
+      referralPaid = (new BigNumber(referralPaid)).plus(toNumber(piPerBlock * 0.02))
 
       // Just to be sure that the referral is not paid
       // Round ....
@@ -430,20 +480,20 @@ console.log(228)
 
       let prevBalance = await WMATIC.balanceOf(bob.address)
 
-      await waitFor(archimedes.withdraw(0, bob.address, 5))
+      await waitFor(archimedes.withdraw(0, bob.address, five))
 
-      // 1 swap + 5 shares
-      prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(5))
+      // 1 swap + 5e18 shares
+      prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(five))
       expect(await WMATIC.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
         prevBalance
       )
 
-      // now bob has only 5 shares and alice 20
+      // now bob has only 5e18 shares and alice 20e18
       const shares = await controller.balanceOf(bob.address)
       await waitFor(archimedes.withdraw(0, bob.address, shares))
 
-      // 1 swap + 8 shares
+      // 1 swap + 8e18 shares
       prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(shares))
       expect(await WMATIC.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
@@ -454,12 +504,11 @@ console.log(228)
       // Emergency withdraw without harvest
       aliceBalance = await WMATIC.balanceOf(alice.address)
       const deposited = await controller.balanceOf(alice.address)
-      // shares to Matic conversion is not _direct_ and has some rounding errors
-      const offset = 1
 
       await waitFor(archimedes.emergencyWithdraw(0, alice.address))
-      await balanceEqualTo(
-        WMATIC, alice, toNumber(aliceBalance.toNumber() + deposited.toNumber() + offset)
+      expect(await(WMATIC.balanceOf(alice.address))).to.be.within(
+        aliceBalance.add(deposited).mul(slippage).div(slippagePrecision),
+        aliceBalance.add(deposited)
       )
     })
   })
