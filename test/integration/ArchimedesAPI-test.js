@@ -4,7 +4,7 @@ const {
   MAX_UINT
 } = require('../helpers')
 
-const { setWbtcBalanceFor, createPiTokenExchangePair } = require('./helpers')
+const { setWbtcBalanceFor, setWethBalanceFor, createPiTokenExchangePair } = require('./helpers')
 
 describe('ArchimedesAPI setup', () => {
   let ArchimedesAPI
@@ -58,7 +58,7 @@ describe('ArchimedesAPI', () => {
 
   beforeEach(async () => {
     piToken = global.PiToken
-    rewardsBlock = (await getBlock()) + 20
+    rewardsBlock = (await getBlock()) + 30
 
     archimedes = await deploy(
       'ArchimedesAPI',
@@ -71,7 +71,6 @@ describe('ArchimedesAPI', () => {
 
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.addMinter(archimedes.address))
-    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
     await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
 
     expect(await archimedes.piToken()).to.equal(piToken.address)
@@ -84,12 +83,32 @@ describe('ArchimedesAPI', () => {
 
     await waitFor(archimedes.setExchange(exchange.address))
     await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
+
+    let strat = await ethers.getContractAt(
+      'ControllerAaveStrat',
+      (await controller.strategy())
+    )
+
+    let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
+    let WETHFeed = await ethers.getContractAt('IChainLink', '0xF9680D99D6C9589e2a93a78A04A279e509205945')
+    let piTokenFeed = await deploy('PriceFeedMock') // faked at the moment
+
+    // 2021-10-05 wANative-eth prices
+    // ETH => 345716900000
+    await Promise.all([
+      waitFor(piTokenFeed.setPrice(0.08e8)),
+      waitFor(archimedes.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(archimedes.setPriceFeed(WETH.address, WETHFeed.address)),
+      waitFor(archimedes.setPriceFeed(piToken.address, piTokenFeed.address)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(WETH.address, WETHFeed.address)),
+    ])
   })
 
   describe('setExchange', async () => {
     it('should be reverted for non admin', async () => {
       await expect(archimedes.connect(bob).setExchange(zeroAddress)).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
     })
 
@@ -108,7 +127,7 @@ describe('ArchimedesAPI', () => {
     })
     it('should revert for non admin', async () => {
       await expect(archimedes.connect(bob).setHandler(bob.address)).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
     })
     it('should change handler', async () => {
@@ -169,7 +188,7 @@ describe('ArchimedesAPI', () => {
   })
 
   describe('FullFlow', async () => {
-    it('Full flow with 2 accounts && just 1 referral', async () => {
+    it.only('with 2 accounts && just 1 referral', async () => {
       await waitFor(piToken.initRewardsOn(rewardsBlock))
 
       const pair = await createPiTokenExchangePair()
@@ -181,30 +200,29 @@ describe('ArchimedesAPI', () => {
       )
 
       // Needed for exchange
-      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
-      await waitFor(WMATIC.transfer(exchange.address, '' + 1e18))
+      await setWethBalanceFor(exchange.address, '' + 100e18)
+      await setWethBalanceFor(owner.address, '' + 1e18)
 
       // Deposit without rewards yet
-      await waitFor(WMATIC.connect(owner).deposit({ value: '' + 1e18 }))
-      await waitFor(WMATIC.connect(owner).approve(archimedes.address, MAX_UINT))
+      await waitFor(WETH.connect(owner).approve(archimedes.address, MAX_UINT))
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
+console.log(210)
       await (await archimedes.deposit(0, bob.address, 10, alice.address)).wait()
+console.log(212)
       expect(await refMgr.referrers(bob.address)).to.be.equal(alice.address)
       expect(await refMgr.referralsCount(alice.address)).to.be.equal(1)
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(0)
       expect(await refMgr.totalPaid()).to.be.equal(0)
-
+      console.log(219)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      await balanceEqualTo(WMATIC, archimedes, 0)
+      await balanceEqualTo(WETH, archimedes, 0)
 
       // Reward block is in the past
-      const rewardBlock = parseInt(await archimedes.startBlock(), 10)
       const currentBlock = parseInt(await getBlock(), 10)
-      expect(rewardBlock).to.be.lessThan(currentBlock)
-
-      // expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
-
-      // await mineNTimes(rewardBlock - currentBlock)
+      if (currentBlock < rewardsBlock) {
+        await mineNTimes(rewardsBlock - currentBlock)
+      }
+console.log(228)
 
       // This should mint a reward of 0.23~ for the first block
       await waitFor(archimedes.updatePool(0))
@@ -217,9 +235,10 @@ describe('ArchimedesAPI', () => {
       let bobBalance = ethers.BigNumber.from(10)
 
       // Ref transfer
-      await balanceEqualTo(WMATIC, alice, 0)
+      await balanceEqualTo(WETH, alice, 0)
       // This will harvest the previous updated pool + one new
       // because each modifying call mine a new block
+      console.log(1)
       await waitFor(archimedes.harvest(0, bob.address)) // rewardBlock + 2
 
       // 2 blocks for bob + 2 blocks for referral alice
@@ -237,7 +256,7 @@ describe('ArchimedesAPI', () => {
       // 2 blocks
       const swappedPi = piPerBlock.mul(2)
 
-      // PiToken / WMatic => 942000 / 100
+      // PiToken / WETH => 942000 / 100
       const swappedWant = swappedPi.mul(100).div(942000)
 
       const slippageRatio = await archimedes.swapSlippageRatio()
@@ -258,18 +277,19 @@ describe('ArchimedesAPI', () => {
         await archimedes.COMMISSION_RATE_PRECISION()
       )
 
-      // PiToken / WMatic => 942000 / 100
+      // PiToken / WETH => 942000 / 100
       const refSwappedWant = refSwappedPi.mul(100).div(942000)
 
       // Rewards are swapped and transferred to the wallet
       await balanceEqualTo(piToken, alice, 0)
-      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
+      expect(await WETH.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(slippage).div(slippagePrecision),
         refSwappedWant
       )
 
       let aliceBalance = await controller.balanceOf(alice.address)
 
+      console.log(2)
       // Work with Alice
       await waitFor(archimedes.deposit(0, alice.address, 9, zeroAddress))
       // The pricePerShare > 1 gives less shares on deposit
@@ -301,17 +321,18 @@ describe('ArchimedesAPI', () => {
 
       exchBalance = exchBalance.plus('' + nextReward.toFixed())
 
+      console.log(3)
       await waitFor(archimedes.deposit(0, alice.address, 9, owner.address))
 
-      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
+      expect(await WETH.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(slippage).div(slippagePrecision),
         refSwappedWant
       )
       await balanceEqualTo(controller, alice, aliceBalance)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
       expect(await piToken.balanceOf(archimedes.address)).to.be.within(
-        toNumber(piPerBlock * 2 - nextReward),
-        toNumber(piPerBlock * 2 - nextReward * slippage / slippagePrecision)
+        piPerBlock.mul(2).mul(slippage).div(slippagePrecision),
+        piPerBlock.mul(2)
       )
 
       expect(await refMgr.referrers(owner.address)).to.be.equal(zeroAddress)
@@ -351,6 +372,8 @@ describe('ArchimedesAPI', () => {
 
       // bobBalance = bobBalance.add(2)
 
+      // REVISAR ESTO PORQUE EL piPerBlock son 4 bloques pero no es el100%
+      // para bob...
       bobPiPaid = bobPiPaid.add(ethers.BigNumber.from((piPerBlock * 4).toFixed()))
       bobBalance = bobBalance.add(bobPiPaid.mul(100).div(942000))
       await waitFor(archimedes.harvest(0, bob.address))
@@ -380,7 +403,7 @@ describe('ArchimedesAPI', () => {
 
       await balanceEqualTo(piToken, alice, 0)
       // swap for ref reward
-      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
+      expect(await WETH.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(3).mul(slippage).div(slippagePrecision),
         refSwappedWant.mul(3)
       )
@@ -404,13 +427,13 @@ describe('ArchimedesAPI', () => {
       // withdraw everything
       await waitFor(archimedes.harvest(0, bob.address))
 
-      let prevBalance = await WMATIC.balanceOf(bob.address)
+      let prevBalance = await WETH.balanceOf(bob.address)
 
       await waitFor(archimedes.withdraw(0, bob.address, 5))
 
       // 1 swap + 5 shares
       prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(5))
-      expect(await WMATIC.balanceOf(bob.address)).to.be.within(
+      expect(await WETH.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
         prevBalance
       )
@@ -421,21 +444,21 @@ describe('ArchimedesAPI', () => {
 
       // 1 swap + 8 shares
       prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(shares))
-      expect(await WMATIC.balanceOf(bob.address)).to.be.within(
+      expect(await WETH.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
         prevBalance
       )
       await balanceEqualTo(controller, bob, 0)
 
       // Emergency withdraw without harvest
-      aliceBalance = await WMATIC.balanceOf(alice.address)
+      aliceBalance = await WETH.balanceOf(alice.address)
       const deposited = await controller.balanceOf(alice.address)
       // shares to Matic conversion is not _direct_ and has some rounding errors
       const offset = 1
 
       await waitFor(archimedes.emergencyWithdraw(0, alice.address))
       await balanceEqualTo(
-        WMATIC, alice, toNumber(aliceBalance.toNumber() + deposited.toNumber() + offset)
+        WETH, alice, toNumber(aliceBalance.toNumber() + deposited.toNumber() + offset)
       )
     })
   })
@@ -510,7 +533,7 @@ describe('ArchimedesAPI', () => {
       await expect(
         archimedes.connect(bob).setReferralCommissionRate(20)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
 
       expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%

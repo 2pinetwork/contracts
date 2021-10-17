@@ -40,7 +40,7 @@ describe('Archimedes', () => {
 
   beforeEach(async () => {
     piToken = await createPiToken()
-    rewardsBlock = (await getBlock()) + 20
+    rewardsBlock = (await getBlock()) + 30
 
     archimedes = await deploy(
       'Archimedes',
@@ -64,6 +64,20 @@ describe('Archimedes', () => {
 
     await archimedes.addNewPool(global.WETH.address, controller.address, 1, false)
     expect(await archimedes.poolLength()).to.be.equal(1)
+
+    let strat = await ethers.getContractAt(
+      'ControllerAaveStrat',
+      (await controller.strategy())
+    )
+
+    let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
+    let ethFeed = await ethers.getContractAt('IChainLink', '0xF9680D99D6C9589e2a93a78A04A279e509205945')
+
+    // 2021-10-06 wNative-eth prices
+    await Promise.all([
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(WETH.address, ethFeed.address)),
+    ])
   })
 
   describe('addNewPool', async () => {
@@ -479,7 +493,7 @@ describe('Archimedes', () => {
       await expect(
         archimedes.connect(bob).setReferralCommissionRate(20)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
 
       expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%

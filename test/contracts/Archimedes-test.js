@@ -444,7 +444,7 @@ describe('Archimedes', () => {
       await expect(
         archimedes.connect(bob).setReferralCommissionRate(20)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
 
       expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%

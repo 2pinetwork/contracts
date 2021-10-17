@@ -79,11 +79,14 @@ describe('Controller Curve Strat', () => {
     crvFeed = await deploy('PriceFeedMock')
 
     // 2021-10-06 wNative-eth prices
-    await waitFor(wNativeFeed.setPrice(129755407))
-    await waitFor(btcFeed.setPrice(5394968350000))
-    await waitFor(crvFeed.setPrice(283589154))
-
-    await waitFor(strat.setPriceFeeds(wNativeFeed.address, btcFeed.address, crvFeed.address));
+    await Promise.all([
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(btcFeed.setPrice(5394968350000)),
+      waitFor(crvFeed.setPrice(283589154)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
+      waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+    ])
 
 
     pool = CurvePool

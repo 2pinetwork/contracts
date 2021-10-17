@@ -96,10 +96,12 @@ describe('Controller Aave Strat', () => {
     wantFeed = await deploy('PriceFeedMock')
 
     // 2021-10-06 wmatic-eth prices
-    await waitFor(wNativeFeed.setPrice(129755407))
-    await waitFor(wantFeed.setPrice(363070990456305))
-
-    await waitFor(strat.setPriceFeeds(wNativeFeed.address, wantFeed.address));
+    await Promise.all([
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(wantFeed.setPrice(363070990456305)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(piToken.address, wantFeed.address)),
+    ])
 
     pool = Aave.pool
   })
@@ -190,7 +192,8 @@ describe('Controller Aave Strat', () => {
         exchange.address,
         owner.address
       )
-      await waitFor(newStrat.setPriceFeeds(wNativeFeed.address, wantFeed.address));
+      await waitFor(newStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(newStrat.setPriceFeed(piToken.address, wantFeed.address))
       const ctrollerSigner = await impersonateContract(controller.address)
 
       await waitFor(piToken.transfer(newStrat.address, 110))
@@ -304,7 +307,8 @@ describe('Controller Aave Strat', () => {
         owner.address
       )
 
-      await waitFor(newStrat.setPriceFeeds(wNativeFeed.address, wantFeed.address));
+      await waitFor(newStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(newStrat.setPriceFeed(piToken.address, wantFeed.address))
 
       const ctrollerSigner = await impersonateContract(controller.address)
 
@@ -382,14 +386,14 @@ describe('Controller Aave Strat', () => {
       // Ratio: 1.29 / 3630.7 (MATIC / ETH)
       await waitFor(strat.harvest())
 
-      // RATIO => (100 * 1e9 / 20) * 99 / 100 == 353.8
-      // 1e18 * RATIO / 1e9 => 353e9 (swapped)
-      // 353e9 * 0.035 == 173250  (perf fee)
+      // RATIO => (129755407 * 1e18 / 363070990456305) * 9900 / 10000 == 353809189680
+      // 1e18 * RATIO / 1e18 => RATIO (swapped)
+      // RATIO * 0.035 == 12383321638  (perf fee)
       expect(await piToken.balanceOf(exchange.address)).to.be.equal(
-        exchangeBalance.sub(353e9)
+        exchangeBalance.sub(353809189680)
       )
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.add(12.355e9)
+        balance.add(12383321638)
       )
     })
 
@@ -499,7 +503,8 @@ describe('Controller Aave Strat', () => {
         global.exchange.address,
         owner.address
       )
-      await waitFor(levStrat.setPriceFeeds(wNativeFeed.address, wantFeed.address));
+      await waitFor(levStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(levStrat.setPriceFeed(piToken.address, wantFeed.address))
       await waitFor(controller.setStrategy(levStrat.address))
       const ctrollerSigner = await impersonateContract(controller.address)
 

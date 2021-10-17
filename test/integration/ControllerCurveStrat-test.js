@@ -40,10 +40,14 @@ describe('Controller Curve Strat', () => {
       ethers.getContractAt('ControllerCurveStrat', (await controller.strategy())),
       ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'),
       ethers.getContractAt('IChainLink', '0xc907E116054Ad103354f2D350FD2514433D57F6f'),
-      ethers.getContractAt('IChainLink', '0x336584C8E6Dc19637A5b36206B1c79923111b405')
+      ethers.getContractAt('IChainLink', '0x336584C8E6Dc19637A5b36206B1c79923111b405'),
     ])
 
-    await waitFor(strat.setPriceFeeds(wNativeFeed.address, btcFeed.address, crvFeed.address));
+    await Promise.all([
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
+      waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+    ])
   })
 
   it('Full deposit + harvest strat + withdraw', async () => {
@@ -63,7 +67,12 @@ describe('Controller Curve Strat', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
-    await mineNTimes(10) // to ask for rewards
+    // to ask for rewards
+    console.log(new Date())
+    console.time('mineNtimes')
+    await mineNTimes(30)
+    console.timeEnd('mineNtimes')
+    console.log(new Date())
     await waitFor(strat.harvest())
 
     expect(await strat.balanceOfPool()).to.be.above(balance)

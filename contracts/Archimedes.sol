@@ -4,7 +4,7 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
@@ -18,7 +18,7 @@ interface IWNative is IERC20 {
     function withdraw(uint wad) external;
 }
 
-contract Archimedes is Ownable, ReentrancyGuard {
+contract Archimedes is AccessControl, ReentrancyGuard {
     // using Address for address;
     using SafeERC20 for IERC20;
 
@@ -69,13 +69,20 @@ contract Archimedes is Ownable, ReentrancyGuard {
         piToken = _piToken;
         startBlock = _startBlock;
         WNative = _wNative;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    }
+
+    modifier onlyAdmin() {
+        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
+        _;
     }
 
     // Deposit MATIC
     receive() external payable { }
 
     // Add a new want token to the pool. Can only be called by the owner.
-    function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyOwner {
+    function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyAdmin {
         require(address(_want) != address(0), "Address zero not allowed");
         require(IController(_ctroller).farm() == address(this), "Not a farm controller");
         require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
@@ -101,7 +108,7 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // Update the given pool's rewards weighing .
-    function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyOwner {
+    function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyAdmin {
         // Update pools before a weighing change
         if (_massUpdate) {
             massUpdatePools();
@@ -393,12 +400,12 @@ contract Archimedes is Ownable, ReentrancyGuard {
     }
 
     // Update the referral contract address by the owner
-    function setReferralAddress(IReferral _newReferral) external onlyOwner {
+    function setReferralAddress(IReferral _newReferral) external onlyAdmin {
         referralMgr = _newReferral;
     }
 
     // Update referral commission rate by the owner
-    function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyOwner {
+    function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyAdmin {
         require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "setReferralCommissionRate: invalid referral commission rate basis points");
         referralCommissionRate = _referralCommissionRate;
     }
@@ -476,13 +483,13 @@ contract Archimedes is Ownable, ReentrancyGuard {
     // In case of stucketd 2Pi tokens after 2.5 years
     // check if any holder has pending tokens then call this fn
     // E.g. in case of a few EmergencyWithdraw the rewards will be stucked
-    function redeemStuckedPiTokens() external onlyOwner {
+    function redeemStuckedPiTokens() external onlyAdmin {
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
         require(blockNumber() > (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 
-        if (_balance > 0) { piToken.transfer(owner(), _balance); }
+        if (_balance > 0) { piToken.transfer(msg.sender, _balance); }
     }
 }

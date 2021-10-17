@@ -6,16 +6,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // import "hardhat/console.sol";
 
+import "./Swappable.sol";
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
-import "../interfaces/IUniswapRouter.sol";
-import "../interfaces/IChainLink.sol";
 
-contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
+// Swappable contract has the AccessControl module
+contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     using SafeERC20 for IERC20;
 
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
@@ -53,13 +52,9 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     uint constant public INTEREST_RATE_MODE = 2; // variable
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
-    uint constant public RATIO_PRECISION = 10000; // 100%
-    uint constant public SWAP_PRECISION = 1e9;
-
     // In the case of leverage we should withdraw when the
     // amount to withdraw is 50%
     uint public ratioForFullWithdraw = 5000; // 50%
-    uint public swapSlippageRatio = 100; // 1%
 
     // The healthFactor value has the same representation than supply so
     // to do the math we should remove 12 places from healthFactor to get a HF
@@ -73,10 +68,6 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     address public exchange;
     address public immutable controller;
-
-    // Chainlink addr
-    IChainLink public wNativeFeed;
-    IChainLink public wantFeed;
 
     constructor(
         address _want,
@@ -119,21 +110,6 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         _;
     }
 
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
-        _;
-    }
-
-    function setPriceFeeds(IChainLink _wNativeFeed, IChainLink _wantFeed) external onlyAdmin {
-        (uint80 round,,,,) = _wNativeFeed.latestRoundData();
-        require(round > 0, "Invalid wNative feed");
-        (round,,,,) = _wantFeed.latestRoundData();
-        require(round > 0, "Invalid want feed");
-
-        wNativeFeed = _wNativeFeed;
-        wantFeed = _wantFeed;
-    }
-
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         emit NewTreasury(treasury, _treasury);
 
@@ -150,15 +126,10 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         wNativeToWantRoute = _route;
     }
 
-    function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        swapSlippageRatio = _ratio;
-    }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
         ratioForFullWithdraw = _ratio;
     }
-
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
         require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
@@ -355,39 +326,14 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint _balance = IERC20(wNative).balanceOf(address(this));
 
         if (_balance > 0) {
-            // ratio is a 9 decimals ratio number calculated to get the minimum
-            // amount of want-tokens. So the balance is multiplied by the ratio
-            // and then divided by 9 decimals to get the same "precision".
-            // Then the result should be divided for the decimal diff between tokens.
-            // Oracle Price Feed has always 8 decimals.
-            // E.g want is USDT with only 6 decimals:
-            // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
-            // ratio = 1_507_423_500 ((152265000 * 1e9) / 100000000) * 99 / 100 [with 1.52 USDT/MATIC]
-            // _balance = 1e18 (1.0 MATIC)
-            // expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
-            uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * SWAP_PRECISION;
-            uint ratio = (
-                (getPriceFor(wNative) * SWAP_PRECISION) / getPriceFor(want)
-            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
-            uint expected = _balance * ratio / tokenDiffPrecision;
+            // _expectedForSwap checks with oracles to obtain the minExpected amount
+            uint expected = _expectedForSwap(_balance, wNative, want);
 
             IERC20(wNative).safeApprove(exchange, _balance);
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 _balance, expected, wNativeToWantRoute, address(this), block.timestamp + 60
             );
         }
-    }
-
-    function getPriceFor(address _token) internal view returns (uint) {
-        // This could be implemented with FeedRegistry but it's not available in polygon
-        int256 price;
-        if (_token == wNative) {
-            (, price,,,) = wNativeFeed.latestRoundData();
-        } else {
-            (, price,,,) = wantFeed.latestRoundData();
-        }
-
-        return uint(price);
     }
 
     /**

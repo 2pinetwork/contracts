@@ -3,15 +3,12 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
-import "../interfaces/IUniswapRouter.sol";
-import "../interfaces/IChainLink.sol";
+import "./Swappable.sol";
 
 interface ICurvePool {
     // _use_underlying If True, withdraw underlying assets instead of aTokens
@@ -28,10 +25,8 @@ interface IRewardsGauge {
     function withdraw(uint _value) external;
 }
 
-contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
+contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-
-    bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
 
     // Test
     address public constant WNATIVE = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
@@ -55,18 +50,14 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     // Pool settings
     uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
     uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
-    uint public swapSlippageRatio = 100; // 1% [Slippage % in swap]
     // Min % to add/remove to an amount to conver BTC<=>BTCCRV
     // The virtualPrice will ALWAYS be greater than 1.0 (in other case we're loosing BTC
     // so we only consider the decimal part
     uint public poolMinVirtualPrice = 30; // 0.3%
 
-    // Routes
+    // Routes for Swap
     address[] public wNativeToBtcRoute = [WNATIVE, ETH, BTC];
     address[] public crvToBtcRoute = [CRV, ETH, BTC];
-
-    uint constant public RATIO_PRECISION = 10000; // 100%
-    uint constant public SWAP_PRECISION = 1e9;
 
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
@@ -77,11 +68,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     address public exchange;
     address public immutable controller;
 
-    // Chainlink addr
-    IChainLink public wNativeFeed;
-    IChainLink public btcFeed;
-    IChainLink public crvFeed;
-
     constructor(address _controller, address _exchange, address _treasury) {
         require(_controller != address(0), "Controller can't be 0 address");
         require(_exchange != address(0), "Exchange can't be 0 address");
@@ -90,10 +76,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         controller = _controller;
         exchange = _exchange;
         treasury = _treasury;
-
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, _controller); // to retire strat
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -103,24 +85,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
         _;
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
-        _;
-    }
-
-    function setPriceFeeds(IChainLink _wNativeFeed, IChainLink _btcFeed, IChainLink _crvFeed) external onlyAdmin {
-        (uint80 round,,,,) = _wNativeFeed.latestRoundData();
-        require(round > 0, "Invalid wNative feed");
-        (round,,,,) = _btcFeed.latestRoundData();
-        require(round > 0, "Invalid btc feed");
-        (round,,,,) = _crvFeed.latestRoundData();
-        require(round > 0, "Invalid crv feed");
-
-        wNativeFeed = _wNativeFeed;
-        btcFeed = _btcFeed;
-        crvFeed = _crvFeed;
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
@@ -160,10 +124,6 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
         poolSlippageRatio = _ratio;
-    }
-    function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
-        swapSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
@@ -259,12 +219,7 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint _balance = wNativeBalance();
 
         if (_balance > 0) {
-            // WNATIVE 18 decimals BTC => 8 decimals
-            uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
-            uint ratio = (
-                (getPriceFor(WNATIVE) * SWAP_PRECISION) / getPriceFor(BTC)
-            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
-            uint expected = _balance * ratio / tokenDiffPrecision;
+            uint expected = _expectedForSwap(_balance, WNATIVE, BTC);
 
             // BTC price is too high so sometimes it requires a lot of rewards to swap
             if (expected > 1) {
@@ -281,33 +236,17 @@ contract ControllerCurveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint _balance = crvBalance();
 
         if (_balance > 0) {
-            // CRV 18 decimals BTC => 8 decimals
-            uint tokenDiffPrecision = (1e18 / 1e8) * SWAP_PRECISION;
-            uint ratio = (
-                (getPriceFor(CRV) * SWAP_PRECISION) / getPriceFor(BTC)
-            ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
-            uint expected = _balance * ratio / tokenDiffPrecision;
+            uint expected = _expectedForSwap(_balance, CRV, BTC);
 
-            IERC20(CRV).safeApprove(exchange, _balance);
+            // BTC price is too high so sometimes it requires a lot of rewards to swap
+            if (expected > 1) {
 
-            IUniswapRouter(exchange).swapExactTokensForTokens(
-                _balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
-            );
+                IERC20(CRV).safeApprove(exchange, _balance);
+                IUniswapRouter(exchange).swapExactTokensForTokens(
+                    _balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
+                );
+            }
         }
-    }
-
-    function getPriceFor(address _token) internal view returns (uint) {
-        // This could be implemented with FeedRegistry but it's not available in polygon
-        int256 price;
-        if (_token == WNATIVE) {
-            (, price,,,) = wNativeFeed.latestRoundData();
-        } else if (_token == BTC) {
-            (, price,,,) = btcFeed.latestRoundData();
-        } else {
-            (, price,,,) = crvFeed.latestRoundData();
-        }
-
-        return uint(price);
     }
 
     /**

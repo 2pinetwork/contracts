@@ -9,11 +9,14 @@ describe('ArchimedesAPIMock', () => {
   let rewardsBlock
   let bob
   let controller
+  let piTokenFeed
+  let wNativeFeed
+  let strat
 
   beforeEach(async () => {
     [, bob] = await ethers.getSigners()
     piToken = await createPiToken(true)
-    rewardsBlock = (await getBlock()) + 20
+    rewardsBlock = (await getBlock()) + 30
 
     archimedes = await deploy(
       'ArchimedesAPIMock',
@@ -24,15 +27,29 @@ describe('ArchimedesAPIMock', () => {
 
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
-    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
-    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
+    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''));
 
-    controller = await createController(WMATIC, archimedes)
+    controller = await createController(WMATIC, archimedes);
 
-    await (await archimedes.addNewPool(WMATIC.address, controller.address, 1, false)).wait()
+    [strat, wNativeFeed, piTokenFeed] = await Promise.all([
+      ethers.getContractAt('ControllerAaveStrat', (await controller.strategy())),
+      deploy('PriceFeedMock'),
+      deploy('PriceFeedMock'),
+    ])
+
+    await archimedes.addNewPool(WMATIC.address, controller.address, 1, true)
     expect(await archimedes.poolLength()).to.be.equal(1)
-    await waitFor(archimedes.setExchange(exchange.address))
-    await waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address]))
+
+    await Promise.all([
+      waitFor(archimedes.setExchange(exchange.address)),
+      waitFor(archimedes.setRoute(0, [piToken.address, WMATIC.address])),
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(piTokenFeed.setPrice(0.08e8)),
+      waitFor(archimedes.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(archimedes.setPriceFeed(piToken.address, piTokenFeed.address)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(piToken.address, piTokenFeed.address)),
+    ])
 
     await waitFor(WMATIC.deposit({ value: toNumber(1e18) }))
     await waitFor(WMATIC.transfer(exchange.address, toNumber(1e18)))

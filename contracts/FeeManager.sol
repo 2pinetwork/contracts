@@ -7,13 +7,15 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // import "hardhat/console.sol";
-import "../interfaces/IUniswapRouter.sol";
+
+import "./Swappable.sol";
 
 interface IPiVault {
     function piToken() external view returns (address);
 }
 
-contract FeeManager is AccessControl, ReentrancyGuard {
+// Swappable contract has the AccessControl module
+contract FeeManager is ReentrancyGuard, Swappable {
     using SafeERC20 for IERC20;
 
     bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
@@ -32,15 +34,12 @@ contract FeeManager is AccessControl, ReentrancyGuard {
     uint constant public TREASURY_PART = 150;
     uint constant public MAX = 1000;
 
-    uint constant public SWAP_PRECISION = 1e18;
-
     constructor(address _treasury, address _piVault, address _exchange) {
         require(IPiVault(_piVault).piToken() == piToken, "Not PiToken vault");
         treasury = _treasury;
         piVault = _piVault;
         exchange = _exchange;
 
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(HARVEST_ROLE, msg.sender);
     }
 
@@ -48,29 +47,12 @@ contract FeeManager is AccessControl, ReentrancyGuard {
     event NewExchange(address oldExchange, address newExchange);
     event Harvest(address _token, uint _tokenAmount, uint piTokenAmount);
 
-    modifier onlyAdmin {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only Admin");
-        _;
-    }
-
-    function harvest(address _token, uint _ratio) external nonReentrant {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
+    function harvest(address _token) external nonReentrant {
         uint _balance = IERC20(_token).balanceOf(address(this));
 
         if (_balance <= 0) { return; }
 
-        // _ratio is a 18 decimals ratio number calculated by the
-        // caller before call harvest to get the minimum amount of 2Pi-tokens.
-        // So the _balance is multiplied by the ratio and then divided by 18 decimals
-        // to get the same "precision". Then the result should be divided for the
-        // decimal diff between tokens.
-        // E.g _token is WMATIC with 18 decimals:
-        // _ratio = 522_650_000 (0.52265 WMATIC/2Pi)
-        // __balance = 1e18 (1.0 WMATIC)
-        // tokenDiffPrecision = 1e18 (1e18 MATIC decimals * 1e18 ratio precision / 1e18 2Pi decimals)
-        // expected = 522650000000000000 (1e18 * 522_650_000 / 1e18) [0.52 in 2Pi decimals]
-        uint tokenDiffPrecision = ((10 ** IERC20Metadata(_token).decimals()) * SWAP_PRECISION) / 1e18;
-        uint expected = _balance * _ratio / tokenDiffPrecision;
+        uint expected = _expectedForSwap(_balance, _token, piToken);
 
         bool native = _token == wNative;
 
