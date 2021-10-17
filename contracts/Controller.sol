@@ -66,6 +66,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
         // ignore mint/burn
         if (from != address(0) && to != address(0) && amount > 0) {
+           console.log("Controller before cbk From:", from, to, amount);
             IFarm(farm).beforeSharesTransfer(uint(pid), from, to, amount);
         }
     }
@@ -73,6 +74,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     // AferTransfer callback to update the farm rewards for both users
     function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
         if (from != address(0) && to != address(0) && amount > 0) {
+           console.log("Controller after cbk From:", from, to, amount);
             IFarm(farm).afterSharesTransfer(uint(pid), from, to, amount);
         }
     }
@@ -126,12 +128,14 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         require(!_strategyPaused(), "Strategy paused");
         uint _before = balance();
 
+        console.log("Before transfer in ctroller");
         want.safeTransferFrom(
             farm, // Archimedes
             address(this),
             _amount
         );
 
+        console.log("after transfer in ctroller");
         uint _diff = balance() - _before;
 
         uint shares;

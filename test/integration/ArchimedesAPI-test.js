@@ -4,7 +4,7 @@ const {
   MAX_UINT
 } = require('../helpers')
 
-const { setWbtcBalanceFor, setWethBalanceFor, createPiTokenExchangePair } = require('./helpers')
+const { setWbtcBalanceFor, setWMaticBalanceFor, createPiTokenExchangePair } = require('./helpers')
 
 describe('ArchimedesAPI setup', () => {
   let ArchimedesAPI
@@ -89,19 +89,20 @@ describe('ArchimedesAPI', () => {
       (await controller.strategy())
     )
 
-    let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
+    // let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
     let WETHFeed = await ethers.getContractAt('IChainLink', '0xF9680D99D6C9589e2a93a78A04A279e509205945')
     let piTokenFeed = await deploy('PriceFeedMock') // faked at the moment
 
     // 2021-10-05 wANative-eth prices
     // ETH => 345716900000
+    // FOR THESE TEST WE WILL USE THE ETH PRICE
     await Promise.all([
       waitFor(piTokenFeed.setPrice(0.08e8)),
-      waitFor(archimedes.setPriceFeed(WMATIC.address, wNativeFeed.address)),
-      waitFor(archimedes.setPriceFeed(WETH.address, WETHFeed.address)),
+      waitFor(archimedes.setPriceFeed(WMATIC.address, WETHFeed.address)),
+      // waitFor(archimedes.setPriceFeed(WETH.address, WETHFeed.address)),
       waitFor(archimedes.setPriceFeed(piToken.address, piTokenFeed.address)),
-      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
-      waitFor(strat.setPriceFeed(WETH.address, WETHFeed.address)),
+      waitFor(strat.setPriceFeed(WMATIC.address, WETHFeed.address)),
+      // waitFor(strat.setPriceFeed(WETH.address, WETHFeed.address)),
     ])
   })
 
@@ -200,11 +201,11 @@ describe('ArchimedesAPI', () => {
       )
 
       // Needed for exchange
-      await setWethBalanceFor(exchange.address, '' + 100e18)
-      await setWethBalanceFor(owner.address, '' + 1e18)
+      await setWMaticBalanceFor(exchange.address, '' + 100e18)
+      await setWMaticBalanceFor(owner.address, '' + 1e18)
 
       // Deposit without rewards yet
-      await waitFor(WETH.connect(owner).approve(archimedes.address, MAX_UINT))
+      await waitFor(WMATIC.connect(owner).approve(archimedes.address, MAX_UINT))
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
 console.log(210)
       await (await archimedes.deposit(0, bob.address, 10, alice.address)).wait()
@@ -215,7 +216,7 @@ console.log(212)
       expect(await refMgr.totalPaid()).to.be.equal(0)
       console.log(219)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      await balanceEqualTo(WETH, archimedes, 0)
+      await balanceEqualTo(WMATIC, archimedes, 0)
 
       // Reward block is in the past
       const currentBlock = parseInt(await getBlock(), 10)
@@ -235,7 +236,7 @@ console.log(228)
       let bobBalance = ethers.BigNumber.from(10)
 
       // Ref transfer
-      await balanceEqualTo(WETH, alice, 0)
+      await balanceEqualTo(WMATIC, alice, 0)
       // This will harvest the previous updated pool + one new
       // because each modifying call mine a new block
       console.log(1)
@@ -256,7 +257,7 @@ console.log(228)
       // 2 blocks
       const swappedPi = piPerBlock.mul(2)
 
-      // PiToken / WETH => 942000 / 100
+      // PiToken / WMATIC => 942000 / 100
       const swappedWant = swappedPi.mul(100).div(942000)
 
       const slippageRatio = await archimedes.swapSlippageRatio()
@@ -277,12 +278,12 @@ console.log(228)
         await archimedes.COMMISSION_RATE_PRECISION()
       )
 
-      // PiToken / WETH => 942000 / 100
+      // PiToken / WMATIC => 942000 / 100
       const refSwappedWant = refSwappedPi.mul(100).div(942000)
 
       // Rewards are swapped and transferred to the wallet
       await balanceEqualTo(piToken, alice, 0)
-      expect(await WETH.balanceOf(alice.address)).to.be.within(
+      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(slippage).div(slippagePrecision),
         refSwappedWant
       )
@@ -324,7 +325,7 @@ console.log(228)
       console.log(3)
       await waitFor(archimedes.deposit(0, alice.address, 9, owner.address))
 
-      expect(await WETH.balanceOf(alice.address)).to.be.within(
+      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(slippage).div(slippagePrecision),
         refSwappedWant
       )
@@ -403,7 +404,7 @@ console.log(228)
 
       await balanceEqualTo(piToken, alice, 0)
       // swap for ref reward
-      expect(await WETH.balanceOf(alice.address)).to.be.within(
+      expect(await WMATIC.balanceOf(alice.address)).to.be.within(
         refSwappedWant.mul(3).mul(slippage).div(slippagePrecision),
         refSwappedWant.mul(3)
       )
@@ -427,13 +428,13 @@ console.log(228)
       // withdraw everything
       await waitFor(archimedes.harvest(0, bob.address))
 
-      let prevBalance = await WETH.balanceOf(bob.address)
+      let prevBalance = await WMATIC.balanceOf(bob.address)
 
       await waitFor(archimedes.withdraw(0, bob.address, 5))
 
       // 1 swap + 5 shares
       prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(5))
-      expect(await WETH.balanceOf(bob.address)).to.be.within(
+      expect(await WMATIC.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
         prevBalance
       )
@@ -444,21 +445,21 @@ console.log(228)
 
       // 1 swap + 8 shares
       prevBalance = prevBalance.add(piPerBlock.mul(100).div(942000).add(shares))
-      expect(await WETH.balanceOf(bob.address)).to.be.within(
+      expect(await WMATIC.balanceOf(bob.address)).to.be.within(
         prevBalance.mul(slippage).div(slippagePrecision),
         prevBalance
       )
       await balanceEqualTo(controller, bob, 0)
 
       // Emergency withdraw without harvest
-      aliceBalance = await WETH.balanceOf(alice.address)
+      aliceBalance = await WMATIC.balanceOf(alice.address)
       const deposited = await controller.balanceOf(alice.address)
       // shares to Matic conversion is not _direct_ and has some rounding errors
       const offset = 1
 
       await waitFor(archimedes.emergencyWithdraw(0, alice.address))
       await balanceEqualTo(
-        WETH, alice, toNumber(aliceBalance.toNumber() + deposited.toNumber() + offset)
+        WMATIC, alice, toNumber(aliceBalance.toNumber() + deposited.toNumber() + offset)
       )
     })
   })
