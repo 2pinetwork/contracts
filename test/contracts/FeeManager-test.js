@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor } = require('../helpers')
+const { createPiToken, deploy, waitFor, zeroAddress } = require('../helpers')
 
 describe('FeeManager setup', () => {
   let piToken
@@ -30,7 +30,10 @@ describe('FeeManager', () => {
   let piToken
   let feeMgr
   let bob
-  let SWAP_PRECISION
+  let WETHFeed
+  let max
+  let slippage
+  let vaultPart
 
   before(async () => {
     [, bob] = await ethers.getSigners()
@@ -45,30 +48,40 @@ describe('FeeManager', () => {
     piVault = await deploy('PiVault', piToken.address, tomorrow, nextWeek)
     feeMgr = await deploy('FeeManager', owner.address, piVault.address, global.exchange.address)
 
-    SWAP_PRECISION = await feeMgr.SWAP_PRECISION()
+    let wNativeFeed = await deploy('PriceFeedMock')
+    let piTokenFeed = await deploy('PriceFeedMock')
+    WETHFeed = await deploy('PriceFeedMock')
+
+    await waitFor(piToken.transfer(exchange.address, 10e18 + ''))
+
+    // 2021-10-06 wNative-eth prices
+    await Promise.all([
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(piTokenFeed.setPrice(0.08e8)),
+      waitFor(WETHFeed.setPrice(1e8)),
+      waitFor(feeMgr.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(feeMgr.setPriceFeed(piToken.address, piTokenFeed.address)),
+    ])
+
+    max = await feeMgr.RATIO_PRECISION()
+    slippage = max.sub(await feeMgr.swapSlippageRatio())
+    vaultPart = max.sub(await feeMgr.treasuryRatio())
   })
 
   describe('harvest', async () => {
-    it('should be reverted for not harvest user', async () => {
-      await expect(feeMgr.connect(bob).harvest(WMATIC.address, 0)).to.be.revertedWith('Only harvest role')
-    })
-
     it('should execute harvest and send to vault', async () => {
       // This is because harvest need balance to swap
-      await waitFor(WMATIC.deposit({ value: 1 }))
-      await waitFor(WMATIC.transfer(feeMgr.address, 1))
+      await waitFor(WMATIC.deposit({ value: 1e6 + '' }))
+      await waitFor(WMATIC.transfer(feeMgr.address, 1e6 + ''))
 
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
 
-      await waitFor(piToken.transfer(feeMgr.address, 100))
-      await waitFor(feeMgr.harvest(WMATIC.address, 0))
+      await waitFor(feeMgr.harvest(WMATIC.address))
 
-      const max = await feeMgr.MAX()
-      const amount = max.sub(await feeMgr.TREASURY_PART())
-
-      expect(amount).to.be.above(1)
-      expect(await piToken.balanceOf(piVault.address)).to.be.equal(
-        amount.mul(100).div(max)
+      let swapped = vaultPart.mul(1e6).div(max).mul(129755407).div(0.08e8)
+      expect(vaultPart).to.be.above(1)
+      expect(await piToken.balanceOf(piVault.address)).to.be.within(
+        swapped.mul(slippage).div(max), swapped
       )
     })
 
@@ -76,56 +89,56 @@ describe('FeeManager', () => {
       // This is because harvest need balance to swap
       const otherW = await deploy('WETHMock')
 
+      await waitFor(feeMgr.setPriceFeed(otherW.address, WETHFeed.address))
       await waitFor(otherW.deposit({ value: 100 }))
       await waitFor(otherW.transfer(feeMgr.address, 100))
 
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
 
-      await waitFor(piToken.transfer(exchange.address, 100))
+      let swapped = ethers.BigNumber.from(100).mul(1e8).div(0.08e8)
+        .mul(slippage).div(max)
+
       await expect(
-        feeMgr.harvest(otherW.address, SWAP_PRECISION)
+        feeMgr.harvest(otherW.address)
       ).to.emit(
         feeMgr, 'Harvest'
-      ).withArgs(otherW.address, 100, 100)
+      ).withArgs(otherW.address, 100, swapped)
 
-      const max = await feeMgr.MAX()
-      const amount = max.sub(await feeMgr.TREASURY_PART())
-
-      expect(amount).to.be.above(1)
-      expect(await piToken.balanceOf(piVault.address)).to.be.equal(
-        amount.mul(100).div(max)
+      expect(await piToken.balanceOf(piVault.address)).to.be.within(
+        swapped.mul(vaultPart).div(max).sub(1),
+        swapped.mul(vaultPart).div(max).add(1)
       )
     })
 
     it('should do nothing without balance', async () => {
       const balance = await piToken.balanceOf(owner.address)
-      await waitFor(feeMgr.harvest(WMATIC.address, 0))
+      await waitFor(feeMgr.harvest(WMATIC.address))
 
       expect(await piToken.balanceOf(owner.address)).to.be.equal(balance)
     })
 
-    it('should exchange for other token', async () => {
-      // This is because harvest need balance to swap
-      await waitFor(piToken.transfer(exchange.address, 100))
+    it('should execute harvest with other route and send to vault', async () => {
+      const route = [WMATIC.address, BTC.address, piToken.address]
+      await waitFor(feeMgr.setRoute(WMATIC.address, route))
+
+      await waitFor(WMATIC.deposit({ value: 1e6 + '' }))
+      await waitFor(WMATIC.transfer(feeMgr.address, 1e6 + ''))
+
       expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
 
-      await waitFor(WMATIC.deposit({ value: 100 }))
-      await waitFor(WMATIC.transfer(feeMgr.address, 100))
-      await waitFor(feeMgr.harvest(WMATIC.address, SWAP_PRECISION)) // 1-1 ratio
+      await waitFor(feeMgr.harvest(WMATIC.address))
 
-      const max = await feeMgr.MAX()
-      const amount = max.sub(await feeMgr.TREASURY_PART())
-
-      expect(amount).to.be.above(1)
-      expect(await piToken.balanceOf(piVault.address)).to.be.equal(
-        amount.mul(100).div(max)
+      let swapped = vaultPart.mul(1e6).div(max).mul(129755407).div(0.08e8)
+      expect(vaultPart).to.be.above(1)
+      expect(await piToken.balanceOf(piVault.address)).to.be.within(
+        swapped.mul(slippage).div(max), swapped
       )
     })
   })
 
   describe('setTreasury', async () => {
     it('should revert for non-admin', async () => {
-      await expect(feeMgr.connect(bob).setTreasury(owner.address)).to.be.revertedWith('Only Admin')
+      await expect(feeMgr.connect(bob).setTreasury(owner.address)).to.be.revertedWith('Not an admin')
     })
 
     it('should change treasury', async () => {
@@ -143,7 +156,7 @@ describe('FeeManager', () => {
 
   describe('setExchange', async () => {
     it('should revert for non-admin', async () => {
-      await expect(feeMgr.connect(bob).setExchange(bob.address)).to.be.revertedWith('Only Admin')
+      await expect(feeMgr.connect(bob).setExchange(bob.address)).to.be.revertedWith('Not an admin')
     })
 
     it('should change exchange', async () => {
@@ -156,6 +169,40 @@ describe('FeeManager', () => {
       )
 
       expect(await feeMgr.exchange()).to.be.equal(bob.address)
+    })
+  })
+
+  describe('setRoute', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        feeMgr.connect(bob).setRoute(WMATIC.address, [])
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for zero address token', async () => {
+      await expect(
+        feeMgr.setRoute(zeroAddress, [])
+      ).to.be.revertedWith('!ZeroAddress')
+    })
+    it('should be reverted for invalid route', async () => {
+      await expect(
+        feeMgr.setRoute(WMATIC.address, [WMATIC.address])
+      ).to.be.revertedWith('Invalid route')
+    })
+    it('should be reverted for zero address route', async () => {
+      await expect(
+        feeMgr.setRoute(
+          WMATIC.address, [WMATIC.address, zeroAddress, piToken.address]
+        )
+      ).to.be.revertedWith('Route with ZeroAddress')
+    })
+
+    it('should set route', async () => {
+      const route = [WMATIC.address, BTC.address, piToken.address]
+      await waitFor(feeMgr.setRoute(WMATIC.address, route))
+
+      expect(await feeMgr.routes(WMATIC.address, 0)).to.be.equal(route[0])
+      expect(await feeMgr.routes(WMATIC.address, 1)).to.be.equal(route[1])
+      expect(await feeMgr.routes(WMATIC.address, 2)).to.be.equal(route[2])
     })
   })
 })

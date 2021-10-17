@@ -201,10 +201,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
         // Transfer from user => Archimedes
         // This is the only line that should transfer from msg.sender to Archimedes
         // And in case of swap rewards will be included in the deposit
-        console.log("Por hacer el safeTransf", address(poolInfo[_pid].want));
-        console.log("PiToken:", address(piToken));
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
-        console.log(207);
         uint _balance = wantBalance(poolInfo[_pid].want) - _before;
 
         // Deposit in the controller
@@ -288,8 +285,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     }
 
     // Controller callback after transfer to update users rewards
-    function afterSharesTransfer(uint /*_pid*/, address _from, address _to, uint amount) external view {
-       console.log("After shares transfer dafacccc", _from, _to, amount);
+    function afterSharesTransfer(uint /*_pid*/, address /*_from*/, address /*_to*/, uint /*amount*/) external pure {
         revert("API shares are handled by handler at the moment");
     }
 
@@ -313,11 +309,8 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
 
     function _depositInController(uint _pid, address _user, uint _amount) internal {
         // Archimedes => controller transfer & deposit
-        console.log(315);
         poolInfo[_pid].want.safeIncreaseAllowance(poolInfo[_pid].controller, _amount);
-console.log(317);
         controller(_pid).deposit(_user, _amount);
-console.log(319);
         // This is to "save" like the new amount of shares was paid
         _updateUserPaidRewards(_pid, _user);
 
