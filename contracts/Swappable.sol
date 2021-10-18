@@ -15,6 +15,8 @@ abstract contract Swappable is AccessControl {
 
     mapping(address => IChainLink) public oracles;
 
+    uint public maxPriceOffset = 600; // 10 minutes
+
     constructor() {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -24,14 +26,19 @@ abstract contract Swappable is AccessControl {
         _;
     }
 
-    function setSwapSlippageRatio(uint _ratio) public onlyAdmin {
+    function setSwapSlippageRatio(uint _ratio) external onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
         swapSlippageRatio = _ratio;
     }
 
+    function setMaxPriceOffset(uint _offset) external onlyAdmin {
+        require(_offset <= 86400, "Can't be more than 1 day");
+        maxPriceOffset = _offset;
+    }
+
     function setPriceFeed(address _token, IChainLink _feed) external onlyAdmin {
         require(_token != address(0), "!ZeroAddress");
-        (uint80 round, int256 price,,,) = _feed.latestRoundData();
+        (uint80 round, int price,,,) = _feed.latestRoundData();
         require(round > 0 && price > 0, "Invalid feed");
 
         oracles[_token] = _feed;
@@ -60,7 +67,9 @@ abstract contract Swappable is AccessControl {
 
     function getPriceFor(address _token) internal view returns (uint) {
         // This could be implemented with FeedRegistry but it's not available in polygon
-        (, int256 price,,,) = oracles[_token].latestRoundData();
+        (, int price,,uint timestamp,) = oracles[_token].latestRoundData();
+
+        require(timestamp >= (block.timestamp - maxPriceOffset), "Old price");
 
         return uint(price);
     }

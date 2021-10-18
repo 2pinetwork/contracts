@@ -63,10 +63,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
 
-
     address public treasury;
     address public exchange;
-    address public immutable controller;
+    address public immutable controller; // immutable to prevent anyone to change it and withdraw
 
     constructor(address _controller, address _exchange, address _treasury) {
         require(_controller != address(0), "Controller can't be 0 address");
@@ -80,7 +79,8 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewExchange(address oldExchange, address newExchange);
-    event NewPerformanceFee(uint old_fee, uint new_fee);
+    event NewPerformanceFee(uint oldFee, uint newFee);
+    event Harvested(address _want, uint _amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -193,6 +193,8 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
         // re-deposit
         if (!paused()) { _deposit(); }
+
+        emit Harvested(BTC, harvested);
     }
 
     /**
@@ -202,19 +204,6 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
-    /**
-     * @dev swap ratio explain
-     * ratio is a 9 decimals ratio number calculated to get the minimum
-     * amount of want-tokens. So the balance is multiplied by the ratio
-     * and then divided by 9 decimals to get the same "precision".
-     * Then the result should be divided for the decimal diff between tokens.
-     * Oracle Price Feed has always 8 decimals.
-     * E.g want is USDT with only 6 decimals:
-     * tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
-     * ratio = 1_507_423_500 ((152265000 * 1e9) / 100000000) * 99 / 100 [with 1.52 USDT/MATIC]
-     * _balance = 1e18 (1.0 MATIC)
-     * expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
-     */
     function swapWMaticRewards() internal {
         uint _balance = wNativeBalance();
 
@@ -267,7 +256,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
             btcCrvAmount = balanceOfPool();
         } else {
             // To know how much we have to un-stake we use the same method to
-            // calculate the expected
+            // calculate the expected BTCCRV at deposit
             btcCrvAmount = _btcToBtcCrvDoubleCheck(_amount, false);
         }
 

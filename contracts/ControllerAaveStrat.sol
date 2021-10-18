@@ -103,7 +103,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewExchange(address oldExchange, address newExchange);
-    event NewPerformanceFee(uint old_fee, uint new_fee);
+    event NewPerformanceFee(uint oldFee, uint newFee);
+    event Harvested(address _want, uint _amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -242,6 +243,9 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         }
     }
 
+    // This function is useful to increase Aave HF (to prevent liquidation) and
+    // in case of "stucked while loop for withdraws" the strategy can be paused, and then
+    // use this function the N needed times to get all the resources out of the Aave pool
     function increaseHealthFactor(uint byRatio) external onlyAdmin nonReentrant {
         require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
@@ -320,6 +324,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
         // re-deposit
         if (!paused()) { _leverage(); }
+
+        emit Harvested(want, harvested);
     }
 
     function swapRewards() internal {

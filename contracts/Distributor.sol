@@ -47,12 +47,12 @@ contract Distributor is Ownable, ReentrancyGuard {
     uint public leftTokensForTreasury  = 1.57e24; // 1.57M
 
     constructor(address _piToken, address _piVault, address _treasury) {
-        // require(block.number < _startBlock, "Block should be in the future");
         piToken = IPiToken(_piToken);
         piVault = IPiVault(_piVault);
         treasury = _treasury;
         lastBlock = blockNumber();
 
+        // Will be changed for the right wallets before deploy
         founders[0] = address(0xc);
         founders[1] = address(0xd);
         founders[2] = address(0xe);
@@ -89,7 +89,7 @@ contract Distributor is Ownable, ReentrancyGuard {
         treasury = _treasury;
     }
 
-    function distribute() external onlyOwner nonReentrant {
+    function distribute() external nonReentrant {
         require(blockNumber() > lastBlock, "Have to wait");
         require(
             leftTokensForInvestors > 0 ||
@@ -135,6 +135,8 @@ contract Distributor is Ownable, ReentrancyGuard {
     }
 
     function depositToFounders(uint multiplier) internal {
+        if (leftTokensForFounders <= 0) { return; }
+
         uint amount = multiplier * FOUNDER_PER_BLOCK * FOUNDERS_COUNT;
 
         // Check for limit to mint

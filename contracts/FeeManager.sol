@@ -15,7 +15,7 @@ interface IPiVault {
 }
 
 // Swappable contract has the AccessControl module
-contract FeeManager is ReentrancyGuard, Swappable {
+contract FeeManager is Swappable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Tokens used
@@ -24,12 +24,13 @@ contract FeeManager is ReentrancyGuard, Swappable {
     // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
     // address constant public piToken = address(0x913C1E1a34B60a80F16c64c83E3D74695F492567); // Mumbai
 
+    address public immutable piVault;
     address public treasury;
-    address public piVault;
     address public exchange;
 
     // Fee constants
     uint public treasuryRatio = 150;
+    uint public constant MAX_TREASURY_RATIO = 5000; // 50% for treasury & 50% for Stakers
 
     mapping(address => address[]) public routes;
 
@@ -42,6 +43,7 @@ contract FeeManager is ReentrancyGuard, Swappable {
         exchange = _exchange;
     }
 
+    event NewTreasuryRatio(uint oldRatio, uint newRatio);
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewExchange(address oldExchange, address newExchange);
     event Harvest(address _token, uint _tokenAmount, uint piTokenAmount);
@@ -81,6 +83,12 @@ contract FeeManager is ReentrancyGuard, Swappable {
         IERC20(piToken).safeTransfer(piVault, piBalance - treasuryPart);
 
         emit Harvest(_token, _balance, piBalance);
+    }
+
+    function setTreasuryRatio(uint _ratio) external onlyAdmin nonReentrant {
+        require(_ratio <= MAX_TREASURY_RATIO, "Can't be greater than 50%");
+        emit NewTreasuryRatio(treasuryRatio, _ratio);
+        treasuryRatio = _ratio;
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
