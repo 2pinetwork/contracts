@@ -61,9 +61,12 @@ contract Archimedes is AccessControl, ReentrancyGuard {
     event Deposit(uint indexed pid, address indexed user, uint amount);
     event Withdraw(uint indexed pid, address indexed user, uint amount);
     event EmergencyWithdraw(uint indexed pid, address indexed user, uint amount);
+    event NewPool(uint indexed pid, address want, uint weighing);
+    event PoolWeighingUpdated(uint indexed pid, uint oldWeighing, uint newWeighing);
+    event Harvested(uint indexed pid, address indexed user, uint amount);
 
     constructor(IPiToken _piToken, uint _startBlock, IWNative _wNative) {
-        require(address(_piToken) != address(0), "Pi address can't be zero address");
+        require(address(_piToken) != address(0), "Pi address !ZeroAddress");
         require(_startBlock > blockNumber(), "StartBlock should be in the future");
 
         piToken = _piToken;
@@ -105,10 +108,14 @@ contract Archimedes is AccessControl, ReentrancyGuard {
         uint _pid = poolInfo.length - 1;
         uint _setPid = IController(_ctroller).setFarmPid(_pid);
         require(_pid == _setPid, "Pid doesn't match");
+
+        emit NewPool(_pid, address(_want), _weighing);
     }
 
     // Update the given pool's rewards weighing .
     function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyAdmin {
+        emit PoolWeighingUpdated(_pid, poolInfo[_pid].weighing, _weighing);
+
         // Update pools before a weighing change
         if (_massUpdate) {
             massUpdatePools();
@@ -286,9 +293,11 @@ contract Archimedes is AccessControl, ReentrancyGuard {
 
         updatePool(_pid);
 
-        calcPendingAndPayRewards(_pid, _user);
+        uint harvested = calcPendingAndPayRewards(_pid, _user);
 
         _updateUserPaidRewards(_pid, _user);
+
+        if (harvested > 0) { emit Harvested(_pid, _user, harvested); }
     }
 
     function harvestAll() external {
@@ -374,11 +383,11 @@ contract Archimedes is AccessControl, ReentrancyGuard {
     }
 
     // Pay rewards
-    function calcPendingAndPayRewards(uint _pid, address _user) internal {
+    function calcPendingAndPayRewards(uint _pid, address _user) internal returns (uint pending) {
         uint _shares = userShares(_pid, _user);
 
         if (_shares > 0) {
-            uint pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
+            pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
 
             if (pending > 0) {
                 safePiTokenTransfer(_user, pending);

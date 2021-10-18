@@ -15,7 +15,7 @@ describe('ArchimedesAPI setup', () => {
     await expect(ArchimedesAPI.deploy(
       zeroAddress, 1, owner.address
     )).to.be.revertedWith(
-      "Pi address can't be zero address"
+      "Pi address !ZeroAddress"
     )
   })
 
@@ -31,7 +31,7 @@ describe('ArchimedesAPI setup', () => {
     await expect(ArchimedesAPI.deploy(
       PiToken.address, 1e9, zeroAddress
     )).to.be.revertedWith(
-      "Handler can't be zero address"
+      "Handler !ZeroAddress"
     )
   })
 })
@@ -110,7 +110,7 @@ describe('ArchimedesAPI', () => {
 
     it('should be reverted for 0 address', async () => {
       await expect(archimedes.setExchange(zeroAddress)).to.be.revertedWith(
-        "Can't be 0 address"
+        "!ZeroAddress"
       )
     })
   })
@@ -118,7 +118,7 @@ describe('ArchimedesAPI', () => {
   describe('setHandler', async () => {
     it('should revert for 0 address', async () => {
       await expect(archimedes.setHandler(zeroAddress)).to.be.revertedWith(
-        "Can't be 0 address"
+        "!ZeroAddress"
       )
     })
     it('should revert for non admin', async () => {

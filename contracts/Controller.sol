@@ -51,7 +51,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         string(abi.encodePacked("2pi", _want.symbol()))
     ) {
         require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
-        require(_treasury != address(0), "Treasury can't be 0 address");
+        require(_treasury != address(0), "Treasury !ZeroAddress");
 
         want = _want;
         farm = _farm;
@@ -100,7 +100,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     function setStrategy(address new_strategy) external onlyOwner nonReentrant {
-        require(new_strategy != address(0), "Can't be 0 address");
+        require(new_strategy != address(0), "!ZeroAddress");
         emit NewStrategy(strategy, new_strategy);
 
         if (strategy != address(0)) {

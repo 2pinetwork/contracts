@@ -81,9 +81,12 @@ contract Distributor is Ownable, ReentrancyGuard {
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
+    event InvestorsDistributed(uint amount);
+    event FoundersDistributed(uint amount);
+    event TreasoryDistributed(uint amount);
 
     function setTreasury(address _treasury) external onlyOwner nonReentrant {
-        require(_treasury != address(0), "Can't be 0 address");
+        require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
@@ -132,6 +135,8 @@ contract Distributor is Ownable, ReentrancyGuard {
             // send deposited stk2Pi to each investor
             piVault.safeTransfer(wallet, _sharesAmount);
         }
+
+        emit InvestorsDistributed(amount);
     }
 
     function depositToFounders(uint multiplier) internal {
@@ -157,6 +162,8 @@ contract Distributor is Ownable, ReentrancyGuard {
             // send deposited stk2Pi to each investor
             piVault.safeTransfer(founders[i], sharesPerFounder);
         }
+
+        emit FoundersDistributed(amount);
     }
 
     function transferToTreasury(uint multiplier) internal {
@@ -177,6 +184,8 @@ contract Distributor is Ownable, ReentrancyGuard {
         // Just in case of division "rest"
         uint shares = piVault.balanceOf(address(this));
         if (shares > 0) { piVault.safeTransfer(treasury, shares); }
+
+        emit TreasoryDistributed(amount);
     }
 
     // Only to be mocked

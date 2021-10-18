@@ -14,7 +14,7 @@ describe('Archimedes setup', () => {
 
   it('should revert of 0 address piToken', async () => {
     await expect(Archimedes.deploy(zeroAddress, 1, WMATIC.address)).to.be.revertedWith(
-      "Pi address can't be zero address"
+      "Pi address !ZeroAddress"
     )
   })
 

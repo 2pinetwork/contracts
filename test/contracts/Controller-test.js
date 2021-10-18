@@ -43,7 +43,7 @@ describe('Controller wrong deployment', () => {
         archimedes.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury can't be 0 address")
+    ).to.be.revertedWith("Treasury !ZeroAddress")
   })
 })
 
@@ -161,7 +161,7 @@ describe('Controller', () => {
     it('should revert with 0 address', async () => {
       await expect(
         controller.setStrategy(zeroAddress)
-      ).to.be.revertedWith("Can't be 0 address")
+      ).to.be.revertedWith("!ZeroAddress")
     })
   })
 

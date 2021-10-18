@@ -18,7 +18,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         owner.address
       )
-    ).to.be.revertedWith("Controller can't be 0 address")
+    ).to.be.revertedWith("Controller !ZeroAddress")
   })
 
   it('Should not deploy with zero address exchange', async () => {
@@ -29,7 +29,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         zeroAddress,
         owner.address
       )
-    ).to.be.revertedWith("Exchange can't be 0 address")
+    ).to.be.revertedWith("Exchange !ZeroAddress")
   })
 
   it('Should not deploy with zero address treasury', async () => {
@@ -40,7 +40,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury can't be 0 address")
+    ).to.be.revertedWith("Treasury !ZeroAddress")
   })
 })
 
@@ -113,7 +113,7 @@ describe('Controller Curve Strat', () => {
 
     it('Should revert set the treasury for zero addr', async () => {
       await expect(strat.setTreasury(zeroAddress)).to.be.revertedWith(
-        '!Zero address'
+        '!ZeroAddress'
       )
     })
 
@@ -135,7 +135,7 @@ describe('Controller Curve Strat', () => {
 
     it('Should revert set the exchange for zero addr', async () => {
       await expect(strat.setExchange(zeroAddress)).to.be.revertedWith(
-        '!Zero address'
+        '!ZeroAddress'
       )
     })
 

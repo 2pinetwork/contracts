@@ -24,7 +24,7 @@ describe('Controller Aave Strat wrong deployment', () => {
         exchange.address,
         owner.address
       )
-    ).to.be.revertedWith("want can't be 0 address")
+    ).to.be.revertedWith("want !ZeroAddress")
   })
 
   it('Should not deploy with zero address controller', async () => {
@@ -40,7 +40,7 @@ describe('Controller Aave Strat wrong deployment', () => {
         exchange.address,
         owner.address
       )
-    ).to.be.revertedWith("Controller can't be 0 address")
+    ).to.be.revertedWith("Controller !ZeroAddress")
   })
 
   it('Should not deploy with zero address treasury', async () => {
@@ -59,7 +59,7 @@ describe('Controller Aave Strat wrong deployment', () => {
         exchange.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury can't be 0 address")
+    ).to.be.revertedWith("Treasury !ZeroAddress")
   })
 })
 

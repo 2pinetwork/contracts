@@ -68,9 +68,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     address public immutable controller; // immutable to prevent anyone to change it and withdraw
 
     constructor(address _controller, address _exchange, address _treasury) {
-        require(_controller != address(0), "Controller can't be 0 address");
-        require(_exchange != address(0), "Exchange can't be 0 address");
-        require(_treasury != address(0), "Treasury can't be 0 address");
+        require(_controller != address(0), "Controller !ZeroAddress");
+        require(_exchange != address(0), "Exchange !ZeroAddress");
+        require(_treasury != address(0), "Treasury !ZeroAddress");
 
         controller = _controller;
         exchange = _exchange;
@@ -88,14 +88,14 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
-        require(_treasury != address(0), "!Zero address");
+        require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
-        require(_exchange != address(0), "!Zero address");
+        require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 
         exchange = _exchange;

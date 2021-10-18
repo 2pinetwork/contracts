@@ -58,11 +58,16 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     event Deposit(uint indexed pid, address indexed user, uint amount);
     event Withdraw(uint indexed pid, address indexed user, uint amount);
     event EmergencyWithdraw(uint indexed pid, address indexed user, uint amount);
+    event NewPool(uint indexed pid, address want, uint weighing);
+    event PoolWeighingUpdated(uint indexed pid, uint oldWeighing, uint newWeighing);
+    event Harvested(uint indexed pid, address indexed user, uint amount);
+    event NewExchange(address oldExchange, address newExchange);
+    event NewHandler(address oldHandler, address newHandler);
 
     constructor(IPiToken _piToken, uint _startBlock, address _handler) {
-        require(address(_piToken) != address(0), "Pi address can't be zero address");
+        require(address(_piToken) != address(0), "Pi address !ZeroAddress");
         require(_startBlock > blockNumber(), "StartBlock should be in the future");
-        require(_handler != address(0), "Handler can't be zero address");
+        require(_handler != address(0), "Handler !ZeroAddress");
 
         piToken = _piToken;
         startBlock = _startBlock;
@@ -75,7 +80,8 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     }
 
     function setExchange(address _newExchange) external onlyAdmin {
-        require(_newExchange != address(0), "Can't be 0 address");
+        require(_newExchange != address(0), "!ZeroAddress");
+        emit NewExchange(exchange, _newExchange);
         exchange = _newExchange;
     }
 
@@ -88,7 +94,8 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     }
 
     function setHandler(address _newHandler) external onlyAdmin {
-        require(_newHandler != address(0), "Can't be 0 address");
+        require(_newHandler != address(0), "!ZeroAddress");
+        emit NewHandler(handler, _newHandler);
         handler = _newHandler;
     }
 
@@ -116,10 +123,13 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
         uint _pid = poolInfo.length - 1;
         uint _setPid = IController(_ctroller).setFarmPid(_pid);
         require(_pid == _setPid, "Pid doesn't match");
+
+        emit NewPool(_pid, address(_want),  _weighing);
     }
 
     // Update the given pool's PI rewards weighing
     function changePoolWeighing(uint _pid, uint _weighing, bool _massUpdate) external onlyAdmin {
+        emit PoolWeighingUpdated(_pid, poolInfo[_pid].weighing, _weighing);
         // Update pools before a weighing change
         if (_massUpdate) {
             massUpdatePools();
@@ -244,13 +254,15 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
 
         uint _before = wantBalance(poolInfo[_pid].want);
 
-        calcPendingAndSwapRewards(_pid, _user);
+        uint harvested = calcPendingAndSwapRewards(_pid, _user);
 
         uint _balance = wantBalance(poolInfo[_pid].want) - _before;
 
         if (_balance > 0) {
             _depositInController(_pid, _user, _balance);
         }
+
+        if (harvested > 0) { emit Harvested(_pid, _user, harvested); }
     }
 
     function harvestAll(address _user) external {
@@ -345,7 +357,6 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
             uint[] memory outAmounts = IUniswapRouter(exchange).swapExactTokensForTokens(
                 _amount, expected, piTokenToWantRoute[_pid], address(this), block.timestamp + 60
             );
-
 
             // Only last amount is needed
             swapped = outAmounts[outAmounts.length - 1];
