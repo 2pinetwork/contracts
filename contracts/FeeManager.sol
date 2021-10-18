@@ -79,6 +79,7 @@ contract FeeManager is Swappable, ReentrancyGuard {
         uint piBalance = IERC20(piToken).balanceOf(address(this));
         uint treasuryPart = piBalance * treasuryRatio / RATIO_PRECISION;
 
+        console.log("Transfiriendo al treas", treasuryPart);
         IERC20(piToken).safeTransfer(treasury, treasuryPart);
         IERC20(piToken).safeTransfer(piVault, piBalance - treasuryPart);
 

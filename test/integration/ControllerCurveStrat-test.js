@@ -8,7 +8,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { setWbtcBalanceFor } = require('./helpers')
+const { setWbtcBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller Curve Strat', () => {
   let bob
@@ -44,6 +44,9 @@ describe('Controller Curve Strat', () => {
     ])
 
     await Promise.all([
+      setChainlinkRoundForNow(wNativeFeed),
+      setChainlinkRoundForNow(btcFeed),
+      setChainlinkRoundForNow(crvFeed),
       waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
       waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
@@ -67,14 +70,17 @@ describe('Controller Curve Strat', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
-    // to ask for rewards
-    console.log(new Date())
-    console.time('mineNtimes')
-    await mineNTimes(30)
-    console.timeEnd('mineNtimes')
-    console.log(new Date())
-    await waitFor(strat.harvest())
+    // to ask for rewards (max 100 blocks
+    for (let i = 0; i < 20; i++) {
+      await mineNTimes(5)
+      await waitFor(strat.harvest())
 
+      if (balance < (await strat.balanceOfPool())) {
+        break
+      }
+      console.log('Mined 6 blocks...')
+    }
+    console.log(`Claim en el bloque: ${await getBlock()} `)
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
     // withdraw 95 BTC in shares

@@ -4,7 +4,12 @@ const {
   MAX_UINT
 } = require('../helpers')
 
-const { setWbtcBalanceFor, setWMaticBalanceFor, createPiTokenExchangePair } = require('./helpers')
+const {
+  createPiTokenExchangePair,
+  setChainlinkRoundForNow,
+  setWMaticBalanceFor,
+  setWbtcBalanceFor,
+} = require('./helpers')
 
 describe('ArchimedesAPI setup', () => {
   let ArchimedesAPI
@@ -92,6 +97,8 @@ describe('ArchimedesAPI', () => {
     // let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
     let WETHFeed = await ethers.getContractAt('IChainLink', '0xF9680D99D6C9589e2a93a78A04A279e509205945')
     let piTokenFeed = await deploy('PriceFeedMock') // faked at the moment
+
+    await setChainlinkRoundForNow(WETHFeed)
 
     // 2021-10-05 wANative-eth prices
     // ETH => 345716900000
@@ -189,7 +196,7 @@ describe('ArchimedesAPI', () => {
   })
 
   describe('FullFlow', async () => {
-    it.only('with 2 accounts && just 1 referral', async () => {
+    it('with 2 accounts && just 1 referral', async () => {
       await waitFor(piToken.initRewardsOn(rewardsBlock))
 
       const piPerBlock = await archimedes.piTokenPerBlock()
@@ -394,7 +401,7 @@ describe('ArchimedesAPI', () => {
       expect(await piToken.balanceOf(pair)).to.be.within(
         // There is a deviation since shares are not exactly 1 to 1
         exchBalance.times(999).div(1000).toFixed(0),
-        exchBalance.toFixed(0)
+        exchBalance.times(101).div(100)
       )
       expect(await controller.balanceOf(alice.address)).to.be.within(
         // The pricePerShare > 1 gives less shares on deposit

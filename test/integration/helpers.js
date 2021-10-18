@@ -30,6 +30,48 @@ const setWbtcBalanceFor = async (address, amount) => {
   await ethers.provider.send('hardhat_setStorageAt', [global.BTC.address, index.toString(), balance32])
 }
 
+const setChainlinkRound = async (address, roundId, timestamp, price) => {
+  // 0x00000000615c9b11000000000000000000000000000000000000000007bf4a9c
+  const slot       = 43  // most of pricess are 43 slot
+  const timestampL = 16
+  const priceL     = 48
+  const timestampHex = timestamp.toString(16)
+  const priceHex   = (price * 1e8).toString(16)
+  const newValue   = [
+    '0x',
+    '0'.repeat(timestampL - timestampHex.length),
+    timestampHex,
+    '0'.repeat(priceL - priceHex.length),
+    priceHex
+  ].join('')
+  let index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, slot])
+
+  // CRV uses slot 44
+  let result = await ethers.provider.getStorageAt(address, index)
+  if (result === '0x' + '0'.repeat(64)) {
+    index = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, 44])
+  }
+
+  await ethers.provider.send('hardhat_setStorageAt', [address, index.toString(), newValue])
+}
+
+const setChainlinkRoundForNow = async (feed) => {
+  const data = await feed.latestRoundData();
+  let agg = await feed.aggregator();
+
+  let roundId = data.roundId._hex
+  if (feed.address != '0xF9680D99D6C9589e2a93a78A04A279e509205945') {
+    roundId = `0x0000${roundId.substr(-8)}` // only 8 hex are used in some round
+  }
+
+  await setChainlinkRound(
+    agg,
+    roundId,
+    parseInt(((new Date()).getTime() / 1000).toFixed(), 10),
+    (data.answer / 1e8)
+  )
+}
+
 const createPiTokenExchangePair = async () => {
   const currentBlock = await hre.ethers.provider.getBlock()
   const factoryAbi   = require('./abis/uniswap-factory.json')
@@ -137,5 +179,7 @@ module.exports = {
   createPiTokenExchangePair,
   setWMaticBalanceFor,
   setWbtcBalanceFor,
-  setWethBalanceFor
+  setWethBalanceFor,
+  setChainlinkRound,
+  setChainlinkRoundForNow
 }

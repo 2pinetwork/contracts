@@ -134,6 +134,31 @@ describe('FeeManager', () => {
         swapped.mul(slippage).div(max), swapped
       )
     })
+
+    it('should execute harvest with greater treasury part', async () => {
+      await expect(feeMgr.setTreasuryRatio(5000)).to.emit(
+        feeMgr, 'NewTreasuryRatio'
+      ).withArgs(150, 5000)
+
+      await waitFor(WMATIC.deposit({ value: 1e6 + '' }))
+      await waitFor(WMATIC.transfer(feeMgr.address, 1e6 + ''))
+
+      expect(await piToken.balanceOf(piVault.address)).to.be.equal(0)
+
+      const balance = await piToken.balanceOf(owner.address)
+
+      await waitFor(feeMgr.harvest(WMATIC.address))
+
+      const swapped = ethers.BigNumber.from(5000).mul(1e6).div(max).mul(129755407).div(0.08e8)
+
+      expect(await piToken.balanceOf(piVault.address)).to.be.within(
+        swapped.mul(slippage).div(max), swapped
+      )
+      expect(await piToken.balanceOf(owner.address)).to.be.within(
+        balance.add(swapped.mul(slippage).div(max)),
+        balance.add(swapped)
+      )
+    })
   })
 
   describe('setTreasury', async () => {
