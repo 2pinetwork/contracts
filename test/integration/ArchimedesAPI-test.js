@@ -83,6 +83,7 @@ describe('ArchimedesAPI', () => {
 
     controller = await createController(WMATIC, archimedes)
 
+    await archimedes.setMaxPriceOffset(86400)
     await archimedes.addNewPool(WMATIC.address, controller.address, 1, true)
     expect(await archimedes.poolLength()).to.be.equal(1)
 
@@ -367,7 +368,7 @@ describe('ArchimedesAPI', () => {
 
       expect(await piToken.balanceOf(pair)).to.be.within(
         // There is a deviation since shares are not exactly 1 to 1
-        exchBalance.times(99999).div(100000).toFixed(0),
+        exchBalance.times(999).div(1000).toFixed(0),
         exchBalance.toFixed(0)
       )
       expect(await piToken.balanceOf(archimedes.address)).to.be.within(
