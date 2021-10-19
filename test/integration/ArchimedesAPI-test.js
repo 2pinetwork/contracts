@@ -83,6 +83,7 @@ describe('ArchimedesAPI', () => {
 
     controller = await createController(WMATIC, archimedes)
 
+    await archimedes.setMaxPriceOffset(86400)
     await archimedes.addNewPool(WMATIC.address, controller.address, 1, true)
     expect(await archimedes.poolLength()).to.be.equal(1)
 
@@ -359,7 +360,7 @@ describe('ArchimedesAPI', () => {
         aliceExpectedBalance
       )
 
-      const truncationOffset = 12 // "round margin"
+      const truncationOffset = 20 // "round margin"
       let archReserve = piPerBlock.mul(2).sub('' + nextReward.toFixed())
 
       console.log(3)
@@ -367,7 +368,7 @@ describe('ArchimedesAPI', () => {
 
       expect(await piToken.balanceOf(pair)).to.be.within(
         // There is a deviation since shares are not exactly 1 to 1
-        exchBalance.times(99999).div(100000).toFixed(0),
+        exchBalance.times(999).div(1000).toFixed(0),
         exchBalance.toFixed(0)
       )
       expect(await piToken.balanceOf(archimedes.address)).to.be.within(
@@ -401,7 +402,7 @@ describe('ArchimedesAPI', () => {
       expect(await piToken.balanceOf(pair)).to.be.within(
         // There is a deviation since shares are not exactly 1 to 1
         exchBalance.times(999).div(1000).toFixed(0),
-        exchBalance.times(101).div(100)
+        exchBalance.times(101).div(100).toFixed(0)
       )
       expect(await controller.balanceOf(alice.address)).to.be.within(
         // The pricePerShare > 1 gives less shares on deposit
