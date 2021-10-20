@@ -25,7 +25,6 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     uint public constant FOUNDERS_MAX_WITHDRAWS_AFTER_FIRST_YEAR = 1.57e24;
     mapping(address => uint) public foundersLeftToWithdraw;
 
-
     /**
      * @dev Sets the address of 2pi token, the one that the vault will hold
      * as underlying value.

@@ -18,25 +18,15 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     using SafeERC20 for IERC20;
 
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
-    // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
-    // address public constant wNative = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // MATIC
 
     address public immutable want;
     address public immutable aToken;
     address public immutable debtToken;
 
-    // Test Aave contracts
+    // Aave contracts (test addr)
     address public constant DATA_PROVIDER = address(0x43ca3D2C94be00692D207C6A1e60D8B325c6f12f);
     address public constant INCENTIVES = address(0xC469e7aE4aD962c30c7111dc580B4adbc7E914DD);
     address public constant POOL = address(0xb09da8a5B236fE0295A345035287e80bb0008290);
-    // Mumbai Aave contracts
-    // address public constant DATA_PROVIDER = address(0xFA3bD19110d986c5e5E9DD5F69362d05035D045B);
-    // address public constant INCENTIVES = address(0xd41aE58e803Edf4304334acCE4DC4Ec34a63C644);
-    // address public constant POOL = address(0x9198F13B08E299d85E096929fA9781A1E3d5d827);
-    // Matic Aave contracts
-    // address public constant DATA_PROVIDER = address(0x7551b5D2763519d4e37e8B81929D336De671d46d);
-    // address public constant INCENTIVES = address(0x357D51124f59836DeD84c8a1730D72B749d8BC23);
-    // address public constant POOL = address(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
 
     // Routes
     address[] public wNativeToWantRoute;

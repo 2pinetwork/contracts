@@ -68,32 +68,47 @@ async function main() {
   let args
 
   for (pool of pools) {
+    let ctrollerArgs = [
+      pool.address, deploy.Archimedes, deploy.FeeManager
+    ]
+    let controller = await (
+      await hre.ethers.getContractFactory('Controller')
+    ).deploy(...ctrollerArgs);
+
+    await controller.deployed();
+
+    await verify('Controller', controller.address, ctrollerArgs)
+
     args = [
       pool.address,
       pool.rate, // rate
       pool.aave_rate_max, // rate max
       pool.depth, // depth
       pool.min_leverage, // min leverage
-      archimedes.address,
+      controller.address,
       deploy.exchange,  // sushiswap Exchange
       deploy.FeeManager
     ]
+
     let strategy = await (
-      await hre.ethers.getContractFactory('ArchimedesAaveStrat')
+      await hre.ethers.getContractFactory('ControllerAaveStrat')
     ).deploy(...args);
 
     await strategy.deployed();
 
     console.log('Strategy ' + pool.currency + ':')
 
-    await verify('ArchimedesAaveStrat', strategy.address, args)
-    await (await archimedes.addNewPool(pool.address, strategy.address, 5)).wait()
-    await (await strategy.addHarvester(owner.address)).wait()
+    await verify('ControllerAaveStrat', strategy.address, args)
 
-    let pid = ((await archimedes.poolLength()) - 1)
+    await (await controller.setStrategy(strategy.address)).wait()
+
+    await (await archimedes.addNewPool(pool.address, controller.address, 5, false)).wait()
+
+    let pid = await controller.pid()
     console.log(`Configured ${pool.currency} in ${pid}`)
 
     deploy[`strat-aave-${pool.currency}`] = {
+      controller: controller.address,
       strategy: strategy.address,
       pid:      pid,
       tokenAddr: pool.address

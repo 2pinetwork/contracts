@@ -221,14 +221,11 @@ describe('ArchimedesAPI', () => {
       // Deposit without rewards yet
       await waitFor(WMATIC.connect(owner).approve(archimedes.address, MAX_UINT))
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
-      console.log(210)
       await (await archimedes.deposit(0, bob.address, ten, alice.address)).wait()
-      console.log(212)
       expect(await refMgr.referrers(bob.address)).to.be.equal(alice.address)
       expect(await refMgr.referralsCount(alice.address)).to.be.equal(1)
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(0)
       expect(await refMgr.totalPaid()).to.be.equal(0)
-      console.log(219)
       await balanceEqualTo(piToken, { address: pair }, exchBalance)
       await balanceEqualTo(WMATIC, archimedes, 0)
 
@@ -240,7 +237,6 @@ describe('ArchimedesAPI', () => {
         await mineNTimes(rewardsBlock - currentBlock)
       }
 
-      console.log(228)
 
       accPiTokenPerShare = accPiTokenPerShare.add(
         piPerBlock.mul(one).div(await controller.totalSupply())
@@ -263,7 +259,6 @@ describe('ArchimedesAPI', () => {
 
       // This will harvest the previous updated pool + one new
       // because each modifying call mine a new block
-      console.log(1)
       await waitFor(archimedes.harvest(0, bob.address)) // rewardBlock + 2
 
       // 2 blocks for bob + 2 blocks for referral alice
@@ -319,7 +314,6 @@ describe('ArchimedesAPI', () => {
       )
 
       // Work with Alice
-      console.log(2)
       await waitFor(archimedes.deposit(0, alice.address, nine, zeroAddress))
       aliceBalance = aliceBalance.add(nine)
 
@@ -363,21 +357,20 @@ describe('ArchimedesAPI', () => {
       const truncationOffset = 20 // "round margin"
       let archReserve = piPerBlock.mul(2).sub('' + nextReward.toFixed())
 
-      console.log(3)
       await waitFor(archimedes.deposit(0, alice.address, nine, owner.address))
 
       expect(await piToken.balanceOf(pair)).to.be.within(
         // There is a deviation since shares are not exactly 1 to 1
-        exchBalance.times(999).div(1000).toFixed(0),
-        exchBalance.toFixed(0)
+        exchBalance.times(99).div(100).toFixed(0),
+        exchBalance.times(101).div(100).toFixed(0)
       )
       expect(await piToken.balanceOf(archimedes.address)).to.be.within(
         archReserve.sub(truncationOffset), archReserve.add(truncationOffset)
       )
       expect(await controller.balanceOf(alice.address)).to.be.within(
         // The pricePerShare > 1 gives less shares on deposit
-        aliceBalance.mul(99999).div(100000),
-        aliceBalance
+        aliceBalance.mul(999).div(1000),
+        aliceBalance.mul(1001).div(1000)
       )
       expect(await refMgr.referrers(owner.address)).to.be.equal(zeroAddress)
 

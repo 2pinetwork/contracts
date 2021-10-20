@@ -37,16 +37,6 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
     address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
 
-
-    // Matic Polygon
-    // address constant public WNATIVE = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
-    // address constant public BTC = address(0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6);
-    // address constant public CRV = address(0x172370d5Cd63279eFa6d502DAB29171933a610AF);
-    // address constant public ETH = address(0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619);
-    // address constant public BTCCRV = address(0xf8a57c1d3b9629b77b6726a042ca48990A84Fb49);
-    // address constant public CURVE_POOL = address(0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67);
-    // address constant public REWARDS_GAUGE = address(0xffbACcE0CC7C19d46132f1258FC16CF6871D153c);
-
     // Pool settings
     uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
     uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]

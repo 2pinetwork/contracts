@@ -1,0 +1,8 @@
+{
+    address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
+
+    address public constant DATA_PROVIDER = address(0x43ca3D2C94be00692D207C6A1e60D8B325c6f12f);
+    address public constant INCENTIVES = address(0xC469e7aE4aD962c30c7111dc580B4adbc7E914DD);
+    address public constant POOL = address(0xb09da8a5B236fE0295A345035287e80bb0008290);
+
+}

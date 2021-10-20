@@ -21,8 +21,6 @@ contract FeeManager is Swappable, ReentrancyGuard {
     // Tokens used
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
     address public constant piToken = address(0x5095d3313C76E8d29163e40a0223A5816a8037D8); // Test
-    // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
-    // address constant public piToken = address(0x913C1E1a34B60a80F16c64c83E3D74695F492567); // Mumbai
 
     address public immutable piVault;
     address public treasury;
