@@ -1,8 +1,9 @@
 const {
   toNumber, createPiToken, getBlock, mineNTimes,
   waitFor, deploy, zeroAddress, createController
-} = require('./helpers')
+} = require('../helpers')
 
+const { setWethBalanceFor, setWbtcBalanceFor } = require('./helpers')
 
 describe('Archimedes setup', () => {
   let Archimedes
@@ -12,13 +13,13 @@ describe('Archimedes setup', () => {
   })
 
   it('should revert of 0 address piToken', async () => {
-    await expect(Archimedes.deploy(zeroAddress, 1)).to.be.revertedWith(
-      "Pi address can't be zero address"
+    await expect(Archimedes.deploy(zeroAddress, 1, WMATIC.address)).to.be.revertedWith(
+      "Pi address !ZeroAddress"
     )
   })
 
   it('should revert for old block number', async () => {
-    await expect(Archimedes.deploy(PiToken.address, 0)).to.be.revertedWith(
+    await expect(Archimedes.deploy(PiToken.address, 0, WMATIC.address)).to.be.revertedWith(
       'StartBlock should be in the future'
     )
   })
@@ -39,12 +40,13 @@ describe('Archimedes', () => {
 
   beforeEach(async () => {
     piToken = await createPiToken()
-    rewardsBlock = (await getBlock()) + 20
+    rewardsBlock = (await getBlock()) + 30
 
     archimedes = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     refMgr = await deploy('Referral', archimedes.address)
@@ -52,14 +54,30 @@ describe('Archimedes', () => {
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.initRewardsOn(rewardsBlock))
     await waitFor(piToken.addMinter(archimedes.address))
+    await waitFor(piToken.setCommunityMintPerBlock(0.19383e18 + ''))
+    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
 
     expect(await archimedes.piToken()).to.equal(piToken.address)
     expect(await archimedes.poolLength()).to.equal(0)
 
-    controller = await createController(piToken, archimedes)
+    controller = await createController(global.WETH, archimedes)
 
-    await archimedes.addNewPool(piToken.address, controller.address, 1, false)
+    await archimedes.addNewPool(global.WETH.address, controller.address, 1, false)
     expect(await archimedes.poolLength()).to.be.equal(1)
+
+    let strat = await ethers.getContractAt(
+      'ControllerAaveStrat',
+      (await controller.strategy())
+    )
+
+    let wNativeFeed = await ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0')
+    let ethFeed = await ethers.getContractAt('IChainLink', '0xF9680D99D6C9589e2a93a78A04A279e509205945')
+
+    // 2021-10-06 wNative-eth prices
+    await Promise.all([
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(WETH.address, ethFeed.address)),
+    ])
   })
 
   describe('addNewPool', async () => {
@@ -73,7 +91,8 @@ describe('Archimedes', () => {
       const otherFarm = await deploy(
         'Archimedes',
         piToken.address,
-        rewardsBlock
+        rewardsBlock,
+        WMATIC.address
       )
 
       const otherCtroller = await createController(piToken, otherFarm)
@@ -126,11 +145,13 @@ describe('Archimedes', () => {
 
   describe('FullFlow', async () => {
     it('Full flow with 2 accounts && just 1 referral', async () => {
+      const token = global.WETH
       let referralPaid = 0
 
+      await setWethBalanceFor(bob.address, '10')
+
       // Deposit without rewards yet
-      await piToken.transfer(bob.address, 10)
-      await piToken.connect(bob).approve(archimedes.address, 10)
+      await token.connect(bob).approve(archimedes.address, 10)
       await (await archimedes.connect(bob).deposit(0, 10, alice.address)).wait()
       expect(await refMgr.referrers(bob.address)).to.be.equal(alice.address)
       expect(await refMgr.referralsCount(alice.address)).to.be.equal(1)
@@ -162,7 +183,7 @@ describe('Archimedes', () => {
 
       // This will harvest the previous updated pool + one new
       // because each modifying call mine a new block
-      await (await archimedes.connect(bob).harvest(0)).wait() // rewardBlock + 2
+      await waitFor(archimedes.connect(bob).harvest(0)) // rewardBlock + 2
 
       let bobBalance = (new BigNumber(piPerBlock * 2)).toFixed()
       // All the rewards claimed
@@ -173,39 +194,43 @@ describe('Archimedes', () => {
         await piToken.balanceOf(bob.address)
       ).to.be.equal(bobBalance)
 
+      await setWethBalanceFor(alice.address, '10')
+
       // Referral receive 1% per reward
-      let aliceBalance = (new BigNumber(piPerBlock * 0.02)).toFixed()  // 1% for 2 block referal
-      referralPaid = aliceBalance // same here
+      let alicePiBalance = (new BigNumber(piPerBlock * 0.02)).toFixed()  // 1% for 2 block referal
+      let aliceTokenBalance = await token.balanceOf(alice.address)
+      referralPaid = alicePiBalance // same here
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
       expect(
         await piToken.balanceOf(alice.address)
-      ).to.be.equal(aliceBalance)
+      ).to.be.equal(alicePiBalance)
       expect(
         await archimedes.connect(bob).pendingPiToken(0)
       ).to.be.equal(0)
 
       // Work with Alice
-      await waitFor(piToken.connect(alice).approve(archimedes.address, 20))
+      await waitFor(token.connect(alice).approve(archimedes.address, 20))
       await waitFor(archimedes.connect(alice).deposit(0, 10, zeroAddress))
-      aliceBalance = (new BigNumber(aliceBalance)).minus(10).toFixed()
+      aliceTokenBalance = aliceTokenBalance.sub(10)
       expect(
         await piToken.balanceOf(archimedes.address)
       ).to.be.equal(
         toNumber(piPerBlock * 2) // 2 calls mean 2 reward blocks
       )
       expect(
-        await piToken.balanceOf(alice.address)
+        await token.balanceOf(alice.address)
       ).to.be.equal(
-        aliceBalance
+        aliceTokenBalance
       )
 
-      // Should not give to owner the referal when alice already deposited without one
+      // Should not give to owner the referral when alice already deposited without one
       // deposit method claim the pending rewards so the last rewards block
       // are half for the alice and the other half for bob (3º call)
       await waitFor(archimedes.connect(alice).deposit(0, 10, owner.address))
 
-      aliceBalance = (new BigNumber(aliceBalance)).minus(10).plus(
+      aliceTokenBalance = aliceTokenBalance.sub(10)
+      alicePiBalance = (new BigNumber(alicePiBalance)).plus(
         piPerBlock / 2 // 50% of 1 block per 1º deposit
       ).toFixed()
 
@@ -218,21 +243,26 @@ describe('Archimedes', () => {
       expect(
         await piToken.balanceOf(alice.address)
       ).to.be.equal(
-        aliceBalance
+        alicePiBalance
+      )
+      expect(
+        await token.balanceOf(alice.address)
+      ).to.be.equal(
+        aliceTokenBalance
       )
 
       await waitFor(archimedes.connect(alice).harvest(0))
 
       // last reward block is divided in 3 (20 shares for Alice and 10 shares for Bob
-      aliceBalance = (
-        new BigNumber(aliceBalance)
+      alicePiBalance = (
+        new BigNumber(alicePiBalance)
       ).plus(
         new BigNumber((piPerBlock / 3) * 2) // 33.3% of 1 block per 2º deposit
       ).toFixed()
 
       expect(
         await piToken.balanceOf(alice.address)
-      ).to.be.equal(aliceBalance)
+      ).to.be.equal(alicePiBalance)
       // Just to be sure that the referal is not paid
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
@@ -246,8 +276,8 @@ describe('Archimedes', () => {
         await piToken.balanceOf(bob.address)
       ).to.be.equal(bobBalance)
 
-      // Referal
-      aliceBalance = (new BigNumber(aliceBalance)).plus(
+      // Referral
+      alicePiBalance = (new BigNumber(alicePiBalance)).plus(
         (piPerBlock * (2 + 0.5 + 2 / 3)) * 0.01 // 1% of bob harvest
       ).toFixed()
       referralPaid = (new BigNumber(referralPaid)).plus(
@@ -255,7 +285,7 @@ describe('Archimedes', () => {
       ).toFixed()
       expect(
         await piToken.balanceOf(alice.address)
-      ).to.be.equal(aliceBalance)
+      ).to.be.equal(alicePiBalance)
       // Just to be sure that the referal is not paid
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
@@ -267,34 +297,47 @@ describe('Archimedes', () => {
       // withdraw everything
       await waitFor(archimedes.connect(bob).harvest(0))
 
-      let prevBalance = new BigNumber(parseInt(await piToken.balanceOf(bob.address), 10))
+      let prevBobPiBalance = new BigNumber(parseInt(await piToken.balanceOf(bob.address), 10))
+      let bobTokenBalance = await token.balanceOf(bob.address)
 
       await waitFor(archimedes.connect(bob).withdraw(0, 5))
 
-      prevBalance = prevBalance.plus(piPerBlock / 3).plus(5)
+      prevBobPiBalance = prevBobPiBalance.plus(piPerBlock / 3)
+      bobTokenBalance = bobTokenBalance.add(5)
       expect(
         await piToken.balanceOf(bob.address)
       ).to.be.equal(
-        prevBalance.toFixed()
+        prevBobPiBalance.toFixed()
+      )
+      expect(
+        await token.balanceOf(bob.address)
+      ).to.be.equal(
+        bobTokenBalance
       )
 
       // now bob has only 5 shares and alice 20
       await waitFor(archimedes.connect(bob).withdrawAll(0))
 
-      prevBalance = prevBalance.plus(piPerBlock / 5).plus(5)
+      prevBobPiBalance = prevBobPiBalance.plus(piPerBlock / 5)
+      bobTokenBalance = bobTokenBalance.add(5)
       expect(
         await piToken.balanceOf(bob.address)
       ).to.be.equal(
-        prevBalance.toFixed()
+        prevBobPiBalance.toFixed()
+      )
+      expect(
+        await token.balanceOf(bob.address)
+      ).to.be.equal(
+        bobTokenBalance
       )
 
       // Emergency withdraw without harvest
-      aliceBalance = parseInt(await piToken.balanceOf(alice.address), 10)
+      aliceBalance = parseInt(await token.balanceOf(alice.address), 10)
       const deposited = parseInt(await controller.balanceOf(alice.address), 10)
 
       await waitFor(archimedes.connect(alice).emergencyWithdraw(0))
 
-      expect(await piToken.balanceOf(alice.address)).to.be.equal(
+      expect(await token.balanceOf(alice.address)).to.be.equal(
         toNumber(aliceBalance + deposited)
       )
     })
@@ -378,18 +421,20 @@ describe('Archimedes', () => {
     })
 
     it('Should get updated value after deposit', async () => {
+      const token = global.WETH
       // Setup deposit
-      await piToken.approve(archimedes.address, 100)
-      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+      await setWethBalanceFor(bob.address, '10')
+      await token.connect(bob).approve(archimedes.address, 100)
+      await waitFor(archimedes.connect(bob).deposit(0, 10, zeroAddress))
 
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
 
-      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+      await waitFor(archimedes.connect(bob).deposit(0, 10, zeroAddress))
 
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1e18))
 
       // simulate yield 30 /20 => 15
-      await waitFor(piToken.transfer(controller.address, 10))
+      await waitFor(token.connect(bob).transfer(controller.address, 10))
       expect(await archimedes.getPricePerFullShare(0)).to.be.equal(toNumber(1.5e18))
     })
   })
@@ -406,12 +451,17 @@ describe('Archimedes', () => {
       expect(await archimedes.balance(0)).to.be.equal(0)
       expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(0)
     })
+
     it('Should get 1 for 1 shares', async () => {
-      await piToken.approve(archimedes.address, 100)
-      await waitFor(archimedes.deposit(0, 1, zeroAddress))
+      const token = global.WETH
+
+      await setWethBalanceFor(bob.address, '10')
+
+      await token.connect(bob).approve(archimedes.address, 100)
+      await waitFor(archimedes.connect(bob).deposit(0, 1, zeroAddress))
 
       expect(await archimedes.balance(0)).to.be.equal(1)
-      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(1)
+      expect(await archimedes.balanceOf(0, bob.address)).to.be.equal(1)
     })
   })
 
@@ -423,12 +473,16 @@ describe('Archimedes', () => {
     })
 
     it('should deposit all balance', async () => {
-      await waitFor(piToken.transfer(bob.address, 1000))
-      await waitFor(piToken.connect(bob).approve(archimedes.address, 1000))
+      const token = global.WETH
 
-      await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+      await setWethBalanceFor(alice.address, '10')
 
-      expect(await archimedes.balanceOf(0, bob.address)).to.be.equal(1000)
+      await waitFor(token.connect(alice).transfer(owner.address, 1000))
+      await waitFor(token.approve(archimedes.address, 1000))
+
+      await waitFor(archimedes.depositAll(0, zeroAddress))
+
+      expect(await archimedes.balanceOf(0, owner.address)).to.be.equal(1000)
     })
   })
 
@@ -439,7 +493,7 @@ describe('Archimedes', () => {
       await expect(
         archimedes.connect(bob).setReferralCommissionRate(20)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
 
       expect(await archimedes.referralCommissionRate()).to.be.equal(10) // 1%
@@ -463,29 +517,85 @@ describe('Archimedes', () => {
 
   describe('Token decimals', async () => {
     it('Should have the same decimals than want', async () => {
-      const token = await deploy('TokenMock', 'T', 'T')
-      await waitFor(token.setDecimals(6))
-
+      // We use BTC since it has 8 decimals
+      const token = global.BTC
       const ctroller = await createController(token, archimedes)
+
+      await setWbtcBalanceFor(owner.address, '10')
 
       await waitFor(archimedes.addNewPool(token.address, ctroller.address, 1, false))
 
-      expect(await archimedes.decimals(1)).to.be.equal(6)
-      expect(await archimedes.getPricePerFullShare(1)).to.be.equal(1e6)
+      expect(await archimedes.decimals(1)).to.be.equal(8)
+      expect(await archimedes.getPricePerFullShare(1)).to.be.equal(1e8)
 
       await waitFor(token.approve(archimedes.address, '' + 1e18))
       await waitFor(archimedes.deposit(1, 100, zeroAddress))
 
       const price = await archimedes.getPricePerFullShare(1)
-      expect(price).to.be.equal(1e6)
+      expect(price).to.be.equal(1e8)
 
-      expect(price * 100).to.be.equal(100e6)
+      expect(price * 100).to.be.equal(100e8)
 
       await waitFor(token.transfer(ctroller.address, 10))
 
       expect(
         await archimedes.getPricePerFullShare(1)
-      ).to.be.equal(1.1e6)
+      ).to.be.equal(1.1e8)
     })
+  })
+
+  describe('Harvest', async () => {
+    it('should not receive double reward harvest', async () => {
+      const token = global.WETH
+
+      await setWethBalanceFor(owner.address, '10')
+
+      // Deposit without rewards yet
+      await token.connect(owner).transfer(bob.address, 10)
+      await token.connect(bob).approve(archimedes.address, 10)
+      await (await archimedes.connect(bob).deposit(0, 10, zeroAddress)).wait()
+      // Victim
+      await token.connect(owner).transfer(alice.address, 10)
+      await token.connect(alice).approve(archimedes.address, 10)
+      await (await archimedes.connect(alice).deposit(0, 10, zeroAddress)).wait()
+      expect(
+        await piToken.balanceOf(archimedes.address)
+      ).to.be.equal(0)
+      // Still behind the reward block
+      const rewardBlock = parseInt(await archimedes.startBlock(), 10)
+      const currentBlock = parseInt(await getBlock(), 10)
+      expect(rewardBlock).to.be.greaterThan(currentBlock)
+      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      await mineNTimes(rewardBlock - currentBlock)
+      // This should mint a reward of 0.23~ for the first block
+      await (await archimedes.updatePool(0)).wait() // rewardBlock + 1
+      const piPerBlock = toNumber(await archimedes.piTokenPerBlock())
+      expect(
+        await piToken.balanceOf(archimedes.address)
+      ).to.be.equal(
+        toNumber(piPerBlock)
+      )
+      await mineNTimes(5)
+      await network.provider.send('evm_setAutomine', [false]);
+      await network.provider.send('evm_setIntervalMining', [2000]);
+
+      await archimedes.connect(bob).harvest(0) // rewardBlock + 2 + 5
+
+      // (Attack prevented)
+      // ATTACK: already harvested shares get transferred and
+      // re-harvested from another address, stealing from alice
+      let mal = (await ethers.getSigners())[8]
+
+      expect(await controller.balanceOf(bob.address)).to.be.above(9) // at least 10
+
+      // This transfer doesn't work but doesn't revert because of the automine=false
+      await controller.connect(bob).transfer(mal.address, 10)
+
+      await waitFor(archimedes.connect(mal).harvest(0))
+
+      expect(await piToken.balanceOf(mal.address)).to.be.equal(0)
+
+      await network.provider.send('evm_setAutomine', [true]);
+    }).timeout(0)
   })
 })

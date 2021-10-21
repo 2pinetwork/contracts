@@ -1,44 +1,32 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
+import "./Swappable.sol";
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
-import "../interfaces/IUniswapRouter.sol";
 
-contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
+// Swappable contract has the AccessControl module
+contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     using SafeERC20 for IERC20;
 
-    bytes32 public constant HARVEST_ROLE = keccak256("HARVEST_ROLE");
-
     address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
-    // address public constant wNative = address(0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889); // Mumbai
-    // address public constant wNative = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); // MATIC
 
     address public immutable want;
     address public immutable aToken;
     address public immutable debtToken;
 
-    // Test Aave contracts
-    address public constant dataProvider = address(0x43ca3D2C94be00692D207C6A1e60D8B325c6f12f);
-    address public constant incentivesController = address(0xC469e7aE4aD962c30c7111dc580B4adbc7E914DD);
-    address public constant pool = address(0xb09da8a5B236fE0295A345035287e80bb0008290);
-    // Mumbai Aave contracts
-    // address public constant dataProvider = address(0xFA3bD19110d986c5e5E9DD5F69362d05035D045B);
-    // address public constant incentivesController = address(0xd41aE58e803Edf4304334acCE4DC4Ec34a63C644);
-    // address public constant pool = address(0x9198F13B08E299d85E096929fA9781A1E3d5d827);
-    // Matic Aave contracts
-    // address public constant dataProvider = address(0x7551b5D2763519d4e37e8B81929D336De671d46d);
-    // address public constant incentivesController = address(0x357D51124f59836DeD84c8a1730D72B749d8BC23);
-    // address public constant pool = address(0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf);
+    // Aave contracts (test addr)
+    address public constant DATA_PROVIDER = address(0x43ca3D2C94be00692D207C6A1e60D8B325c6f12f);
+    address public constant INCENTIVES = address(0xC469e7aE4aD962c30c7111dc580B4adbc7E914DD);
+    address public constant POOL = address(0xb09da8a5B236fE0295A345035287e80bb0008290);
 
     // Routes
     address[] public wNativeToWantRoute;
@@ -54,9 +42,18 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     uint constant public INTEREST_RATE_MODE = 2; // variable
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
+    // In the case of leverage we should withdraw when the
+    // amount to withdraw is 50%
+    uint public ratioForFullWithdraw = 5000; // 50%
+
+    // The healthFactor value has the same representation than supply so
+    // to do the math we should remove 12 places from healthFactor to get a HF
+    // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
+    uint public constant HF_DECIMAL_FACTOR = 1e6;
+    uint public constant HF_WITHDRAW_TOLERANCE = 0.05e6;
 
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
 
     address public exchange;
@@ -72,8 +69,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         address _exchange,
         address _treasury
     ) {
-        require(_controller != address(0), "Controller can't be 0 address");
-        require(_treasury != address(0), "Treasury can't be 0 address");
+        require(_want != address(0), "want !ZeroAddress");
+        require(_controller != address(0), "Controller !ZeroAddress");
+        require(_treasury != address(0), "Treasury !ZeroAddress");
+        require(_borrowRate <= _borrowRateMax, "Borrow can't be greater than MaxBorrow");
+        require(_borrowRateMax <= RATIO_PRECISION, "MaxBorrow can't be greater than 100%");
 
         want = _want;
         borrowRate = _borrowRate;
@@ -84,27 +84,20 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         exchange = _exchange;
         treasury = _treasury;
 
-        (aToken,,debtToken) = IDataProvider(dataProvider).getReserveTokensAddresses(_want);
+        (aToken,,debtToken) = IDataProvider(DATA_PROVIDER).getReserveTokensAddresses(_want);
 
         wNativeToWantRoute = [wNative, _want];
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, msg.sender);
-        _setupRole(HARVEST_ROLE, _controller); // to retire strat
-        _giveAllowances(_want);
     }
 
-    event NewTreasury(address old_treasury, address new_treasury);
-    event NewExchange(address old_exchange, address new_exchange);
-    event NewPerformanceFee(uint old_fee, uint new_fee);
+    event NewTreasury(address oldTreasury, address newTreasury);
+    event NewExchange(address oldExchange, address newExchange);
+    event NewPerformanceFee(uint oldFee, uint newFee);
+    event Harvested(address _want, uint _amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
-        _;
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
         _;
     }
 
@@ -117,32 +110,30 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
         emit NewExchange(exchange, _exchange);
 
-        // Revoke current exchange
-        IERC20(wNative).safeApprove(exchange, 0);
-
         exchange = _exchange;
-        IERC20(wNative).safeApprove(exchange, type(uint).max);
     }
 
     function setSwapRoute(address[] calldata _route) external onlyAdmin nonReentrant {
         wNativeToWantRoute = _route;
     }
 
+    function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
+        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        ratioForFullWithdraw = _ratio;
+    }
+
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 
         performanceFee = _fee;
-    }
-
-    function addHarvester(address newHarvester) external onlyAdmin nonReentrant {
-        _setupRole(HARVEST_ROLE, newHarvester);
     }
 
     function deposit() external whenNotPaused onlyController nonReentrant {
         _leverage();
     }
 
-    function withdraw(uint _amount) external onlyController nonReentrant {
+    function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
         uint _balance = wantBalance();
 
         if (_balance < _amount) {
@@ -151,7 +142,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
             // If the amount is at least the half of the real deposit
             // we have to do a full deleverage, in other case the withdraw+repay
             // will looping for ever.
-            if ((_diff * 2) >= balanceOfPool()) {
+            if ((balanceOfPool() * ratioForFullWithdraw / RATIO_PRECISION) <= _diff) {
                 _fullDeleverage();
             } else {
                 _partialDeleverage(_diff);
@@ -160,30 +151,28 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
         IERC20(want).safeTransfer(controller, _amount);
 
-        if (!paused()) {
-            _leverage();
-        }
+        if (!paused() && wantBalance() > 0) { _leverage(); }
+
+        return _amount;
     }
 
     function _leverage() internal {
         uint _amount = wantBalance();
 
-        IAaveLendingPool(pool).deposit(want, _amount, address(this), 0);
+        IERC20(want).safeApprove(POOL, _amount);
+        IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
 
-        if (_amount < minLeverage) {
-            return;
-        }
+        if (_amount < minLeverage) { return; }
 
         // Borrow & deposit strategy
         for (uint i = 0; i < borrowDepth; i++) {
-            _amount = (_amount * borrowRate) / 100;
+            _amount = (_amount * borrowRate) / RATIO_PRECISION;
 
-            IAaveLendingPool(pool).borrow(want, _amount, INTEREST_RATE_MODE, 0, address(this));
-            IAaveLendingPool(pool).deposit(want, _amount, address(this), 0);
+            IAaveLendingPool(POOL).borrow(want, _amount, INTEREST_RATE_MODE, 0, address(this));
+            IERC20(want).safeApprove(POOL, _amount);
+            IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
 
-            if (_amount < minLeverage) {
-                break;
-            }
+            if (_amount < minLeverage) { break; }
         }
     }
 
@@ -194,15 +183,16 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         while (borrowBal > 0) {
             toWithdraw = maxWithdrawFromSupply(supplyBal);
 
-            IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+            IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
+            IERC20(want).safeApprove(POOL, toWithdraw);
             // Repay only will use the needed
-            IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+            IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
 
             (supplyBal, borrowBal) = supplyAndBorrow();
         }
 
         if (supplyBal > 0) {
-            IAaveLendingPool(pool).withdraw(want, type(uint).max, address(this));
+            IAaveLendingPool(POOL).withdraw(want, type(uint).max, address(this));
         }
     }
 
@@ -230,29 +220,35 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         // This amount with borrowDepth = 0 will return the entire deposit
         uint toWithdraw = maxWithdrawFromSupply(supplyBal);
 
-        if (toWithdraw > _needed) {
-            toWithdraw = _needed;
-        }
+        if (toWithdraw > _needed) { toWithdraw = _needed; }
 
-        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
+        IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
 
         // for depth > 0
         if (borrowBal > 0) {
             // Only repay the just amount
-
-            uint toRepay = (toWithdraw * borrowRate) / 100;
-            IAaveLendingPool(pool).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
+            uint toRepay = (toWithdraw * borrowRate) / RATIO_PRECISION;
+            IERC20(want).safeApprove(POOL, toRepay);
+            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }
     }
 
-    function increaseHealthFactor() external onlyAdmin nonReentrant {
-        (uint supplyBal,) = supplyAndBorrow();
+    // This function is useful to increase Aave HF (to prevent liquidation) and
+    // in case of "stucked while loop for withdraws" the strategy can be paused, and then
+    // use this function the N needed times to get all the resources out of the Aave pool
+    function increaseHealthFactor(uint byRatio) external onlyAdmin nonReentrant {
+        require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
+        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
 
-        // Only withdraw the 10% of the max withdraw
-        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * 100) / 10;
+        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
 
-        IAaveLendingPool(pool).withdraw(want, toWithdraw, address(this));
-        IAaveLendingPool(pool).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+        IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
+
+        //  just in case
+        if (borrowBal > 0) {
+            IERC20(want).safeApprove(POOL, toWithdraw);
+            IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+        }
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
@@ -264,7 +260,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         borrowRate = _borrowRate;
         borrowDepth = _borrowDepth;
 
-        _leverage();
+        if (wantBalance() > 0) { _leverage(); }
     }
 
     // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
@@ -272,12 +268,14 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
+        uint hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
+
         return _supply - (
-            (_supply * 1e6) / ((currentHealthFactor() / 1e12) - 0.05e6)
+            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / hfDecimals) - HF_WITHDRAW_TOLERANCE)
         );
     }
 
-        function wantBalance() public view returns (uint) {
+    function wantBalance() public view returns (uint) {
         return IERC20(want).balanceOf(address(this));
     }
 
@@ -297,52 +295,37 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         assets[0] = aToken;
         assets[1] = debtToken;
 
-        IAaveIncentivesController(incentivesController).claimRewards(
+        IAaveIncentivesController(INCENTIVES).claimRewards(
             assets, type(uint).max, address(this)
         );
     }
 
-    // _maticToWantRatio is a pre-calculated ratio to prevent
-    // sandwich attacks
-    function harvest(uint _maticToWantRatio) public nonReentrant {
-        require(hasRole(HARVEST_ROLE, msg.sender), "Only harvest role");
+    function harvest() public nonReentrant {
         uint _before = wantBalance();
 
         claimRewards();
 
         // only need swap when is different =)
-        if (want != wNative) {
-            swapRewards(_maticToWantRatio);
-        }
+        if (want != wNative) { swapRewards(); }
 
         uint harvested = wantBalance() - _before;
 
         chargeFees(harvested);
 
-        if (!paused()) {
-            // re-deposit
-            _leverage();
-        }
+        // re-deposit
+        if (!paused()) { _leverage(); }
+
+        emit Harvested(want, harvested);
     }
 
-    function swapRewards(uint _maticToWantRatio) internal {
+    function swapRewards() internal {
         uint _balance = IERC20(wNative).balanceOf(address(this));
 
         if (_balance > 0) {
-            // _maticToWantRatio is a 9 decimals ratio number calculated by the
-            // caller before call harvest to get the minimum amount of want-tokens.
-            // So the balance is multiplied by the ratio and then divided by 9 decimals
-            // to get the same "precision". Then the result should be divided for the
-            // decimal diff between tokens.
-            // E.g want is USDT with  only 6 decimals:
-            // _maticToWantRatio = 1_522_650_000 (1.52265 USDT/MATIC)
-            // _balance = 1e18 (1.0 MATIC)
-            // tokenDiffPrecision = 1e21 ((1e18 MATIC decimals / 1e6 USDT decimals) * 1e9 ratio precision)
-            // expected = 1522650 (1e18 * 1_522_650_000 / 1e21) [1.52 in USDT decimals]
+            // _expectedForSwap checks with oracles to obtain the minExpected amount
+            uint expected = _expectedForSwap(_balance, wNative, want);
 
-            uint tokenDiffPrecision = ((10 ** IERC20Metadata(wNative).decimals()) / (10 ** IERC20Metadata(want).decimals())) * 1e9;
-            uint expected = (_balance * _maticToWantRatio) / tokenDiffPrecision;
-
+            IERC20(wNative).safeApprove(exchange, _balance);
             IUniswapRouter(exchange).swapExactTokensForTokens(
                 _balance, expected, wNativeToWantRoute, address(this), block.timestamp + 60
             );
@@ -353,12 +336,10 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
      * @dev Takes out performance fee.
      */
     function chargeFees(uint _harvested) internal {
-        uint fee = (_harvested * performanceFee) / FEE_MAX;
+        uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
-        if (fee > 0) {
-            // Pay to treasury a percentage of the total reward claimed
-            IERC20(want).safeTransfer(treasury, fee);
-        }
+        // Pay to treasury a percentage of the total reward claimed
+        if (fee > 0) { IERC20(want).safeTransfer(treasury, fee); }
     }
 
     function userReserves() public view returns (
@@ -372,7 +353,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint40 stableRateLastUpdated,
         bool usageAsCollateralEnabled
     ) {
-        return IDataProvider(dataProvider).getUserReserveData(want, address(this));
+        return IDataProvider(DATA_PROVIDER).getUserReserveData(want, address(this));
     }
 
     function supplyAndBorrow() public view returns (uint, uint) {
@@ -389,7 +370,7 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
         uint ltv,
         uint healthFactor
     ) {
-        return IAaveLendingPool(pool).getUserAccountData(address(this));
+        return IAaveLendingPool(POOL).getUserAccountData(address(this));
     }
 
     function currentHealthFactor() public view returns (uint) {
@@ -401,13 +382,14 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
     // called as part of strat migration. Sends all the available funds back to the vault.
     function retireStrat() external onlyController {
         _pause();
-        _fullDeleverage();
 
-        harvest(0);
+        if (balanceOfPool() > 0) { _fullDeleverage(); }
 
+        // Can be called without rewards
+        harvest();
+
+        require(balanceOfPool() <= 0, "Strategy still has deposits");
         IERC20(want).safeTransfer(controller, wantBalance());
-
-        _removeAllowances();
     }
 
     // pauses deposits and withdraws all funds from third party systems.
@@ -418,25 +400,11 @@ contract ControllerAaveStrat is AccessControl, Pausable, ReentrancyGuard {
 
     function pause() public onlyAdmin {
         _pause();
-
-        _removeAllowances();
     }
 
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
-        _giveAllowances(want);
-
         _leverage();
-    }
-
-    function _giveAllowances(address _want) internal {
-        IERC20(_want).safeApprove(pool, type(uint).max);
-        IERC20(wNative).safeApprove(exchange, type(uint).max);
-    }
-
-    function _removeAllowances() internal {
-        IERC20(want).safeApprove(pool, 0);
-        IERC20(wNative).safeApprove(exchange, 0);
     }
 }

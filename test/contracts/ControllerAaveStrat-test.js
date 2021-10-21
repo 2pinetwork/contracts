@@ -8,8 +8,7 @@ const {
   impersonateContract,
   waitFor,
   zeroAddress,
-  MAX_UINT
-} = require('./helpers')
+} = require('../helpers')
 
 describe('Controller Aave Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
@@ -17,15 +16,31 @@ describe('Controller Aave Strat wrong deployment', () => {
       deploy(
         'ControllerAaveStrat',
         zeroAddress,
-        48,
-        50,
+        4800,
+        5000,
         8,
         1e15,
         zeroAddress, // ignored in that case
         exchange.address,
         owner.address
       )
-    ).to.be.revertedWith("Controller can't be 0 address")
+    ).to.be.revertedWith("want !ZeroAddress")
+  })
+
+  it('Should not deploy with zero address controller', async () => {
+    await expect(
+      deploy(
+        'ControllerAaveStrat',
+        PiToken.address,
+        4800,
+        5000,
+        8,
+        1e15,
+        zeroAddress, // ignored in that case
+        exchange.address,
+        owner.address
+      )
+    ).to.be.revertedWith("Controller !ZeroAddress")
   })
 
   it('Should not deploy with zero address treasury', async () => {
@@ -36,15 +51,15 @@ describe('Controller Aave Strat wrong deployment', () => {
       deploy(
         'ControllerAaveStrat',
         piToken.address,
-        48,
-        50,
+        4800,
+        5000,
         8,
         1e15,
         archimedes.address,
         exchange.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury can't be 0 address")
+    ).to.be.revertedWith("Treasury !ZeroAddress")
   })
 })
 
@@ -56,6 +71,8 @@ describe('Controller Aave Strat', () => {
   let strat
   let rewardsBlock
   let pool
+  let wNativeFeed
+  let wantFeed
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -64,7 +81,8 @@ describe('Controller Aave Strat', () => {
     archimedes   = await deploy(
       'Archimedes',
       piToken.address,
-      rewardsBlock
+      rewardsBlock,
+      WMATIC.address
     )
 
     controller = await createController(piToken, archimedes)
@@ -74,7 +92,24 @@ describe('Controller Aave Strat', () => {
       (await controller.strategy())
     )
 
+    wNativeFeed = await deploy('PriceFeedMock')
+    wantFeed = await deploy('PriceFeedMock')
+
+    // 2021-10-06 wmatic-eth prices
+    await Promise.all([
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(wantFeed.setPrice(363070990456305)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(piToken.address, wantFeed.address)),
+    ])
+
     pool = Aave.pool
+  })
+
+  afterEach(async () => {
+    // Reset
+    await waitFor(wNativeFeed.setPrice(129755407))
+    await waitFor(wantFeed.setPrice(363070990456305))
   })
 
   describe('Deployment', () => {
@@ -122,22 +157,6 @@ describe('Controller Aave Strat', () => {
       expect(await strat.wNativeToWantRoute(0)).to.equal(piToken.address)
       expect(await strat.wNativeToWantRoute(1)).to.equal(WMATIC.address)
     })
-
-    it('Should set a new hardvester', async () => {
-      await strat.addHarvester(bob.address)
-
-      await expect(
-        strat.connect(bob).harvest(0)
-      ).to.be.not.revertedWith('Only harvest role')
-
-      // Just to take the _other_ path during swap rewards
-      await WMATIC.deposit({ value: 1 });
-      await WMATIC.transfer(strat.address, 1)
-
-      expect(
-        strat.connect(bob).harvest(0)
-      ).to.be.not.revertedWith('Only harvest role')
-    })
   })
 
   describe('Deposit', () => {
@@ -165,14 +184,16 @@ describe('Controller Aave Strat', () => {
       const newStrat = await deploy(
         'ControllerAaveStrat',
         piToken.address,
-        48,
-        50,
+        4800,
+        5000,
         8,
         100,
         controller.address,
         exchange.address,
         owner.address
       )
+      await waitFor(newStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(newStrat.setPriceFeed(piToken.address, wantFeed.address))
       const ctrollerSigner = await impersonateContract(controller.address)
 
       await waitFor(piToken.transfer(newStrat.address, 110))
@@ -206,8 +227,8 @@ describe('Controller Aave Strat', () => {
       const newStrat = await deploy(
         'ControllerAaveStrat',
         piToken.address,
-        48,
-        50,
+        4800,
+        5000,
         4,
         100,
         controller.address,
@@ -264,6 +285,9 @@ describe('Controller Aave Strat', () => {
       await piToken.transfer(strat.address, 10)
 
       await waitFor(strat.connect(ctrollerSigner).withdraw(10))
+      // expect('_fullDeleverage').to.not.be.calledOnContract(strat)
+      // expect('_partialDeleverage').to.not.be.calledOnContract(strat)
+
 
       expect(await piToken.balanceOf(controller.address)).to.equal(10)
       expect(await piToken.balanceOf(strat.address)).to.equal(0)
@@ -274,14 +298,17 @@ describe('Controller Aave Strat', () => {
       const newStrat = await deploy(
         'ControllerAaveStrat',
         piToken.address,
-        48,
-        50,
+        4800,
+        5000,
         8,
         1e15,
         controller.address,
         exchange.address,
         owner.address
       )
+
+      await waitFor(newStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(newStrat.setPriceFeed(piToken.address, wantFeed.address))
 
       const ctrollerSigner = await impersonateContract(controller.address)
 
@@ -293,10 +320,12 @@ describe('Controller Aave Strat', () => {
       expect(await piToken.balanceOf(newStrat.address)).to.be.equal(0)
       expect(await piToken.balanceOf(pool.address)).to.be.equal('' + 1e18)
 
-      // Just to test the maxWithdrawSupply < _needed
+      // trigger 5 deleverages
       await waitFor(pool.setHealthFactor('' + 1.2e18))
 
       await waitFor(newStrat.connect(ctrollerSigner).withdraw('' + 1e18))
+      // expect('_fullDeleverage').to.be.calledOnContract(newStrat)
+      // expect('_partialDeleverage').to.not.be.calledOnContract(newStrat)
 
       expect(await piToken.balanceOf(controller.address)).to.equal('' + 1e18)
       expect(await piToken.balanceOf(newStrat.address)).to.equal(0)
@@ -325,26 +354,46 @@ describe('Controller Aave Strat', () => {
   })
 
   describe('Harvest', () => {
-    it('Should harvest', async () => {
-      await strat.addHarvester(owner.address)
-
-      await expect(strat.harvest(1)).to.be.not.revertedWith()
-    })
-
     it('should harvest and receive fee', async () => {
-      await strat.addHarvester(owner.address)
-
       await waitFor(WMATIC.deposit({ value: 1e6 }))
       await waitFor(WMATIC.transfer(strat.address, 1e6))
-      await waitFor(piToken.transfer(strat.address, 1e6))
       await waitFor(piToken.transfer(exchange.address, '' + 1e18))
 
       const balance = await piToken.balanceOf(owner.address)
 
-      await waitFor(strat.harvest(1e9)) // 1 x 1 ratio
+      await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(wantFeed.setPrice(20))
 
+      // 1 x 0.2 ratio
+      await waitFor(strat.harvest())
+
+      // RATIO => (100 * 1e9 / 20) * 99 / 100 == 4950000000.0
+      // 1e6 * RATIO / 1e9 => 4950000.0 (swapped)
+      // 4950000.0 * 0.035 == 173250  (perf fee)
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.add(3.5e4) // 3.5% of 1e6
+        balance.add(173250)
+      )
+    })
+
+    it('should harvest with low swap ratio', async () => {
+      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
+      await waitFor(WMATIC.transfer(strat.address, '' + 1e18))
+      await waitFor(piToken.transfer(exchange.address, '' + 1e18))
+
+      const balance = await piToken.balanceOf(owner.address)
+      const exchangeBalance = await piToken.balanceOf(exchange.address)
+
+      // Ratio: 1.29 / 3630.7 (MATIC / ETH)
+      await waitFor(strat.harvest())
+
+      // RATIO => (129755407 * 1e18 / 363070990456305) * 9900 / 10000 == 353809189680
+      // 1e18 * RATIO / 1e18 => RATIO (swapped)
+      // RATIO * 0.035 == 12383321638  (perf fee)
+      expect(await piToken.balanceOf(exchange.address)).to.be.equal(
+        exchangeBalance.sub(353809189680)
+      )
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.add(12383321638)
       )
     })
 
@@ -352,17 +401,15 @@ describe('Controller Aave Strat', () => {
       const newStrat = await deploy(
         'ControllerAaveStrat',
         WMATIC.address,
-        48,
-        50,
+        4800,
+        5000,
         8,
         1e15,
         controller.address,
         exchange.address,
         owner.address
       )
-      await newStrat.addHarvester(owner.address)
-
-      await expect(newStrat.harvest(1)).to.be.not.revertedWith()
+      await expect(newStrat.harvest()).to.be.not.revertedWith()
     })
   })
 
@@ -370,6 +417,12 @@ describe('Controller Aave Strat', () => {
     it('should be reverted for non admin', async () => {
       await expect(strat.connect(bob).setPerformanceFee(1)).to.be.revertedWith(
         'Not an admin'
+      )
+    })
+
+    it('should be reverted for max perf fee', async () => {
+      await expect(strat.setPerformanceFee(100000)).to.be.revertedWith(
+        "Can't be greater than max"
       )
     })
 
@@ -386,13 +439,44 @@ describe('Controller Aave Strat', () => {
     })
   })
 
-  describe('Other functions', () => {
-    it('Should reject no hardvester doing harvest', async () => {
-      expect(
-        strat.connect(bob).harvest(0)
-      ).to.be.revertedWith('Only harvest role')
+  describe('setSwapSlippageRatio', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setSwapSlippageRatio(100)
+      ).to.be.revertedWith('Not an admin')
     })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setSwapSlippageRatio(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.swapSlippageRatio()).to.not.be.equal(123)
+      await waitFor(strat.setSwapSlippageRatio(123))
+      expect(await strat.swapSlippageRatio()).to.be.equal(123)
+    })
+  })
 
+  describe('setRatioForFullWithdraw', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(
+        strat.connect(bob).setRatioForFullWithdraw(100)
+      ).to.be.revertedWith('Not an admin')
+    })
+    it('should be reverted for big ratio', async () => {
+      await expect(
+        strat.setRatioForFullWithdraw(10001)
+      ).to.be.revertedWith("can't be more than 100%")
+    })
+    it('should be changed', async () => {
+      expect(await strat.ratioForFullWithdraw()).to.not.be.equal(123)
+      await waitFor(strat.setRatioForFullWithdraw(123))
+      expect(await strat.ratioForFullWithdraw()).to.be.equal(123)
+    })
+  })
+
+
+  describe('Other functions', () => {
     it('Should not increase health factor', async () => {
       const balance = await piToken.balanceOf(owner.address)
 
@@ -400,7 +484,7 @@ describe('Controller Aave Strat', () => {
 
       const initialBalance = await piToken.balanceOf(pool.address)
 
-      await waitFor(strat.increaseHealthFactor())
+      await waitFor(strat.increaseHealthFactor(1000)) // 10%
 
       expect(await piToken.balanceOf(pool.address)).to.be.equal(initialBalance)
     })
@@ -411,14 +495,16 @@ describe('Controller Aave Strat', () => {
       const levStrat = await deploy(
         'ControllerAaveStrat',
         piToken.address,
-        80,
-        100,
+        8000,
+        10000,
         2,
         10,
         controller.address,
         global.exchange.address,
         owner.address
       )
+      await waitFor(levStrat.setPriceFeed(WMATIC.address, wNativeFeed.address))
+      await waitFor(levStrat.setPriceFeed(piToken.address, wantFeed.address))
       await waitFor(controller.setStrategy(levStrat.address))
       const ctrollerSigner = await impersonateContract(controller.address)
 
@@ -427,7 +513,7 @@ describe('Controller Aave Strat', () => {
 
       const hf = (await levStrat.userAccountData())[5]
 
-      await levStrat.increaseHealthFactor()
+      await waitFor(levStrat.increaseHealthFactor(1000)) // 10%
 
       const newHf = (await levStrat.userAccountData())[5]
 
@@ -502,13 +588,7 @@ describe('Controller Aave Strat', () => {
     it('Should retire strategy', async () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
-      expect(await piToken.allowance(strat.address, pool.address)).to.be.equal(MAX_UINT)
-      expect(await WMATIC.allowance(strat.address, exchange.address)).to.be.equal(MAX_UINT)
-
       await waitFor(strat.connect(ctrollerSigner).retireStrat())
-
-      expect(await piToken.allowance(strat.address, pool.address)).to.be.equal(0)
-      expect(await WMATIC.allowance(strat.address, exchange.address)).to.be.equal(0)
     })
   })
 })

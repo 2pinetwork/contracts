@@ -1,4 +1,4 @@
-const { createPiToken, deploy, waitFor, toNumber } = require('./helpers')
+const { createPiToken, deploy, waitFor, toNumber } = require('../helpers')
 
 describe('PiVault', () => {
   let tomorrow
@@ -132,23 +132,16 @@ describe('PiVault', () => {
     beforeEach(async () => {
       await piToken.approve(piVault.address, 10)
       await piVault.deposit(10)
-    })
-
-    it('should be added', async () => {
       expect(await piVault.investors(owner.address)).to.be.equal(false)
       await waitFor(piVault.addInvestor(owner.address))
       expect(await piVault.investors(owner.address)).to.be.equal(true)
     })
 
     it('should revert on withdraw before lock time', async () => {
-      await waitFor(piVault.addInvestor(owner.address))
-
       expect(piVault.withdraw(1)).to.be.revertedWith('Still locked')
     })
 
     it('should withdraw everything', async () => {
-      await waitFor(piVault.addInvestor(owner.address))
-
       await expect(piVault.withdraw(1)).to.be.revertedWith('Still locked')
 
       // Set same timestamp than investor lock
@@ -159,6 +152,21 @@ describe('PiVault', () => {
       await waitFor(piVault.withdraw(10))
       expect(await piVault.balanceOf(owner.address)).to.be.equal(0)
     })
+
+    it('should not transfer shares', async () => {
+      let [, bob] = await ethers.getSigners()
+
+      await expect(piVault.transfer(bob.address, 1)).to.be.revertedWith(
+        'Still locked'
+      )
+
+      await piToken.transfer(bob.address, 10)
+      await piToken.connect(bob).approve(piVault.address, 10)
+      await piVault.connect(bob).deposit(10)
+
+      // Just check it's not reverted
+      await waitFor(piVault.connect(bob).transfer(owner.address, 1))
+    })
   })
 
   describe('Founders', async () => {
@@ -167,15 +175,13 @@ describe('PiVault', () => {
       await piVault.deposit(toNumber(1.6e24)); // Limit for 1º year is 1.57
       expect(await piVault.founders(owner.address)).to.be.equal(false)
       await waitFor(piVault.addFounder(owner.address))
-    })
-
-    it('should be added', async () => {
       expect(await piVault.founders(owner.address)).to.be.equal(true)
     })
 
     it('should revert on withdraw before lock time', async () => {
       await expect(piVault.withdraw(1)).to.be.revertedWith('Still locked')
     })
+
     it('should withdraw only first tranche', async () => {
       const foundersMaxFirstTranche = await piVault.FOUNDERS_MAX_WITHDRAWS_AFTER_FIRST_YEAR()
 
@@ -204,6 +210,21 @@ describe('PiVault', () => {
 
       await waitFor(piVault.withdraw(toNumber(1.6e24)))
       expect(await piVault.balanceOf(owner.address)).to.be.equal(0)
+    })
+
+    it('should not transfer shares', async () => {
+      let [, bob] = await ethers.getSigners()
+
+      await expect(piVault.transfer(bob.address, 100)).to.be.revertedWith(
+        'Still locked'
+      )
+
+      await piToken.transfer(bob.address, 10)
+      await piToken.connect(bob).approve(piVault.address, 10)
+      await piVault.connect(bob).deposit(10)
+
+      // Just check it's not reverted
+      await waitFor(piVault.connect(bob).transfer(owner.address, 1))
     })
   })
 })

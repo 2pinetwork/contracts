@@ -28,6 +28,14 @@ const main = async function () {
 
   deploy.PiToken = contract.address
 
+  // replace piToken addr
+  const chainId = hre.network.config.network_id
+  const replacementsFile = `utils/addr_replacements.${chainId}.json`
+  let replacements = JSON.parse(fs.readFileSync(replacementsFile, 'utf8'))
+
+  replacements['0x5095d3313C76E8d29163e40a0223A5816a8037D8'] = deploy.PiToken
+
+  fs.writeFileSync(replacementsFile, JSON.stringify(replacements, undefined, 2))
   fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
 }
 

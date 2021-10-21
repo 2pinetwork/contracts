@@ -10,23 +10,22 @@ async function main() {
   const args = [
     deploy.PiToken,
     deploy.PiVault,
-    deploy.treasury,
-    deploy.block
+    deploy.treasury
   ]
   const contract = await (
-    await hre.ethers.getContractFactory('MintAndSend')
+    await hre.ethers.getContractFactory('Distributor')
   ).deploy(...args);
 
   await contract.deployed();
-  await verify('MintAndSend', contract.address, args)
+  await verify('Distributor', contract.address, args)
 
-  deploy.MintAndSend = contract.address
+  deploy.Distributor = contract.address
 
-  for (let wallet in deploy.investors) {
-    await (await contract.addInvestor(wallet, deploy.investors[wallet].tickets)).wait()
-  }
+  // for (let wallet in deploy.investors) {
+  //   await (await contract.addInvestor(wallet, deploy.investors[wallet].tickets)).wait()
+  // }
 
-  await (await contract.addFounders(Object.keys(deploy.founders))).wait()
+  // await (await contract.addFounders(Object.keys(deploy.founders))).wait()
 
   const piToken = await hre.ethers.getContractAt('IPiTokenMocked', deploy.PiToken)
 

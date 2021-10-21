@@ -15,9 +15,9 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 contract WETHMock {
     string public name     = "Wrapped Ether";

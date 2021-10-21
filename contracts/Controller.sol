@@ -1,23 +1,25 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import "hardhat/console.sol";
 
-interface Farm {
+interface IFarm {
     function piToken() external view returns (address);
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
 }
 
 interface IStrategy {
     function balance() external view returns (uint);
     function deposit() external;
-    function withdraw(uint _amount) external;
+    function withdraw(uint _amount) external returns (uint);
     function paused() external view returns (bool);
     function retireStrat() external;
 }
@@ -29,11 +31,14 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     address public immutable farm;
     IERC20Metadata public immutable want;
 
+    // Farm controller index
+    uint public pid = type(uint16).max; // 65535 means unassigned
+
     address public strategy;
     address public treasury;
 
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public RATIO_PRECISION = 10000;
     uint constant public MAX_WITHDRAW_FEE = 100; // 1%
     uint public withdrawFee = 10; // 0.1%
 
@@ -45,8 +50,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         string(abi.encodePacked("2pi-", _want.name())),
         string(abi.encodePacked("2pi", _want.symbol()))
     ) {
-        require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
-        require(_treasury != address(0), "Treasury can't be 0 address");
+        require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
+        require(_treasury != address(0), "Treasury !ZeroAddress");
 
         want = _want;
         farm = _farm;
@@ -57,18 +62,36 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return want.decimals();
     }
 
+    // BeforeTransfer callback to harvest the farm rewards for both users
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        // ignore mint/burn
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).beforeSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
+
+    // AferTransfer callback to update the farm rewards for both users
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).afterSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
+
     modifier onlyFarm() {
         require(msg.sender == farm, "Not from farm");
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!_strategyPaused(), "Strategy paused");
-        _;
+    function setFarmPid(uint _pid) external onlyFarm returns (uint) {
+        require(pid >= type(uint16).max, "pid already assigned");
+
+        pid = _pid;
+
+        return pid;
     }
 
     event NewStrategy(address old_strategy, address new_strategy);
-    event NewTreasury(address old_treasury, address new_treasury);
+    event NewTreasury(address oldTreasury, address newTreasury);
 
     function setTreasury(address _treasury) external onlyOwner nonReentrant {
         emit NewTreasury(treasury, _treasury);
@@ -77,11 +100,15 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     function setStrategy(address new_strategy) external onlyOwner nonReentrant {
-        require(new_strategy != address(0), "Can't be 0 address");
+        require(new_strategy != address(0), "!ZeroAddress");
         emit NewStrategy(strategy, new_strategy);
 
         if (strategy != address(0)) {
             IStrategy(strategy).retireStrat();
+            require(
+                IStrategy(strategy).balance() <= 0,
+                "Strategy still has deposits"
+            );
         }
 
         strategy = new_strategy;
@@ -95,8 +122,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         withdrawFee = _fee;
     }
 
-
-    function deposit(address _senderUser, uint _amount) external whenNotPaused onlyFarm nonReentrant {
+    function deposit(address _senderUser, uint _amount) external onlyFarm nonReentrant {
+        require(!_strategyPaused(), "Strategy paused");
         uint _before = balance();
 
         want.safeTransferFrom(
@@ -120,27 +147,34 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     // Withdraw partial funds, normally used with a vault withdrawal
-    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant {
+    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant returns (uint) {
         // This line has to be calc before burn
         uint _withdraw = (balance() * _shares) / totalSupply();
 
         _burn(_senderUser, _shares);
 
         uint _balance = wantBalance();
+        uint withdrawn;
 
         if (_balance < _withdraw) {
             uint _diff = _withdraw - _balance;
 
-            _strategyWithdraw(_diff);
+            // withdraw will revert if anyything weird happend with the
+            // transfer back but just in case we ensure that the withdraw is
+            // positive
+            withdrawn = IStrategy(strategy).withdraw(_diff);
+            require(withdrawn > 0, "Can't withdraw from strategy...");
         }
 
-        uint withdrawalFee = _withdraw * withdrawFee / FEE_MAX;
-        want.safeTransfer(farm, _withdraw - withdrawalFee);
+        uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
+        withdrawn = _withdraw - withdrawalFee;
+
+        want.safeTransfer(farm, withdrawn);
         want.safeTransfer(treasury, withdrawalFee);
 
-        if (!_strategyPaused()) {
-            _strategyDeposit();
-        }
+        if (!_strategyPaused()) { _strategyDeposit(); }
+
+        return withdrawn;
     }
 
     function _strategyPaused() internal view returns (bool){
@@ -166,12 +200,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
             want.safeTransfer(strategy, _amount);
 
             IStrategy(strategy).deposit();
-        }
-    }
-
-    function _strategyWithdraw(uint _amount) internal {
-        if (_amount > 0) {
-            IStrategy(strategy).withdraw(_amount);
         }
     }
 }
