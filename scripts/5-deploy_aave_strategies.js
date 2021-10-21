@@ -109,9 +109,9 @@ async function main() {
 
     deploy[`strat-aave-${pool.currency}`] = {
       controller: controller.address,
-      strategy: strategy.address,
-      pid:      pid,
-      tokenAddr: pool.address
+      strategy:   strategy.address,
+      pid:        pid.toBigInt(),
+      tokenAddr:  pool.address
     }
   }
 
