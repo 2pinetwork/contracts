@@ -1,4 +1,4 @@
-pragma solidity >= 0.7.6;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC777/IERC777.sol";
@@ -22,7 +22,6 @@ interface ISuperfluidToken {
     * @dev Calculate the real balance of a user, taking in consideration all agreements of the account
     * @param account for the query
     * @param timestamp Time of balance
-    * @param account Account to query
     * @return availableBalance Real-time balance
     * @return deposit Account deposit
     * @return owedDeposit Account owed Deposit
@@ -1275,7 +1274,7 @@ library BatchOperation {
      */
     uint32 constant internal OPERATION_TYPE_SUPERTOKEN_DOWNGRADE = 2 + 100;
     /**
-     * @dev ERC20 Approve batch operation type
+     * @dev Superfluid.callAgreement batch operation type
      *
      * Call spec:
      * callAgreement(
@@ -1285,7 +1284,7 @@ library BatchOperation {
      */
     uint32 constant internal OPERATION_TYPE_SUPERFLUID_CALL_AGREEMENT = 1 + 200;
     /**
-     * @dev ERC20 Approve batch operation type
+     * @dev Superfluid.callAppAction batch operation type
      *
      * Call spec:
      * callAppAction(
@@ -1310,13 +1309,18 @@ library SuperfluidGovernanceConfigs {
             forwarder));
     }
 
-    function getAppWhiteListingSecretKey(address deployer, string memory registrationkey) internal pure returns (bytes32) {
+    function getAppRegistrationConfigKey(address deployer, string memory registrationKey) internal pure returns (bytes32) {
         return keccak256(abi.encode(
-            "org.superfluid-finance.superfluid.appWhiteListing.seed",
+            "org.superfluid-finance.superfluid.appWhiteListing.registrationKey",
             deployer,
-            registrationkey));
+            registrationKey));
     }
 
+    function getAppFactoryConfigKey(address factory) internal pure returns (bytes32) {
+        return keccak256(abi.encode(
+            "org.superfluid-finance.superfluid.appWhiteListing.factory",
+            factory));
+    }
 }
 
 interface ISuperfluid {
@@ -1461,6 +1465,14 @@ interface ISuperfluid {
     function registerAppWithKey(uint256 configWord, string calldata registrationKey) external;
 
     /**
+     * @dev Message sender declares app as a super app
+     * @param configWord The super app manifest configuration, flags are defined in
+     *                   `SuperAppDefinitions`
+     * NOTE: only factory contracts authorized by governance can register super apps
+     */
+    function registerAppByFactory(ISuperApp app, uint256 configWord) external;
+
+    /**
      * @dev Query if the app is registered
      * @param app Super app address
      */
@@ -1545,7 +1557,8 @@ interface ISuperfluid {
         bytes calldata ctx,
         ISuperApp app,
         uint256 appAllowanceGranted,
-        int256 appAllowanceUsed
+        int256 appAllowanceUsed,
+        ISuperfluidToken appAllowanceToken
     )
         external
         // onlyAgreement
@@ -1553,7 +1566,7 @@ interface ISuperfluid {
 
     function appCallbackPop(
         bytes calldata ctx,
-        int256 allowanceUsedDelta
+        int256 appAllowanceUsedDelta
     )
         external
         // onlyAgreement
@@ -1561,8 +1574,8 @@ interface ISuperfluid {
 
     function ctxUseAllowance(
         bytes calldata ctx,
-        uint256 allowanceWantedMore,
-        int256 allowanceUsedDelta
+        uint256 appAllowanceWantedMore,
+        int256 appAllowanceUsedDelta
     )
         external
         // onlyAgreement
@@ -1671,6 +1684,8 @@ interface ISuperfluid {
         int256 appAllowanceUsed;
         // app address
         address appAddress;
+        // app allowance in super token
+        ISuperfluidToken appAllowanceToken;
     }
 
     function callAgreementWithContext(
@@ -1752,6 +1767,15 @@ interface ISuperfluid {
 
      /// @dev The app is registered and not jailed.
      modifier isAppActive(ISuperApp app) virtual; */
+}
+
+abstract contract CustomSuperTokenBase {
+    // This is the hard-coded number of storage slots used by the super token
+    uint256[32] internal _storagePaddings;
+}
+
+interface INativeSuperTokenCustom {
+    function initialize(string calldata name, string calldata symbol, uint256 initialSupply) external;
 }
 
 library UUPSUtils {
@@ -1875,48 +1899,15 @@ contract UUPSProxy is Proxy {
 
 }
 
-abstract contract CustomSuperTokenProxyBase is UUPSProxy {
-    // This is the hard-coded number of storage slots used by the super token
-    uint256[32] internal _storagePaddings;
-}
-
 // SPDX-License-Identifier: AGPLv3
-/**
- * @dev Native SuperToken custom token functions
- *
- * @author Superfluid
- */
-interface INativeSuperTokenCustom {
-    function initialize(string calldata name, string calldata symbol, uint256 initialSupply) external;
-}
-
-/**
- * @dev Native SuperToken full interface
- *
- * @author Superfluid
- */
-interface INativeSuperToken is INativeSuperTokenCustom, ISuperToken {
-    function initialize(string calldata name, string calldata symbol, uint256 initialSupply) external override;
-}
-
 /**
  * @dev Native SuperToken custom super token implementation
  *
- * NOTE:
- * - This is a simple implementation where the supply is pre-minted.
+ * NOTE: this is a merged one-file from 1.0.0-rc7 contracts/tokens/NativeSuperToken.sol
  *
- * @author Superfluid
  */
-contract NativeSuperTokenProxy is INativeSuperTokenCustom, CustomSuperTokenProxyBase {
-    function initialize(string calldata name, string calldata symbol, uint256 initialSupply)
-        external override
-    {
-        ISuperToken(address(this)).initialize(
-            IERC20(address(0)), // no underlying/wrapped token
-            18, // shouldn't matter if there's no wrapped token
-            name,
-            symbol
-        );
-        ISuperToken(address(this)).selfMint(msg.sender, initialSupply, new bytes(0));
+contract NativeSuperTokenProxy is INativeSuperTokenCustom, CustomSuperTokenBase, UUPSProxy {
+    function initialize(string calldata /*name*/, string calldata /*symbol*/, uint256 /*initialSupply*/) external pure {
+        revert("Can't call initialize directly");
     }
 }

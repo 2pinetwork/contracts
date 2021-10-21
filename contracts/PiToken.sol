@@ -269,12 +269,4 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     function blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
-
-    // Just to ignore SuperFluid inheritance functions
-    // function initialize(string calldata /*name*/, string calldata /*symbol*/, uint /*initialSupply*/) external override {
-    //     revert("Not implemented");
-    // }
-    // function initializeProxy(address /*initialAddress*/) external {
-    //     revert("Not implemented");
-    // }
 }

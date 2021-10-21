@@ -3,9 +3,7 @@ const { createPiToken, deploy, waitFor } = require('../helpers')
 describe('BridgedPiTokenMock', () => {
   let piToken
   let bridgedPiToken
-  let owner
   let bob
-  let superTokenFactory
 
   // Global setup
   before(async () => {
@@ -13,7 +11,7 @@ describe('BridgedPiTokenMock', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(owner, superTokenFactory, true)
+    piToken = await createPiToken(true)
     bridgedPiToken = await deploy('BridgedPiTokenMock', piToken.address)
 
 

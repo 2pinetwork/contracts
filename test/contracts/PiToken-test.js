@@ -9,7 +9,6 @@ describe('PiToken', () => {
   let bob
   let alice
   let INITIAL_SUPPLY
-  let superTokenFactory
 
   // Global setup
   before(async () => {
@@ -17,7 +16,7 @@ describe('PiToken', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(owner, superTokenFactory)
+    piToken = await createPiToken()
 
     INITIAL_SUPPLY = await piToken.INITIAL_SUPPLY()
 
@@ -199,6 +198,34 @@ describe('PiToken', () => {
 
     it('Should revert second call', async () => {
       await expect(piToken.init()).to.be.revertedWith('Already initialized')
+    })
+
+    it('should revert initialize native function', async () => {
+      const balance = await piToken.balanceOf(owner.address)
+      const supply = await piToken.totalSupply()
+
+      await expect(piToken.initialize(zeroAddress, 18, '2Pi', '2Pi')).to.be.revertedWith('Initializable: contract is already initialized')
+      await expect(piToken.initialize(zeroAddress, 18, '22Pi', '22Pi')).to.be.revertedWith('Initializable: contract is already initialized')
+
+      const native = await ethers.getContractAt('NativeSuperTokenProxy', piToken.address)
+
+      await expect(native.initialize('2Pi', '2Pi', 100)).to.be.revertedWith(
+        "Can't call initialize directly"
+      )
+      await expect(native.initialize('22Pi', '22Pi', 100)).to.be.revertedWith(
+        "Can't call initialize directly"
+      )
+
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(balance)
+      expect(await piToken.totalSupply()).to.be.equal(supply)
+    })
+
+    it('should revert superfluid initializeProxy', async () => {
+      const native = await ethers.getContractAt('NativeSuperTokenProxy', piToken.address)
+
+      await expect(native.initializeProxy(bob.address)).to.be.revertedWith(
+        'UUPSProxy: already initialized'
+      )
     })
   })
 
@@ -410,6 +437,41 @@ describe('PiToken', () => {
       ).to.be.revertedWith("Can't mint more than expected")
 
       await waitFor(piToken.connect(bob).communityMint(bob.address, n))
+    })
+  })
+
+  describe('setMintPerBlock', async () => {
+    it('should not revert when changing rates', async () => {
+      const block = await getBlock();
+      await piToken.initRewardsOn(block)
+      await mineNTimes(1)
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0)
+
+      await waitFor(piToken.setCommunityMintPerBlock(0.2e18 + ''))
+      await waitFor(piToken.setCommunityMintPerBlock(0))
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+      expect(await piToken.communityLeftToMint()).to.be.equal(0.2e18 + '')
+
+      await waitFor(piToken.setCommunityMintPerBlock(1e18 + ''))
+      await waitFor(piToken.setCommunityMintPerBlock(0))
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0)
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.2e18 + '')
+
+      await waitFor(piToken.setApiMintPerBlock(0.3e18 + ''))
+      await waitFor(piToken.setApiMintPerBlock(0))
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0.3e18 + '')
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.2e18 + '')
+
+      await waitFor(piToken.setApiMintPerBlock(0.5e18 + ''))
+      await waitFor(piToken.setApiMintPerBlock(0))
+
+      expect(await piToken.apiLeftToMint()).to.be.equal(0.8e18 + '')
+      expect(await piToken.communityLeftToMint()).to.be.equal(1.2e18 + '')
     })
   })
 

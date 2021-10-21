@@ -6,7 +6,6 @@ describe('PiTokenMock', () => {
   let bob
   let INITIAL_SUPPLY
   let MAX_SUPPLY
-  let superTokenFactory
 
   // Global setup
   before(async () => {
@@ -14,7 +13,7 @@ describe('PiTokenMock', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(owner, superTokenFactory, true)
+    piToken = await createPiToken(true)
 
     INITIAL_SUPPLY = await piToken.INITIAL_SUPPLY()
     MAX_SUPPLY = await piToken.MAX_SUPPLY()

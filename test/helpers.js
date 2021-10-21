@@ -69,7 +69,7 @@ const createPiToken = async (mocked, withDeployer) => {
   expect(await piToken.balanceOf(owner.address)).to.equal(0)
   expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
 
-  await (await piToken.init()).wait()
+  await expect(piToken.init()).to.emit(piToken, 'Minted')
 
   return piToken
 }
