@@ -38,6 +38,12 @@ call an on-chain oracle and calculate that in the same way (with some slippage).
 - `yarn test` to run only unit tests
 - `yarn itest` to run only integration tests (ALCHEMY_API_KEY env needed)
 - `yarn full_test` to run unit + integration tests (ALCHEMY_API_KEY env needed)
+
+## Parallel test + coverage
+```bash
+docker build -t 2pi_contracts .
+mkdir -p shares_cov/
+```
 - `yarn ptest` to run only unit tests in parallel (it fails sometimes ?)
 
 ## Contracts

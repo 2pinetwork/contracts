@@ -8,6 +8,7 @@ addresses
 yarn.lock
 coverage/
 coverage.json
+shared_cov/*
 
 # Ignore tmp or utils
 build/
