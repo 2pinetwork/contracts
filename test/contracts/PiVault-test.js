@@ -115,7 +115,7 @@ describe('PiVault', () => {
       await expect(
         piVault.connect(bob).addInvestor(owner.address)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
     })
 
@@ -123,7 +123,7 @@ describe('PiVault', () => {
       await expect(
         piVault.connect(bob).addFounder(owner.address)
       ).to.be.revertedWith(
-        'Ownable: caller is not the owner'
+        'Not an admin'
       )
     })
   })

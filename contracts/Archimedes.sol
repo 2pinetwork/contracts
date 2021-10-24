@@ -4,10 +4,10 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
+import "./PiAdmin.sol";
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IController.sol";
 import "../interfaces/IReferral.sol";
@@ -18,7 +18,7 @@ interface IWNative is IERC20 {
     function withdraw(uint wad) external;
 }
 
-contract Archimedes is AccessControl, ReentrancyGuard {
+contract Archimedes is PiAdmin, ReentrancyGuard {
     // using Address for address;
     using SafeERC20 for IERC20;
 
@@ -72,13 +72,6 @@ contract Archimedes is AccessControl, ReentrancyGuard {
         piToken = _piToken;
         startBlock = _startBlock;
         WNative = _wNative;
-
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
-        _;
     }
 
     // Deposit MATIC

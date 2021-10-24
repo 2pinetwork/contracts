@@ -2,9 +2,7 @@
 
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract Referral is Ownable {
+contract Referral {
     // Archimedes
     address public immutable farm;
 

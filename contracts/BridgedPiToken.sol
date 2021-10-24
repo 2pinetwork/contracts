@@ -3,11 +3,11 @@ pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 
 import "hardhat/console.sol";
+import "./PiAdmin.sol";
 
-contract BridgedPiToken is AccessControl {
+contract BridgedPiToken is PiAdmin {
     using SafeERC20 for IERC20;
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -34,12 +34,6 @@ contract BridgedPiToken is AccessControl {
 
     constructor(IERC20 _piToken) {
         piToken = _piToken;
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
-        _;
     }
 
     function initRewardsOn(uint _blockNumber) external onlyAdmin {

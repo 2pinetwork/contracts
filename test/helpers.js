@@ -118,7 +118,7 @@ const createController = async (token, archimedes, stratName) => {
 const zeroAddress = '0x' + '0'.repeat(40)
 
 const expectedOnlyAdmin = async (fn, ...args) => {
-  await expect(fn(...args)).to.be.revertedWith('Only admin');
+  await expect(fn(...args)).to.be.revertedWith('Not an admin');
 }
 
 const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));

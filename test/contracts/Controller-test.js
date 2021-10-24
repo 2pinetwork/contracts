@@ -5,16 +5,19 @@ const {
   deploy,
   getBlock,
   waitFor,
-  zeroAddress
+  zeroAddress,
+  MAX_UINT
 } = require('../helpers')
 
 describe('Controller wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
+    const archimedes = await deploy('FarmMock', global.PiToken.address)
+
     await expect(
       deploy(
         'Controller',
         zeroAddress,
-        zeroAddress,
+        archimedes.address,
         owner.address
       )
     ).to.be.revertedWith('function call to a non-contract account')
@@ -43,7 +46,7 @@ describe('Controller wrong deployment', () => {
         archimedes.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury !ZeroAddress")
+    ).to.be.revertedWith('Treasury !ZeroAddress')
   })
 })
 
@@ -101,7 +104,7 @@ describe('Controller', () => {
     it('Should not set the treasury as non admin', async () => {
       expect(
         controller.connect(bob).setTreasury(bob.address)
-      ).to.be.revertedWith('Ownable: caller is not the owner')
+      ).to.be.revertedWith('Not an admin')
     })
   })
 
@@ -125,7 +128,7 @@ describe('Controller', () => {
     it('Should not set the strategy as non admin', async () => {
       await expect(
         controller.connect(bob).setStrategy(strat.address)
-      ).to.be.revertedWith('Ownable: caller is not the owner')
+      ).to.be.revertedWith('Not an admin')
     })
 
     it('should call strategy retireStrat', async () => {
@@ -161,7 +164,7 @@ describe('Controller', () => {
     it('should revert with 0 address', async () => {
       await expect(
         controller.setStrategy(zeroAddress)
-      ).to.be.revertedWith("!ZeroAddress")
+      ).to.be.revertedWith('!ZeroAddress')
     })
   })
 
@@ -336,6 +339,47 @@ describe('Controller', () => {
 
       expect(await controller.balanceOf(owner.address)).to.be.equal(50)
       expect(await controller.balanceOf(bob.address)).to.be.equal(50)
+    })
+  })
+
+  describe('setDepositCap', async () => {
+    it('should be reverted for non admin', async () => {
+      await expect(controller.connect(bob).setDepositCap(10)).to.be.revertedWith(
+        'Not an admin'
+      )
+    })
+
+    it('should change depositCap', async () => {
+      expect(await controller.depositCap()).to.be.equal(0)
+      await expect(controller.setDepositCap(10)).to.emit(
+        controller, 'NewDepositCap'
+      ).withArgs(0, 10)
+      expect(await controller.depositCap()).to.be.equal(10)
+    })
+  })
+
+  describe('availableDeposit', async () => {
+    it('should return MAX UINT for un-capped', async () => {
+      expect(await controller.depositCap()).to.be.equal(0)
+      expect(await controller.availableDeposit()).to.be.equal(MAX_UINT)
+    })
+
+    it('should return diff between deposited & cap', async () => {
+      expect(await controller.setDepositCap(10))
+      expect(await controller.availableDeposit()).to.be.equal(10)
+
+      await waitFor(piToken.transfer(controller.address, 7))
+
+      // 10 - 7
+      expect(await controller.availableDeposit()).to.be.equal(3)
+    })
+
+    it('should return 0 for full controller', async () => {
+      expect(await controller.setDepositCap(10))
+
+      await waitFor(piToken.transfer(controller.address, 12))
+
+      expect(await controller.availableDeposit()).to.be.equal(0)
     })
   })
 })

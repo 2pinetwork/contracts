@@ -2,13 +2,13 @@
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "hardhat/console.sol";
 
+import "./PiAdmin.sol";
 import "../interfaces/IChainLink.sol";
 import "../interfaces/IUniswapRouter.sol";
 
-abstract contract Swappable is AccessControl {
+abstract contract Swappable is PiAdmin {
     uint constant public SWAP_PRECISION = 1e18;
     uint constant public RATIO_PRECISION = 10000; // 100%
     uint public swapSlippageRatio = 100; // 1%
@@ -16,15 +16,6 @@ abstract contract Swappable is AccessControl {
     mapping(address => IChainLink) public oracles;
 
     uint public maxPriceOffset = 600; // 10 minutes
-
-    constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
-        _;
-    }
 
     function setSwapSlippageRatio(uint _ratio) external onlyAdmin {
         require(_ratio <= RATIO_PRECISION, "can't be more than 100%");

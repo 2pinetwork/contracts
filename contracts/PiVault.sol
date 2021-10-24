@@ -4,11 +4,11 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // import "hardhat/console.sol";
+import "./PiAdmin.sol";
 
-contract PiVault is ERC20, Ownable, ReentrancyGuard {
+contract PiVault is ERC20, PiAdmin, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable piToken;
@@ -43,14 +43,14 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Adds address to investors list
      */
-    function addInvestor(address _wallet) external onlyOwner {
+    function addInvestor(address _wallet) external onlyAdmin {
         investors[_wallet] = true;
     }
 
     /**
      * @dev Adds address to founders list
      */
-    function addFounder(address _wallet) external onlyOwner {
+    function addFounder(address _wallet) external onlyAdmin {
         founders[_wallet] = true;
         foundersLeftToWithdraw[_wallet] = FOUNDERS_MAX_WITHDRAWS_AFTER_FIRST_YEAR;
     }

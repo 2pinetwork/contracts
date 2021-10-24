@@ -1,13 +1,13 @@
 //SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import { IERC1820Registry } from "@openzeppelin/contracts/utils/introspection/IERC1820Registry.sol";
 
 import "hardhat/console.sol";
+import "./PiAdmin.sol";
 import "../vendor_contracts/NativeSuperTokenProxy.sol";
 
-contract PiToken is NativeSuperTokenProxy, AccessControl {
+contract PiToken is NativeSuperTokenProxy, PiAdmin {
     // mint/burn roles
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
@@ -44,17 +44,8 @@ contract PiToken is NativeSuperTokenProxy, AccessControl {
     uint internal API_TYPE = 0;
     uint internal COMMUNITY_TYPE = 1;
 
-    constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
     // Events from SuperToken
     // Minted, Burned, Transfer, Sent
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Only admin");
-        _;
-    }
 
     // Should be called from a wallet
     function init() external onlyAdmin {

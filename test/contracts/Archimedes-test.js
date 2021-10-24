@@ -13,7 +13,7 @@ describe('Archimedes setup', () => {
 
   it('should revert of 0 address piToken', async () => {
     await expect(Archimedes.deploy(zeroAddress, 1, WMATIC.address)).to.be.revertedWith(
-      "Pi address !ZeroAddress"
+      'Pi address !ZeroAddress'
     )
   })
 
@@ -23,7 +23,6 @@ describe('Archimedes setup', () => {
     )
   })
 })
-
 
 describe('Archimedes', () => {
   let bob, alice
@@ -600,5 +599,33 @@ describe('Archimedes', () => {
 
       expect(await piToken.balanceOf(newUser.address)).to.be.equal(expected)
     }).timeout(0)
+  })
+
+  describe('Deposit with CAP', async () => {
+    it('should deposit only allowed cap', async () => {
+      await expect(controller.setDepositCap(10)).to.emit(controller, 'NewDepositCap')
+      await piToken.approve(archimedes.address, 20)
+      await waitFor(archimedes.deposit(0, 10, zeroAddress))
+
+      await expect(archimedes.deposit(0, 1, zeroAddress)).to.be.revertedWith(
+        'Max depositCap reached'
+      )
+    })
+
+    it('should deposit only allowed cap with yield', async () => {
+      await expect(controller.setDepositCap(10)).to.emit(controller, 'NewDepositCap')
+      await piToken.approve(archimedes.address, 20)
+      await waitFor(archimedes.deposit(0, 8, zeroAddress))
+
+      expect(await controller.availableDeposit()).to.be.equal(2)
+
+      await waitFor(piToken.transfer(controller.address, 3))
+
+      expect(await controller.availableDeposit()).to.be.equal(0)
+
+      await expect(archimedes.deposit(0, 1, zeroAddress)).to.be.revertedWith(
+        'Max depositCap reached'
+      )
+    })
   })
 })

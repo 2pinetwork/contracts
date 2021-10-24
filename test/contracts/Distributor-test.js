@@ -54,7 +54,7 @@ describe('Distributor setup', () => {
     it('should revert set treasury for non owner', async () => {
       await expect(
         distributor.connect(alice).setTreasury(alice.address)
-      ).to.be.revertedWith('Ownable: caller is not the owner')
+      ).to.be.revertedWith('Not an admin')
     })
   })
 
