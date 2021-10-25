@@ -69,12 +69,31 @@ module.exports = {
     username: process.env.TENDERLY_USER
   },
   solidity: {
-    version:  '0.8.9',
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs:    10000
+    compilers: [
+      {
+        version:  '0.8.9',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs:    10000
+          }
+        },
+      },
+      {
+        version:  '0.6.6',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs:    10000
+          }
+        },
       }
+    ],
+    overrides: {
+      "@uniswap/lib/contracts/libraries/Babylonian.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/BitMath.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/FixedPoint.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/FullMath.sol": { version: "0.6.6" },
     }
   },
   networks: {
