@@ -1,4 +1,4 @@
-# 2piFinance
+# 2PI Network
 
 # Notes for audit
 - vendor_contracts/NativeSuperTokenProxy.sol (Is an all-in-one file from SuperFluid because of the different pragma versions)
