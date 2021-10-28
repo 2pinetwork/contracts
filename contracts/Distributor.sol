@@ -53,20 +53,20 @@ contract Distributor is PiAdmin, ReentrancyGuard {
         lastBlock = blockNumber();
 
         // Will be changed for the right wallets before deploy
-        founders[0] = address(0xc);
-        founders[1] = address(0xd);
-        founders[2] = address(0xe);
+        founders[0] = address(0x1cC86b9b67C93B8Fa411554DB761f68979E7995A);
+        founders[1] = address(0xBF67C362d035e6B6e95C4F254fe359Eea8B8C7ea);
+        founders[2] = address(0xc2d2fE7c1aD582723Df08e3e176762f70d7aC7eC);
 
-        investors[0] = address(0x1);
-        investors[1] = address(0x2);
-        investors[2] = address(0x3);
-        investors[3] = address(0x4);
-        investors[4] = address(0x5);
-        investors[5] = address(0x6);
-        investors[6] = address(0x7);
-        investors[7] = address(0x8);
-        investors[8] = address(0x9);
-        investors[9] = address(0xa);
+        investors[0] = address(0x3181893d37BC1F89635B4dDAc5A7424d804FA9c9);
+        investors[1] = address(0x610DA3A2b17a0611552E7519b804D2E554CbCE35);
+        investors[2] = address(0x713C9aE2D300FE95f9778dC63DdA6B6a64E16474);
+        investors[3] = address(0xD5399bE4abD48fBe728E5e20E352633a206Da795);
+        investors[4] = address(0x774A1a1546Ff63135414b7394FD50779dfD0296d);
+        investors[5] = address(0xc5A094F8AC2c9a51144930565Af590C51F1C1F66);
+        investors[6] = address(0xe4eDB9B7b97884f37660b00aDfbB814bD4Bf1d61);
+        investors[7] = address(0x75037D275A63f6449bbcAC7e971695696D6C2ce5);
+        investors[8] = address(0x21E1A8CE937c0A0382ECebe687e9968c2f51731b);
+        investors[9] = address(0x7341Fb8d04BE5FaEFe9152EC8Ca90908deBA1CB6);
 
         investorTickets[investors[0]] = 4;
         investorTickets[investors[1]] = 2;
@@ -167,6 +167,10 @@ contract Distributor is PiAdmin, ReentrancyGuard {
     }
 
     function transferToTreasury(uint multiplier) internal {
+        // Just in case of division "rest"
+        uint shares = piVault.balanceOf(address(this));
+        if (shares > 0) { piVault.safeTransfer(treasury, shares); }
+
         if (leftTokensForTreasury <= 0) { return; }
 
         uint amount = multiplier * TREASURY_PER_BLOCK;
@@ -180,10 +184,6 @@ contract Distributor is PiAdmin, ReentrancyGuard {
 
         // SuperToken transfer is safe
         piToken.transfer(treasury, amount);
-
-        // Just in case of division "rest"
-        uint shares = piVault.balanceOf(address(this));
-        if (shares > 0) { piVault.safeTransfer(treasury, shares); }
 
         emit TreasoryDistributed(amount);
     }

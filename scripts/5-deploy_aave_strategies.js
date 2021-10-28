@@ -107,6 +107,13 @@ async function main() {
     let pid = await controller.pid()
     console.log(`Configured ${pool.currency} in ${pid}`)
 
+    await (await strategy.setPriceFeed(deploy.WMATIC, deploy.chainlink[deploy.WMATIC])).wait()
+    if (pool.currency != 'MATIC') {
+      await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
+      await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
+      await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
+    }
+
     deploy[`strat-aave-${pool.currency}`] = {
       controller: controller.address,
       strategy:   strategy.address,

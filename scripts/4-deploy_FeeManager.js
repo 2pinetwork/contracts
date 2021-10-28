@@ -21,7 +21,17 @@ async function main() {
 
   deploy.FeeManager = contract.address
 
+  // Falta el oraculo
+
+  // ensure write
   fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+
+  await (await contract.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
+  await (await contract.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
+
+  for (let c in deploy.chainlink) {
+    await (await contract.setPriceFeed(c, deploy.chainlink[c])).wait()
+  }
 }
 
 main()

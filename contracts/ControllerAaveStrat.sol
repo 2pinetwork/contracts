@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 import "./Swappable.sol";
 import "../interfaces/IAave.sol";
@@ -179,14 +179,20 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     function _fullDeleverage() internal {
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
         uint toWithdraw;
+        uint toRepay;
 
         while (borrowBal > 0) {
             toWithdraw = maxWithdrawFromSupply(supplyBal);
 
             IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
-            IERC20(want).safeApprove(POOL, toWithdraw);
+
+            // This is made mainly for the approve != 0
+            toRepay = toWithdraw;
+            if (toWithdraw > borrowBal) { toRepay = borrowBal; }
+
+            IERC20(want).safeApprove(POOL, toRepay);
             // Repay only will use the needed
-            IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
 
             (supplyBal, borrowBal) = supplyAndBorrow();
         }
@@ -228,6 +234,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         if (borrowBal > 0) {
             // Only repay the just amount
             uint toRepay = (toWithdraw * borrowRate) / RATIO_PRECISION;
+            if (toRepay > borrowBal) { toRepay = borrowBal; }
+
             IERC20(want).safeApprove(POOL, toRepay);
             IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }
@@ -246,8 +254,11 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
         //  just in case
         if (borrowBal > 0) {
-            IERC20(want).safeApprove(POOL, toWithdraw);
-            IAaveLendingPool(POOL).repay(want, toWithdraw, INTEREST_RATE_MODE, address(this));
+            uint toRepay = toWithdraw;
+            if (toWithdraw > borrowBal) { toRepay = borrowBal; }
+
+            IERC20(want).safeApprove(POOL, toRepay);
+            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
         }
     }
 
@@ -313,7 +324,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         chargeFees(harvested);
 
         // re-deposit
-        if (!paused()) { _leverage(); }
+        if (!paused() && wantBalance() > 0) { _leverage(); }
 
         emit Harvested(want, harvested);
     }

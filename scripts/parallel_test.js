@@ -110,6 +110,8 @@ const main = async () => {
     })
   })
 
+  await delay(5000) // wait at least 5s to change the files
+
   await Promise.all(reportPromises)
 
   console.log('Combinando')

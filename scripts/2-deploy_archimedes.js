@@ -17,7 +17,7 @@ async function main() {
   const args = [
     deploy.PiToken, // pitoken
     deploy.block,
-    owner.address
+    deploy.WMATIC
   ]
   const archimedes = await (
     await hre.ethers.getContractFactory('Archimedes')

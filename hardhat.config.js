@@ -15,6 +15,7 @@ const hardhatNetwork = () => {
   if (isIntegration) {
     return {
       network_id: 137,
+      chainId: 137,
       forking:    {
         url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
         // url:         `http://localhost:8545`,
@@ -104,6 +105,11 @@ module.exports = {
     avax_test: {
       url:        'https://api.avax-test.network/ext/bc/C/rpc',
       network_id: 43113,
+      accounts:   accounts
+    },
+    ganache: {
+      url:        'http://localhost:8545',
+      network_id: 137,
       accounts:   accounts
     }
   },
