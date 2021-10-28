@@ -126,7 +126,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // View function to see pending PIes on frontend.
-    function pendingPiToken(uint _pid) external view returns (uint) {
+    function pendingPiToken(uint _pid, address _user) external view returns (uint) {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
@@ -137,7 +137,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
             uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
-        return ((userShares(_pid) * accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid);
+        return ((userShares(_pid, _user) * accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
     }
 
     // Update reward variables for all pools. Be careful of gas spending!
@@ -355,7 +355,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     // Record referral in referralMgr contract if needed
     function _recordReferral(uint _pid, address _referrer) internal {
         // only if it's the first deposit
-        if ( userShares(_pid) <= 0 && _referrer != address(0) &&
+        if (userShares(_pid) <= 0 && _referrer != address(0) &&
             _referrer != msg.sender && address(referralMgr) != address(0)) {
 
             referralMgr.recordReferral(msg.sender, _referrer);

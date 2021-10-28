@@ -10,5 +10,15 @@ exports.notify = async function(msg) {
     encodeURIComponent(msg)
   ].join('');
 
-  await fetch(url);
+  await Promise.all([
+    fetch(
+      `https://discord.com/api/webhooks/${process.env.DISCORD_WEBHOOK_ID}/${process.env.DISCORD_WEBHOOK_TOKEN}`,
+      {
+        method:  'POST',
+        body:    JSON.stringify({ content: msg }),
+        headers: { 'Content-Type': 'application/json' }
+      }
+    ),
+    fetch(url)
+  ])
 }
