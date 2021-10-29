@@ -8,6 +8,7 @@
 - contracts/Controller is the Archimedes token controller (It's the one _who_ mint share-tokens) and give the option to change strategies for the same token
 - contracts/ControllerAaveStrat is the aave strategy to work with Archimedes controller
 - contracts/ControllerCurveStrat is the curve strategy to work with Archimedes controller
+- contracts/ControllerLPWithoutStrat is the strategy to work with LP controller it only keeps the tokens at the moment until pools with rewards exist
 - contracts/PiVault is the vault to stake 2Pi tokens
 - contracts/FeeManager is in charge of receive the performance fee and "buyback" 2Pi tokens and deposit in the PiVault (and send a part to the treasury)
 - contracts/Distributor is a "timelock" in charge to deposit in the PiVault the vested tokens for investors and founders (and send the stk2Pi tokens to the wallets). And to transfer to treasury tokens to be used in advisors/logistic/etc.
@@ -24,6 +25,9 @@ want-tokens and re invest (or transfer to the referer in case of referral commis
 Will "emulate" the PiToken behavior. The idea is in other chains (via a bridge) deposit the
 bridged 2PiTokens in the BridgedPiToken and let Archimedes work "in the same way" that works in
 the "main network".
+
+## PiOracle (Should be ignored)
+It's a TWAP oracle contract with Chainlink latestRoundData compatibility until we have the real oracle working
 
 ### Note MintAndDeposit => Distributor rename
 This contract in the flow draw (below) mint and distribute, but in the current flow the contract just
@@ -47,7 +51,7 @@ mkdir -p shares_cov/
 - `yarn ptest` to run only unit tests in parallel (it fails sometimes ?)
 
 ## Contracts
-![Contracts](https://github.com/2pifinance/contracts/blob/audit-sept/contracts.jpg?raw=true)
+![Contracts](https://github.com/2pifinance/contracts/blob/master/contracts.jpg?raw=true)
 
 
 ## We use
