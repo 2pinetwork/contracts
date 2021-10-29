@@ -29,7 +29,7 @@ async function main() {
 
   const piToken = await hre.ethers.getContractAt('IPiTokenMocked', deploy.PiToken)
 
-  await (await piToken.addMinter(contract.address)).wait()
+  await (await piToken.transfer(contract.address, '2041' + '0'.repeat(22))).wait()
 
   fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
 }
