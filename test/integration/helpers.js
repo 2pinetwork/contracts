@@ -108,6 +108,24 @@ const createPiTokenExchangePair = async () => {
   return pair
 }
 
+const resetHardhat = async () => {
+  // Reset network because the rewards are not harvested for somereason
+  await network.provider.request({
+    method: 'hardhat_reset',
+    params: [
+      {
+        forking: {
+          jsonRpcUrl:  hre.network.config.forking.url,
+          blockNumber: hre.network.config.forking.blockNumber
+        },
+      },
+    ],
+  });
+
+  global.PiToken = await createPiToken(false, true)
+  expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
+}
+
 const fetchNeededTokens = async () => {
   console.log('Fetching needed tokens...')
   const wmaticAbi = require('./abis/wmatic.json')
@@ -177,9 +195,10 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
 
 module.exports = {
   createPiTokenExchangePair,
+  resetHardhat,
   setWMaticBalanceFor,
   setWbtcBalanceFor,
   setWethBalanceFor,
   setChainlinkRound,
-  setChainlinkRoundForNow
+  setChainlinkRoundForNow,
 }

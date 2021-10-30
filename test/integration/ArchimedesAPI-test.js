@@ -6,6 +6,7 @@ const {
 
 const {
   createPiTokenExchangePair,
+  resetHardhat,
   setChainlinkRoundForNow,
   setWMaticBalanceFor,
   setWbtcBalanceFor,
@@ -58,6 +59,8 @@ describe('ArchimedesAPI', () => {
   }
 
   before(async () => {
+    await resetHardhat();
+
     [, bob, alice] = await ethers.getSigners()
   })
 
@@ -323,7 +326,7 @@ describe('ArchimedesAPI', () => {
       expect(await controller.balanceOf(alice.address)).to.be.within(
         // The pricePerShare > 1 gives less shares on deposit
         aliceBalance.mul(99999).div(100000),
-        aliceBalance
+        aliceBalance.mul(1001).div(1000)
       )
 
       // Should not give to owner the referral when alice already deposited without one
@@ -400,7 +403,7 @@ describe('ArchimedesAPI', () => {
       expect(await controller.balanceOf(alice.address)).to.be.within(
         // The pricePerShare > 1 gives less shares on deposit
         aliceBalance.mul(99999).div(100000),
-        aliceBalance
+        aliceBalance.mul(1001).div(1000)
       )
 
       // Just to be sure that the referral is not paid

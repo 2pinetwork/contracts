@@ -82,3 +82,27 @@ main()
     console.error(error);
     process.exit(1);
   });
+
+
+for (k in deploy) {
+  if (k.startsWith('strat-aave-')) {
+    let ctroller = await (
+      await hre.ethers.getContractFactory('Controller')
+    ).attach(deploy[k].controller)
+
+    let oracle = await hre.ethers.getContractAt(
+      'IChainLink', deploy.chainlink[deploy[k].tokenAddr]
+    );
+
+    let result = (await oracle.latestRoundData()).answer
+
+    console.log(k, result.mul(await ctroller.depositCap()).div(1e8).toBigInt())
+    continue
+
+    let cap = (1000000 / (parseFloat(result) / 1e8)).toFixed()
+
+    let decimals = parseInt(await ctroller.decimals(), 10)
+
+    await (await ctroller.setDepositCap(cap + '0'.repeat(decimals))).wait()
+  }
+}

@@ -3,7 +3,12 @@ const {
   waitFor, deploy, zeroAddress, createController
 } = require('../helpers')
 
-const { setWethBalanceFor, setWbtcBalanceFor } = require('./helpers')
+const {
+  createPiTokenExchangePair,
+  resetHardhat,
+  setWethBalanceFor,
+  setWbtcBalanceFor
+} = require('./helpers')
 
 describe('Archimedes setup', () => {
   let Archimedes
@@ -14,7 +19,7 @@ describe('Archimedes setup', () => {
 
   it('should revert of 0 address piToken', async () => {
     await expect(Archimedes.deploy(zeroAddress, 1, WMATIC.address)).to.be.revertedWith(
-      "Pi address !ZeroAddress"
+      'Pi address !ZeroAddress'
     )
   })
 
@@ -35,6 +40,8 @@ describe('Archimedes', () => {
   let refMgr
 
   before(async () => {
+    await resetHardhat();
+
     [, bob, alice] = await ethers.getSigners()
   })
 
@@ -133,13 +140,32 @@ describe('Archimedes', () => {
   describe('pendingPiToken', async () => {
     it('should return 0 for future block', async () => {
       expect(await archimedes.startBlock()).to.be.above(await getBlock())
-      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0, bob.address)).to.be.equal(0)
     })
 
     it('should return 0 for unknown user', async () => {
       mineNTimes((await archimedes.startBlock()) - (await getBlock()))
 
-      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0, bob.address)).to.be.equal(0)
+    })
+  })
+
+  describe('deposit', async () => {
+    it('should work with LP', async () => {
+      const pair = await hre.ethers.getContractAt(
+        '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol:IERC20Metadata',
+        await createPiTokenExchangePair()
+      )
+
+      const ctroller = await createController(pair, archimedes, 'ControllerLPWithoutStrat')
+      await waitFor(archimedes.addNewPool(pair.address, ctroller.address, 1, false))
+
+      const pid = await ctroller.pid()
+
+      await waitFor(pair.approve(archimedes.address, 100))
+      await expect(archimedes.deposit(pid, 1, zeroAddress)).to.emit(
+        archimedes, 'Deposit'
+      ).withArgs(pid, owner.address, 1)
     })
   })
 
@@ -166,7 +192,7 @@ describe('Archimedes', () => {
       const rewardBlock = parseInt(await archimedes.startBlock(), 10)
       const currentBlock = parseInt(await getBlock(), 10)
       expect(rewardBlock).to.be.greaterThan(currentBlock)
-      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0, bob.address)).to.be.equal(0)
 
       await mineNTimes(rewardBlock - currentBlock)
 
@@ -206,7 +232,7 @@ describe('Archimedes', () => {
         await piToken.balanceOf(alice.address)
       ).to.be.equal(alicePiBalance)
       expect(
-        await archimedes.connect(bob).pendingPiToken(0)
+        await archimedes.connect(bob).pendingPiToken(0, bob.address)
       ).to.be.equal(0)
 
       // Work with Alice
@@ -290,7 +316,7 @@ describe('Archimedes', () => {
       expect(await refMgr.referralsPaid(alice.address)).to.be.equal(referralPaid)
       expect(await refMgr.totalPaid()).to.be.equal(referralPaid)
 
-      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0, bob.address)).to.be.equal(0)
       // just call the fn to get it covered
       await (await archimedes.massUpdatePools()).wait()
 
@@ -332,7 +358,7 @@ describe('Archimedes', () => {
       )
 
       // Emergency withdraw without harvest
-      aliceBalance = parseInt(await token.balanceOf(alice.address), 10)
+      let aliceBalance = parseInt(await token.balanceOf(alice.address), 10)
       const deposited = parseInt(await controller.balanceOf(alice.address), 10)
 
       await waitFor(archimedes.connect(alice).emergencyWithdraw(0))
@@ -565,7 +591,7 @@ describe('Archimedes', () => {
       const rewardBlock = parseInt(await archimedes.startBlock(), 10)
       const currentBlock = parseInt(await getBlock(), 10)
       expect(rewardBlock).to.be.greaterThan(currentBlock)
-      expect(await archimedes.connect(bob).pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.connect(bob).pendingPiToken(0, bob.address)).to.be.equal(0)
       await mineNTimes(rewardBlock - currentBlock)
       // This should mint a reward of 0.23~ for the first block
       await (await archimedes.updatePool(0)).wait() // rewardBlock + 1

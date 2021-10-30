@@ -8,7 +8,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { setWbtcBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setWbtcBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller Curve Strat', () => {
   let bob
@@ -21,20 +21,11 @@ describe('Controller Curve Strat', () => {
   let btcFeed
   let crvFeed
 
-  beforeEach(async () => {
-    // Reset network because the rewards are not harvested for somereason
-    await network.provider.request({
-      method: 'hardhat_reset',
-      params: [
-        {
-          forking: {
-            jsonRpcUrl:  hre.network.config.forking.url,
-            blockNumber: hre.network.config.forking.blockNumber
-          },
-        },
-      ],
-    });
+  before(async () => {
+    await resetHardhat()
+  })
 
+  beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
     piToken      = await createPiToken()
     rewardsBlock = (await getBlock()) + 20

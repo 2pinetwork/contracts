@@ -126,6 +126,13 @@ const createController = async (token, archimedes, stratName) => {
           owner.address
         )
         break
+      case 'ControllerLPWithoutStrat':
+        strategy = await deploy(
+          'ControllerLPWithoutStrat',
+          controller.address,
+          token.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))

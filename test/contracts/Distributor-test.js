@@ -1,5 +1,7 @@
 const { toNumber, createPiToken, waitFor, deploy } = require('../helpers')
 
+const { DISTRIBUTOR_DATA } = require('./contract_constants')
+
 describe('Distributor setup', () => {
   let alice
   let piToken
@@ -26,7 +28,7 @@ describe('Distributor setup', () => {
       for (let i = 0; i < 10; i++) {
         let wallet = await distributor.investors(i)
         expect(wallet.toLowerCase()).to.be.equal(
-          '0x000000000000000000000000000000000000000' + (i + 1).toString(16)
+          DISTRIBUTOR_DATA.investorWallets[i].toLowerCase()
         )
         expect(await distributor.investorTickets(wallet)).to.be.above(0)
       }
@@ -35,7 +37,7 @@ describe('Distributor setup', () => {
         expect(
           (await distributor.founders(i)).toLowerCase()
         ).to.be.equal(
-          '0x000000000000000000000000000000000000000' + (i + 12).toString(16)
+          DISTRIBUTOR_DATA.founderWallets[i].toLowerCase()
         )
       }
     })

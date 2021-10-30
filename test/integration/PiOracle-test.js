@@ -5,9 +5,7 @@ const {
 
 const {
   createPiTokenExchangePair,
-  setChainlinkRoundForNow,
-  setWMaticBalanceFor,
-  setWbtcBalanceFor,
+  resetHardhat,
 } = require('./helpers')
 
 describe('PiOracle', () => {
@@ -16,6 +14,8 @@ describe('PiOracle', () => {
   let PERIOD
 
   before(async () => {
+    await resetHardhat();
+
     pair = await createPiTokenExchangePair()
     oracle = await deploy('PiOracle', pair, PiToken.address)
     PERIOD = parseInt(await oracle.PERIOD(), 10)

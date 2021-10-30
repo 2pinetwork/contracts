@@ -160,7 +160,7 @@ describe('ArchimedesMock', () => {
 
       await waitFor(archimedes.updatePool(0))
 
-      const expected = parseInt(await archimedes.pendingPiToken(0), 10)
+      const expected = parseInt(await archimedes.pendingPiToken(0, owner.address), 10)
 
       // Impersonate Archimedes Load with 1e18
       const archSigner = await impersonateContract(archimedes.address)
@@ -196,7 +196,7 @@ describe('ArchimedesMock', () => {
       const reward = (30 * (MINT_DATA[0].community * 0.99))
 
       expect(
-        await archimedes.pendingPiToken(0)
+        await archimedes.pendingPiToken(0, owner.address)
       ).to.be.equal(
         toNumber(reward)
       )
@@ -214,16 +214,16 @@ describe('ArchimedesMock', () => {
       await waitFor(archimedes.setBlockNumber(toNumber(1e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
 
-      expect(await archimedes.pendingPiToken(0)).to.be.above(0)
+      expect(await archimedes.pendingPiToken(0, owner.address)).to.be.above(0)
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
 
       await waitFor(archimedes.harvestAll())
-      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.pendingPiToken(0, owner.address)).to.be.equal(0)
 
       await waitFor(piToken.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.setBlockNumber(toNumber(2e10))) // stupid amount of blocks =)
       await waitFor(archimedes.updatePool(0)) // this will redeem everything
-      expect(await archimedes.pendingPiToken(0)).to.be.equal(0)
+      expect(await archimedes.pendingPiToken(0, owner.address)).to.be.equal(0)
       expect(await piToken.communityLeftToMint()).to.be.equal(0)
     })
   })
