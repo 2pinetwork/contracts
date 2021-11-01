@@ -18,20 +18,20 @@ const exec = (fn, title) => {
 
 async function main () {
   const Archimedes = await hre.ethers.getContractAt('Archimedes', deploy.Archimedes)
-  const MintAndSend = await hre.ethers.getContractAt('MintAndSend', deploy.MintAndSend)
+  const Distributor = await hre.ethers.getContractAt('Distributor', deploy.Distributor)
   const FeeManager = await hre.ethers.getContractAt('FeeManager', deploy.FeeManager)
 
   await exec(Archimedes.harvestAll(), 'Archimedes')
-  await exec(MintAndSend.mintAndSend(), 'MintAndSend')
+  await exec(Distributor.distribute(), 'Distributor')
 
   let strat
   for (let k in deploy) {
-    if (k.startsWith('strat-')) {
-      strat = await hre.ethers.getContractAt('ArchimedesAaveStrat', deploy[k].strategy)
+    if (k.startsWith('aave-strat-')) {
+      strat = await hre.ethers.getContractAt('ControllerAaveStrat', deploy[k].strategy)
 
-      await exec(strat.harvest(0), k)
+      await exec(strat.harvest(), k)
 
-      await exec(FeeManager.harvest(await strat.want(), 0), `Fee manager ${k}`)
+      await exec(FeeManager.harvest(await strat.want()), `Fee manager ${k}`)
     }
   }
 }

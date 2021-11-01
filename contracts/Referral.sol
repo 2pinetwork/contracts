@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract Referral is Ownable {
+contract Referral {
     // Archimedes
-    address public immutable operator;
+    address public immutable farm;
 
     mapping(address => address) public referrers; // user address => referrer address
     mapping(address => uint) public referralsCount; // referrer address => referrals count
@@ -15,18 +13,19 @@ contract Referral is Ownable {
     mapping(address => uint) public referralsPaid; // referrer address => paid
 
     event ReferralRecorded(address indexed user, address indexed referrer);
+    event ReferralPaid(address indexed user, uint amount);
 
-    constructor(address _operator) {
-        require(_operator != address(0), "Zero address for operator");
-        operator = _operator;
+    constructor(address _farm) {
+        require(_farm != address(0), "Zero address for farm");
+        farm = _farm;
     }
 
-    modifier onlyOperator {
-        require(operator == msg.sender, "Operator: caller is not the operator");
+    modifier onlyFarm {
+        require(farm == msg.sender, "!Farm");
         _;
     }
 
-    function recordReferral(address _user, address _referrer) external onlyOperator {
+    function recordReferral(address _user, address _referrer) external onlyFarm {
         if (_user != address(0)
             && _referrer != address(0)
             && _user != _referrer
@@ -38,9 +37,11 @@ contract Referral is Ownable {
         }
     }
 
-    function referralPaid(address _referrer, uint _amount) external onlyOperator {
+    function referralPaid(address _referrer, uint _amount) external onlyFarm {
         totalPaid += _amount;
         referralsPaid[_referrer] += _amount;
+
+        emit ReferralPaid(_referrer, _amount);
     }
 
     // Get the referrer address that referred the user

@@ -1,24 +1,62 @@
-/* global task*/
 require('@nomiclabs/hardhat-waffle')
 require('@tenderly/hardhat-tenderly')
-require('@nomiclabs/hardhat-etherscan');
-// require('@nomiclabs/hardhat-web3');
-require('@nomiclabs/hardhat-truffle5');
-require('solidity-coverage');
-// require('hardhat-gas-reporter');
+require('@nomiclabs/hardhat-etherscan')
+require('@nomiclabs/hardhat-web3')
+require('@nomiclabs/hardhat-truffle5')
+require('solidity-coverage')
+require('hardhat-gas-reporter')
+require('hardhat-preprocessor')
 
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
-task('accounts', 'Prints the list of accounts', async () => {
-  const accounts = await ethers.getSigners()
+const fs            = require('fs')
+const accounts      = JSON.parse(fs.readFileSync('.accounts'))
+const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
-  for (const account of accounts) {
-    console.log(account.address)
+const hardhatNetwork = () => {
+  if (isIntegration) {
+    return {
+      network_id: 137,
+      chainId: 137,
+      gasMultiplier: 3,
+      forking:    {
+        url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+        // url:         `http://localhost:8545`,
+        blockNumber: 19880876
+      }
+    }
   }
-})
 
-const fs = require('fs')
-const accounts = JSON.parse(fs.readFileSync('.accounts'))
+  return { hardfork: 'berlin', network_id: 31337 }
+}
+
+const getStringReplacements = (hre) => {
+  const chainId = hre.network.config.network_id
+
+  return JSON.parse(
+    fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
+  )
+}
+
+let stringReplacements
+
+const mochaSettings = JSON.parse(fs.readFileSync('.mocharc.json'))
+const transformLine = (hre, line) => {
+  let newLine = line
+  stringReplacements = stringReplacements || getStringReplacements(hre)
+
+  for (let [string, replacement] of Object.entries(stringReplacements)) {
+    newLine = newLine.replace(string, replacement)
+  }
+
+  return newLine
+}
+
+const preProcessSettings = {
+  eachLine: hre => ({ transform: line => transformLine(hre, line) })
+}
+
+if (isIntegration) {
+  mochaSettings.timeout = 300000 // 5 minutes
+}
 
 module.exports = {
   etherscan: {
@@ -33,55 +71,66 @@ module.exports = {
     username: process.env.TENDERLY_USER
   },
   solidity: {
-    version:  '0.8.4',
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs:    10000
+    compilers: [
+      {
+        version:  '0.8.9',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs:    10000
+          }
+        },
+      },
+      {
+        version:  '0.6.6',
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs:    10000
+          }
+        },
       }
+    ],
+    overrides: {
+      "@uniswap/lib/contracts/libraries/Babylonian.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/BitMath.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/FixedPoint.sol": { version: "0.6.6" },
+      "@uniswap/lib/contracts/libraries/FullMath.sol": { version: "0.6.6" },
     }
   },
   networks: {
-    hardhat: { hardfork: 'berlin' },
-    polygon:  {
-      // url:        'https://polygon-mainnet.g.alchemy.com/v2/6QS-pCOZrFiG4f6pQ3B5wuD_Ihx4HJkl',
-      url:        'https://polygon-rpc.com/',
-      network_id: 137,
+    hardhat: hardhatNetwork(),
+    polygon: {
+      url:      'https://polygon-rpc.com',
       accounts: accounts,
+      network_id: 137,
     },
-    mumbai:  {
-      url:           'https://rpc-mumbai.maticvigil.com',
-      // url:           'https://polygon-mumbai.g.alchemy.com/v2/KFHa0rODnAiKO-AfSrpwLihLmXATJaJu',
-      accounts:      accounts,
-      network_id:    80001,
-      gas:           5500000
-      // confirmations: 2,
-      // timeoutBlocks: 200,
-      // skipDryRun:    true
+    mumbai: {
+      url:        'https://rpc-mumbai.maticvigil.com',
+      accounts:   accounts,
+      network_id: 80001,
     },
     kovan: {
       url:      process.env.KOVAN_URL || '',
       accounts: accounts
     },
-    ropsten: {
-      url:      process.env.ROPSTEN_URL || 'https://eth-ropsten.alchemyapi.io/v2/yz4A63lL39hgwPNfy8Z0IV44sU53mC9d',
-      accounts: accounts
-    },
     rinkeby: {
       url:      process.env.RINKEBY_URL || '',
-      accounts: accounts,
-      gasPrice: 1.5e9
-    },
-    arbrinkeby: {
-      url: 'https://rinkeby.arbitrum.io/rpc',
       accounts: accounts
     },
+    arbrinkeby: {
+      url:      'https://rinkeby.arbitrum.io/rpc',
+      accounts: accounts
+    },
+    avax_test: {
+      url:        'https://api.avax-test.network/ext/bc/C/rpc',
+      network_id: 43113,
+      accounts:   accounts
+    },
     ganache: {
-      url: 'http://localhost:8545',
-      network_id: 1337,
-      accounts: [
-        '0xcafc46c4bde2dc5a274e73a992e8165a9390f198b017888b94ade845f1bec0bf'
-      ]
+      url:        'http://localhost:8545',
+      network_id: 137,
+      accounts:   accounts
     }
   },
   gasReporter: {
@@ -89,5 +138,10 @@ module.exports = {
     currency:      'USD',
     coinmarketcap: 'dd4b2cc6-a407-42a0-bc5d-ef6fc5a5a813',
     gasPrice:      1 // to compare between tests
-  }
+  },
+  paths: {
+    tests: isIntegration ? './test/integration' : './test/contracts'
+  },
+  mocha:      mochaSettings,
+  preprocess: preProcessSettings
 }

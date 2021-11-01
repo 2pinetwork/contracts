@@ -8,7 +8,10 @@ addresses
 yarn.lock
 coverage/
 coverage.json
+shared_cov/*
+run_in_network.sh
 
 # Ignore tmp or utils
 build/
 utils/
+ganache_polygon_fork/

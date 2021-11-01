@@ -1,14 +1,14 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 // import "hardhat/console.sol";
+import "./PiAdmin.sol";
 
-contract PiVault is ERC20, Ownable, ReentrancyGuard {
+contract PiVault is ERC20, PiAdmin, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable piToken;
@@ -24,7 +24,6 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     // Individual max amount to release after the first year.
     uint public constant FOUNDERS_MAX_WITHDRAWS_AFTER_FIRST_YEAR = 1.57e24;
     mapping(address => uint) public foundersLeftToWithdraw;
-
 
     /**
      * @dev Sets the address of 2pi token, the one that the vault will hold
@@ -44,14 +43,14 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Adds address to investors list
      */
-    function addInvestor(address _wallet) external onlyOwner {
+    function addInvestor(address _wallet) external onlyAdmin {
         investors[_wallet] = true;
     }
 
     /**
      * @dev Adds address to founders list
      */
-    function addFounder(address _wallet) external onlyOwner {
+    function addFounder(address _wallet) external onlyAdmin {
         founders[_wallet] = true;
         foundersLeftToWithdraw[_wallet] = FOUNDERS_MAX_WITHDRAWS_AFTER_FIRST_YEAR;
     }
@@ -66,15 +65,15 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev A helper function to call deposit() with all the sender's funds.
      */
-    function depositAll() external {
-        deposit(piToken.balanceOf(msg.sender));
+    function depositAll() external returns (uint) {
+        return deposit(piToken.balanceOf(msg.sender));
     }
 
     /**
      * @dev The entrypoint of funds into the system. People deposit with this function
      * into the vault.
      */
-    function deposit(uint _amount) public nonReentrant {
+    function deposit(uint _amount) public nonReentrant returns (uint) {
         uint shares = 0;
         uint _pool = balance();
 
@@ -91,6 +90,8 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
 
         _mint(msg.sender, shares);
         emit Deposit(msg.sender, _amount);
+
+        return shares;
     }
 
     /**
@@ -108,7 +109,7 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
 
         uint r = balance() * _shares / totalSupply();
 
-        checkWithdraw(r);
+        _checkWithdraw(r);
 
         _burn(msg.sender, _shares);
         piToken.safeTransfer(msg.sender, r);
@@ -125,7 +126,7 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
     /**
      * @dev Check if msg.sender is an investor or a founder to release the funds.
      */
-    function checkWithdraw(uint _amount) internal {
+    function _checkWithdraw(uint _amount) internal {
         if (investors[msg.sender]) {
             require(block.timestamp >= investorsLockTime, "Still locked");
         } else if (founders[msg.sender]) {
@@ -138,6 +139,18 @@ contract PiVault is ERC20, Ownable, ReentrancyGuard {
                 // Accumulate withdrawn for founder
                 // (will revert if the amount is greater than the left to withdraw)
                 foundersLeftToWithdraw[msg.sender] -= _amount;
+            }
+        }
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint /*amount*/) internal virtual override {
+        // Ignore mint/burn
+        if (from != address(0) && to != address(0)) {
+            // Founders & Investors can't transfer shares before timelock
+            if (investors[from]) {
+                require(block.timestamp >= investorsLockTime, "Still locked");
+            } else if (founders[from]) {
+                require(block.timestamp >= foundersLockTime, "Still locked");
             }
         }
     }

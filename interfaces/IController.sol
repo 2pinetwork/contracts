@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 interface IController {
-    function withdraw(address, uint256) external;
-
-    function balanceOf(address) external view returns (uint256);
-
-    function earn(address, uint256) external;
-
-    function want(address) external view returns (address);
-
-    function rewards() external view returns (address);
-
-    function vaults(address) external view returns (address);
-
-    function strategies(address) external view returns (address);
+    function strategy() external view returns (address);
+    function totalSupply() external view returns (uint);
+    function balance() external view returns (uint);
+    function balanceOf(address _user) external view returns (uint);
+    function decimals() external view returns (uint);
+    function farm() external view returns (address);
+    function deposit(address _depositor, uint _amount) external;
+    function withdraw(address _depositor, uint _shares) external returns (uint);
+    function setFarmPid(uint pid) external returns (uint);
 }

@@ -1,52 +1,66 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "hardhat/console.sol";
 
-interface Farm {
+import "hardhat/console.sol";
+import "./PiAdmin.sol";
+
+interface IFarm {
     function piToken() external view returns (address);
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint _amount) external;
 }
 
 interface IStrategy {
     function balance() external view returns (uint);
     function deposit() external;
-    function withdraw(uint _amount) external;
+    function withdraw(uint _amount) external returns (uint);
     function paused() external view returns (bool);
     function retireStrat() external;
 }
 
-contract Controller is ERC20, Ownable, ReentrancyGuard {
+contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
 
     // Address of Archimedes
     address public immutable farm;
     IERC20Metadata public immutable want;
 
+    // Farm controller index
+    uint public pid = type(uint16).max; // 65535 means unassigned
+
     address public strategy;
     address public treasury;
 
     // Fees
-    uint constant public FEE_MAX = 10000;
+    uint constant public RATIO_PRECISION = 10000;
     uint constant public MAX_WITHDRAW_FEE = 100; // 1%
     uint public withdrawFee = 10; // 0.1%
+
+    // Deposit limit a contract can hold
+    // This value should be in the same decimal representation as want
+    // 0 value means unlimit
+    uint public depositCap;
+
+    event NewStrategy(address oldStrategy, address newStrategy);
+    event NewTreasury(address oldTreasury, address newTreasury);
+    event NewDepositCap(uint oldCap, uint newCap);
 
     constructor(
         IERC20Metadata _want,
         address _farm,
         address _treasury
     ) ERC20(
-        string(abi.encodePacked("2pi-", _want.name())),
-        string(abi.encodePacked("2pi", _want.symbol()))
+        string(abi.encodePacked("2pi-", _want.symbol())),
+        string(abi.encodePacked("2pi-", _want.symbol()))
     ) {
-        require(Farm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
-        require(_treasury != address(0), "Treasury can't be 0 address");
+        require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
+        require(_treasury != address(0), "Treasury !ZeroAddress");
 
         want = _want;
         farm = _farm;
@@ -57,46 +71,73 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return want.decimals();
     }
 
+    // BeforeTransfer callback to harvest the farm rewards for both users
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        // ignore mint/burn
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).beforeSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
+
+    // AferTransfer callback to update the farm rewards for both users
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IFarm(farm).afterSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
+
     modifier onlyFarm() {
         require(msg.sender == farm, "Not from farm");
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!_strategyPaused(), "Strategy paused");
-        _;
+    function setFarmPid(uint _pid) external onlyFarm returns (uint) {
+        require(pid >= type(uint16).max, "pid already assigned");
+
+        pid = _pid;
+
+        return pid;
     }
 
-    event NewStrategy(address old_strategy, address new_strategy);
-    event NewTreasury(address old_treasury, address new_treasury);
-
-    function setTreasury(address _treasury) external onlyOwner nonReentrant {
+    function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
     }
 
-    function setStrategy(address new_strategy) external onlyOwner nonReentrant {
-        require(new_strategy != address(0), "Can't be 0 address");
-        emit NewStrategy(strategy, new_strategy);
+    function setStrategy(address newStrategy) external onlyAdmin nonReentrant {
+        require(newStrategy != address(0), "!ZeroAddress");
+        emit NewStrategy(strategy, newStrategy);
 
         if (strategy != address(0)) {
             IStrategy(strategy).retireStrat();
+            require(
+                IStrategy(strategy).balance() <= 0,
+                "Strategy still has deposits"
+            );
         }
 
-        strategy = new_strategy;
+        strategy = newStrategy;
 
         _strategyDeposit();
     }
 
-    function setWithdrawFee(uint _fee) external onlyOwner nonReentrant {
+    function setWithdrawFee(uint _fee) external onlyAdmin nonReentrant {
         require(_fee <= MAX_WITHDRAW_FEE, "!cap");
 
         withdrawFee = _fee;
     }
 
+    function setDepositCap(uint _amount) external onlyAdmin nonReentrant {
+        emit NewDepositCap(depositCap, _amount);
 
-    function deposit(address _senderUser, uint _amount) external whenNotPaused onlyFarm nonReentrant {
+        depositCap = _amount;
+    }
+
+    function deposit(address _senderUser, uint _amount) external onlyFarm nonReentrant {
+        require(!_strategyPaused(), "Strategy paused");
+        _checkDepositCap(_amount);
+
         uint _before = balance();
 
         want.safeTransferFrom(
@@ -120,27 +161,34 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     // Withdraw partial funds, normally used with a vault withdrawal
-    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant {
+    function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant returns (uint) {
         // This line has to be calc before burn
         uint _withdraw = (balance() * _shares) / totalSupply();
 
         _burn(_senderUser, _shares);
 
         uint _balance = wantBalance();
+        uint withdrawn;
 
         if (_balance < _withdraw) {
             uint _diff = _withdraw - _balance;
 
-            _strategyWithdraw(_diff);
+            // withdraw will revert if anyything weird happend with the
+            // transfer back but just in case we ensure that the withdraw is
+            // positive
+            withdrawn = IStrategy(strategy).withdraw(_diff);
+            require(withdrawn > 0, "Can't withdraw from strategy...");
         }
 
-        uint withdrawalFee = _withdraw * withdrawFee / FEE_MAX;
-        want.safeTransfer(farm, _withdraw - withdrawalFee);
+        uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
+        withdrawn = _withdraw - withdrawalFee;
+
+        want.safeTransfer(farm, withdrawn);
         want.safeTransfer(treasury, withdrawalFee);
 
-        if (!_strategyPaused()) {
-            _strategyDeposit();
-        }
+        if (!_strategyPaused()) { _strategyDeposit(); }
+
+        return withdrawn;
     }
 
     function _strategyPaused() internal view returns (bool){
@@ -159,6 +207,15 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         return wantBalance() + strategyBalance();
     }
 
+    // Check whats the max available amount to deposit
+    function availableDeposit() external view returns (uint _available) {
+        if (depositCap <= 0) { // without cap
+            _available = type(uint).max;
+        } else if (balance() < depositCap) {
+            _available = depositCap - balance();
+        }
+    }
+
     function _strategyDeposit() internal {
         uint _amount = wantBalance();
 
@@ -169,9 +226,10 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         }
     }
 
-    function _strategyWithdraw(uint _amount) internal {
-        if (_amount > 0) {
-            IStrategy(strategy).withdraw(_amount);
+    function _checkDepositCap(uint _amount) internal view {
+        // 0 depositCap means no-cap
+        if (depositCap > 0) {
+            require(balance() + _amount <= depositCap, "Max depositCap reached");
         }
     }
 }

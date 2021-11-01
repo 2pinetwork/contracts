@@ -69,7 +69,7 @@ const createPiToken = async (mocked, withDeployer) => {
   expect(await piToken.balanceOf(owner.address)).to.equal(0)
   expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
 
-  await (await piToken.init()).wait()
+  await expect(piToken.init()).to.emit(piToken, 'Minted')
 
   return piToken
 }
@@ -86,28 +86,53 @@ const createController = async (token, archimedes, stratName) => {
 
   stratName = stratName || 'ControllerAaveStrat'
 
-  switch(stratName) {
-    case 'ControllerAaveStrat':
-      strategy = await deploy(
-        'ControllerAaveStrat',
-        token.address,
-        0,
-        100,
-        0,
-        0,
-        controller.address,
-        global.exchange.address,
-        owner.address
-      )
-      break
-    case 'ControllerCurveStrat':
-      strategy = await deploy(
-        'ControllerCurveStrat',
-        controller.address,
-        global.exchange.address,
-        owner.address
-      )
-      break
+  switch (stratName) {
+      case 'ControllerAaveStrat':
+        let args =  [
+          0,
+          10000,
+          0,
+          0,
+          controller.address,
+          global.exchange.address,
+          owner.address
+        ]
+
+        if (process.env.HARDHAT_INTEGRATION_TESTS) {
+          let decimals = parseInt(await token.decimals(), 10)
+
+          args = [
+            4800,
+            5000,
+            8,
+            (10 ** (decimals - 3)),
+            controller.address,
+            global.exchange.address,
+            owner.address
+          ]
+        }
+
+        strategy = await deploy(
+          'ControllerAaveStrat',
+          token.address,
+          ...args
+        )
+        break
+      case 'ControllerCurveStrat':
+        strategy = await deploy(
+          'ControllerCurveStrat',
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
+      case 'ControllerLPWithoutStrat':
+        strategy = await deploy(
+          'ControllerLPWithoutStrat',
+          controller.address,
+          token.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))
@@ -118,7 +143,7 @@ const createController = async (token, archimedes, stratName) => {
 const zeroAddress = '0x' + '0'.repeat(40)
 
 const expectedOnlyAdmin = async (fn, ...args) => {
-  await expect(fn(...args)).to.be.revertedWith('Only admin');
+  await expect(fn(...args)).to.be.revertedWith('Not an admin');
 }
 
 const sleep = (s) => new Promise(resolve => setTimeout(resolve, s * 1000));
@@ -127,7 +152,7 @@ const impersonateContract = async (addr) => {
   // Fill with gas 10k eth
   const balance = ethers.BigNumber.from('1' + '0'.repeat(23))._hex
 
-  await network.provider.send('hardhat_setBalance', [addr, balance])
+  await hre.network.provider.send('hardhat_setBalance', [addr, balance])
 
   // Tell hardhat what address enables to impersonate
   await hre.network.provider.request({
@@ -140,15 +165,9 @@ const impersonateContract = async (addr) => {
 
 const MAX_UINT = '115792089237316195423570985008687907853269984665640564039457584007913129639935'
 
-module.exports = {
-  toNumber, getBlock, mineNTimes,
-  createPiToken, waitFor, deploy, zeroAddress, expectedOnlyAdmin,
-  sleep, impersonateContract, createController, MAX_UINT
-}
-
 // Global setup for all the test-set
-setupSuperFluid = async () => {
-   const errorHandler = err => {
+const setupSuperFluid = async () => {
+  const errorHandler = err => {
     if (err) throw err;
   };
 
@@ -161,7 +180,7 @@ setupSuperFluid = async () => {
   );
 }
 
-setupNeededTokens = async () => {
+const setupNeededTokens = async () => {
   console.log('Deploying WMatic')
   global.WMATIC = await deployWithMainDeployer('WETHMock')
   expect(global.WMATIC.address).to.be.equal('0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f')
@@ -204,31 +223,57 @@ setupNeededTokens = async () => {
   console.log('Deploying Curve RewardsGauge')
   global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock')
   expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
+
+  // Set BTC 8 decimals
+  await waitFor(BTC.setDecimals(8));
 }
 
-before(async () => {
-  // Not change signer because if the deployer/nonce changes
-  // the deployed address will change too
-  // All signers have 10k ETH
-  // global variable is like "window"
-  global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
-  global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
-  global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
+if (! process.env.HARDHAT_INTEGRATION_TESTS) {
+  before(async () => {
+    // Not change signer because if the deployer/nonce changes
+    // the deployed address will change too
+    // All signers have 10k ETH
+    // global variable is like "window"
+    global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
+    global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
+    global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
-  // If PiToken fails change this to wait for SuperFluid
-  await Promise.all([
-    setupSuperFluid(),
-    setupNeededTokens()
-  ])
+    // If PiToken fails change this to wait for SuperFluid
+    await Promise.all([
+      setupSuperFluid(),
+      setupNeededTokens()
+    ])
 
-  console.log('===============  SETUP DONE  ===============\n\n')
-})
+    console.log('===============  SETUP DONE  ===============\n\n')
+  })
 
-afterEach(async () => {
-  Promise.all([
-    (await global.Aave.pool.reset()).wait(),
-    (await global.Aave.dataProvider.reset()).wait(),
-    (await global.CurvePool.reset()).wait(),
-    (await global.CurveRewardsGauge.reset()).wait()
-  ])
-})
+  afterEach(async () => {
+    await Promise.all([
+      (await global.Aave.pool.reset()).wait(),
+      (await global.Aave.dataProvider.reset()).wait(),
+      (await global.CurvePool.reset()).wait(),
+      (await global.CurveRewardsGauge.reset()).wait(),
+      (await global.exchange.reset()).wait(),
+      // Reset hardhat "state"
+      network.provider.send('evm_setAutomine', [true]),
+      network.provider.send('evm_setIntervalMining', [0]),
+      network.provider.send('evm_mine')
+    ])
+  })
+}
+
+module.exports = {
+  createController,
+  createPiToken,
+  deploy,
+  expectedOnlyAdmin,
+  getBlock,
+  impersonateContract,
+  mineNTimes,
+  setupSuperFluid,
+  sleep,
+  toNumber,
+  waitFor,
+  zeroAddress,
+  MAX_UINT
+}

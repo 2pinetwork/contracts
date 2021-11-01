@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -24,21 +24,22 @@ contract CurvePoolMock is ERC20 {
         _mint(msg.sender, _amount);
     }
 
-    function add_liquidity(uint[2] calldata amounts, uint /* min_mint_amount */, bool /* _use_underlying */) external {
+    function add_liquidity(uint[2] calldata amounts, uint min_mint_amount, bool /* _use_underlying */) external {
         BTC.safeTransferFrom(msg.sender, address(this), amounts[0]);
-        _mint(msg.sender, amounts[0]); // send same amount of btcCRV
+        _mint(msg.sender, min_mint_amount);
     }
     function remove_liquidity_one_coin(uint _token_amount, int128 /* i */, uint _min_amount, bool /* _use_underlying */) external returns (uint) {
         _burn(msg.sender, _token_amount);
 
         BTC.transfer(msg.sender, _min_amount);
+        return _min_amount;
     }
 
-    function calc_withdraw_one_coin(uint _token_amount, int128 /* i */) external view returns (uint) {
-        return _token_amount;
+    function calc_withdraw_one_coin(uint _token_amount, int128 /* i */) external pure returns (uint) {
+        return _token_amount / 1e10;
     }
 
-    function calc_token_amount(uint[2] calldata _amounts, bool /* is_deposit */) external view returns (uint) {
-        return _amounts[0];
+    function calc_token_amount(uint[2] calldata _amounts, bool /* is_deposit */) external pure returns (uint) {
+        return _amounts[0] * 1e10;
     }
 }
