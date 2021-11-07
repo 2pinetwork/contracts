@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
@@ -11,12 +10,8 @@ import "./PiAdmin.sol";
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IController.sol";
 import "../interfaces/IReferral.sol";
+import "../interfaces/IWNative.sol";
 
-// Wrap-Unwrap native Matic
-interface IWNative is IERC20 {
-    function deposit() external payable;
-    function withdraw(uint wad) external;
-}
 
 contract Archimedes is PiAdmin, ReentrancyGuard {
     // using Address for address;
