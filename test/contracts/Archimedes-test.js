@@ -207,7 +207,9 @@ describe('Archimedes', () => {
       // Should not give to owner the referal when alice already deposited without one
       // deposit method claim the pending rewards so the last rewards block
       // are half for the alice and the other half for bob (3º call)
-      await waitFor(archimedes.connect(alice).deposit(0, 10, owner.address))
+      await expect(archimedes.connect(alice).deposit(0, 10, owner.address)).to.emit(
+        archimedes, 'Harvested'
+      ).withArgs(0, alice.address, toNumber(piPerBlock / 2))
 
       aliceBalance = (new BigNumber(aliceBalance)).minus(10).plus(
         piPerBlock / 2 // 50% of 1 block per 1º deposit

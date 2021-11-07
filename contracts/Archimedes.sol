@@ -286,11 +286,9 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
         updatePool(_pid);
 
-        uint harvested = calcPendingAndPayRewards(_pid, _user);
+        calcPendingAndPayRewards(_pid, _user);
 
         _updateUserPaidRewards(_pid, _user);
-
-        if (harvested > 0) { emit Harvested(_pid, _user, harvested); }
     }
 
     function harvestAll() external {
@@ -385,6 +383,8 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
             if (pending > 0) {
                 safePiTokenTransfer(_user, pending);
                 payReferralCommission(_user, pending);
+
+                emit Harvested(_pid, _user, pending);
             }
         }
     }
