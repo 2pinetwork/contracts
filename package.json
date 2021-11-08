@@ -50,6 +50,7 @@
     "web3": "^1.5.2"
   },
   "dependencies": {
+    "@2pi-network/js-sdk": "^0.2.0-beta.19",
     "@uniswap/lib": "^4.0.1-alpha"
   }
 }
