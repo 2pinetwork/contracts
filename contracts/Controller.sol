@@ -7,8 +7,9 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "hardhat/console.sol";
 import "./PiAdmin.sol";
+import "../interfaces/IUniswapPair.sol";
+import "hardhat/console.sol";
 
 interface IFarm {
     function piToken() external view returns (address);
@@ -23,6 +24,8 @@ interface IStrategy {
     function paused() external view returns (bool);
     function retireStrat() external;
 }
+
+
 
 contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
@@ -51,14 +54,28 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewDepositCap(uint oldCap, uint newCap);
 
+    function _tokenSymbol(IERC20Metadata _want) internal returns (string memory sym) {
+        (bool isLP,) = address(_want).call(abi.encodeWithSignature("token1()"));
+
+        if (isLP) {
+            IUniswapPair possiblePair = IUniswapPair(address(_want));
+
+            sym = string(abi.encodePacked(
+                "2piLP-",
+                IERC20Metadata(possiblePair.token0()).symbol(),
+                "-",
+                IERC20Metadata(possiblePair.token1()).symbol()
+            ));
+        } else {
+            sym = string(abi.encodePacked("2pi-", _want.symbol()));
+        }
+    }
+
     constructor(
         IERC20Metadata _want,
         address _farm,
         address _treasury
-    ) ERC20(
-        string(abi.encodePacked("2pi-", _want.symbol())),
-        string(abi.encodePacked("2pi-", _want.symbol()))
-    ) {
+    ) ERC20(_tokenSymbol(_want), _tokenSymbol(_want)) {
         require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
         require(_treasury != address(0), "Treasury !ZeroAddress");
 

@@ -158,6 +158,7 @@ describe('Archimedes', () => {
       )
 
       const ctroller = await createController(pair, archimedes, 'ControllerLPWithoutStrat')
+      expect(await ctroller.name()).to.be.equal('2piLP-2Pi-WMATIC')
       await waitFor(archimedes.addNewPool(pair.address, ctroller.address, 1, false))
 
       const pid = await ctroller.pid()
