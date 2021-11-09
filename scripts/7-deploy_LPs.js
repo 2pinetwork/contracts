@@ -1,5 +1,5 @@
-const hre = require("hardhat");
-const fs = require("fs");
+const hre = require('hardhat');
+const fs = require('fs');
 const { verify } = require('./verify');
 
 const deploy = JSON.parse(
@@ -15,7 +15,7 @@ const main = async () => {
     let lp = deploy.LPs[name]
 
     let ctrollerArgs = [
-      lp.address, deploy.Archimedes, deploy.FeeManager
+      lp.address, deploy.Archimedes, deploy.FeeManager, `2pi-SLP-${name}`
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')

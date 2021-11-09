@@ -176,7 +176,8 @@ describe('ArchimedesAPI', () => {
         'Controller',
         piToken.address,
         archimedes.address,
-        owner.address
+        owner.address,
+        '2pi-2Pi'
       )
 
       expect(

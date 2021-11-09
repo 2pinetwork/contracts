@@ -18,7 +18,8 @@ describe('Controller wrong deployment', () => {
         'Controller',
         zeroAddress,
         archimedes.address,
-        owner.address
+        owner.address,
+        '2Pi-0'
       )
     ).to.be.revertedWith('function call to a non-contract account')
   })
@@ -31,7 +32,8 @@ describe('Controller wrong deployment', () => {
         'Controller',
         global.WMATIC.address,
         archimedes.address,
-        owner.address
+        owner.address,
+        '2pi-WMATIC'
       )
     ).to.be.revertedWith('Invalid PiToken on Farm')
   })
@@ -44,7 +46,8 @@ describe('Controller wrong deployment', () => {
         'Controller',
         global.WMATIC.address,
         archimedes.address,
-        zeroAddress
+        zeroAddress,
+        '2pi-WMATIC'
       )
     ).to.be.revertedWith('Treasury !ZeroAddress')
   })

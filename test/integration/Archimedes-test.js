@@ -114,7 +114,8 @@ describe('Archimedes', () => {
         'Controller',
         piToken.address,
         archimedes.address,
-        owner.address
+        owner.address,
+        '2pi-2Pi'
       )
 
       expect(
@@ -158,7 +159,7 @@ describe('Archimedes', () => {
       )
 
       const ctroller = await createController(pair, archimedes, 'ControllerLPWithoutStrat')
-      expect(await ctroller.name()).to.be.equal('2piLP-2Pi-WMATIC')
+      expect(await ctroller.name()).to.be.equal('2pi-SLP-2Pi-WMATIC')
       await waitFor(archimedes.addNewPool(pair.address, ctroller.address, 1, false))
 
       const pid = await ctroller.pid()

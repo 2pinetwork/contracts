@@ -75,11 +75,21 @@ const createPiToken = async (mocked, withDeployer) => {
 }
 
 const createController = async (token, archimedes, stratName) => {
+  let shareName = `2pi-${await token.symbol()}`
+  if (stratName == 'ControllerLPWithoutStrat') {
+    let pair = await hre.ethers.getContractAt('IUniswapPair', token.address)
+    let token0 = await hre.ethers.getContractAt('@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol:IERC20Metadata', await pair.token0())
+    let token1 = await hre.ethers.getContractAt('@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol:IERC20Metadata', await pair.token1())
+
+    shareName += `-${await token0.symbol()}-${await token1.symbol()}`
+  }
+
   const controller = await deploy(
     'Controller',
     token.address,
     archimedes.address,
-    owner.address
+    owner.address,
+    shareName
   )
 
   let strategy

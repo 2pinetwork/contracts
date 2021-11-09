@@ -66,12 +66,20 @@ contract UniZap is PiAdmin, ReentrancyGuard {
             } else {
                 exchange.removeLiquidity(token0, token1, amount, 0, 0, msg.sender, block.timestamp + 60);
             }
+
+            _removeAllowance(_from);
         }
     }
 
     /* ========== Private Functions ========== */
     function _approveToken(address _token, uint _amount) internal {
         IERC20(_token).safeApprove(address(exchange), _amount);
+    }
+
+    function _removeAllowance(address _token) internal {
+        if (IERC20(_token).allowance(address(this), address(exchange)) > 0) {
+            IERC20(_token).safeApprove(address(exchange), 0);
+        }
     }
 
     function _isLP(address _addr) internal view returns (bool) {
@@ -120,6 +128,9 @@ contract UniZap is PiAdmin, ReentrancyGuard {
                 msg.sender,
                 block.timestamp + 60
             );
+
+            _removeAllowance(token0);
+            _removeAllowance(token1);
         } else {
             _swap(_from, amount, _to, msg.sender);
         }
@@ -172,6 +183,8 @@ contract UniZap is PiAdmin, ReentrancyGuard {
 
         _approveToken(_from, amount);
         uint[] memory amounts = exchange.swapExactTokensForTokens(amount, 0, route, receiver, block.timestamp);
+        _removeAllowance(_from);
+
         return amounts[amounts.length - 1];
     }
 

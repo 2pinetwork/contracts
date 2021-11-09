@@ -1,5 +1,5 @@
 const fs = require('fs')
-const hre = require("hardhat");
+const hre = require('hardhat');
 const { verify } = require('./verify');
 
 const deploy = JSON.parse(
@@ -20,7 +20,7 @@ async function main() {
 
   for (pool of pools) {
     let ctrollerArgs = [
-      pool.address, deploy.Archimedes, deploy.FeeManager
+      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${pool.currency}`
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
@@ -29,6 +29,21 @@ async function main() {
     await controller.deployed();
 
     await verify('Controller', controller.address, ctrollerArgs)
+
+    if (deploy.chainlink[pool.address]) {
+      let oracle = await hre.ethers.getContractAt(
+        'IChainLink', deploy.chainlink[pool.address]
+      );
+
+      let result = (await oracle.latestRoundData()).answer
+
+      let cap = (1000000 / (parseFloat(result) / 1e8)).toFixed()
+
+      let decimals = parseInt(await controller.decimals(), 10)
+
+      console.log(`Set ${poo.currency} cap to ${cap}`)
+      await controller.setDepositCap(cap + '0'.repeat(decimals))
+    }
 
     args = [
       pool.address,
@@ -82,27 +97,3 @@ main()
     console.error(error);
     process.exit(1);
   });
-
-
-for (k in deploy) {
-  if (k.startsWith('strat-aave-')) {
-    let ctroller = await (
-      await hre.ethers.getContractFactory('Controller')
-    ).attach(deploy[k].controller)
-
-    let oracle = await hre.ethers.getContractAt(
-      'IChainLink', deploy.chainlink[deploy[k].tokenAddr]
-    );
-
-    let result = (await oracle.latestRoundData()).answer
-
-    console.log(k, result.mul(await ctroller.depositCap()).div(1e8).toBigInt())
-    continue
-
-    let cap = (1000000 / (parseFloat(result) / 1e8)).toFixed()
-
-    let decimals = parseInt(await ctroller.decimals(), 10)
-
-    await (await ctroller.setDepositCap(cap + '0'.repeat(decimals))).wait()
-  }
-}
