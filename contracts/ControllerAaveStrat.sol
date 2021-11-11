@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 import "./Swappable.sol";
 import "../interfaces/IAave.sol";
@@ -55,6 +55,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
+    uint internal lastBalance;
 
     address public exchange;
     address public immutable controller;
@@ -95,6 +96,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     event NewExchange(address oldExchange, address newExchange);
     event NewPerformanceFee(uint oldFee, uint newFee);
     event Harvested(address _want, uint _amount);
+    event PerformanceFee(uint _amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -129,8 +131,48 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         performanceFee = _fee;
     }
 
+    // Charge want auto-generation with performanceFee
+    // Basically we assign `lastBalance` each time that we charge or make a movement
+    function beforeMovement() external onlyController nonReentrant {
+        _beforeMovement();
+    }
+
+    function _beforeMovement() internal {
+        uint currentBalance = balance();
+
+        if (currentBalance > lastBalance) {
+            uint perfFee = ((currentBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
+
+            if (perfFee > 0) {
+                uint _balance = wantBalance();
+
+                if (_balance < perfFee) {
+                    uint _diff = perfFee - _balance;
+
+                    // Call partial because this fee should never be a big amount
+                    _partialDeleverage(_diff);
+                }
+
+                // Just in case
+                _balance = wantBalance();
+                if (_balance < perfFee) { perfFee = _balance; }
+
+                if (perfFee > 0) {
+                    IERC20(want).safeTransfer(treasury, perfFee);
+                    emit PerformanceFee(perfFee);
+                }
+            }
+        }
+    }
+
+    // Update new `lastBalance` for the next charge
+    function _afterMovement() internal {
+        lastBalance = balance();
+    }
+
     function deposit() external whenNotPaused onlyController nonReentrant {
         _leverage();
+        _afterMovement();
     }
 
     function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
@@ -152,6 +194,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         IERC20(want).safeTransfer(controller, _amount);
 
         if (!paused() && wantBalance() > 0) { _leverage(); }
+
+        _afterMovement();
 
         return _amount;
     }
@@ -306,27 +350,27 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         assets[0] = aToken;
         assets[1] = debtToken;
 
-        IAaveIncentivesController(INCENTIVES).claimRewards(
+        uint harvested = IAaveIncentivesController(INCENTIVES).claimRewards(
             assets, type(uint).max, address(this)
         );
+
+        emit Harvested(want, harvested);
     }
 
     function harvest() public nonReentrant {
-        uint _before = wantBalance();
-
         claimRewards();
 
         // only need swap when is different =)
         if (want != wNative) { swapRewards(); }
 
-        uint harvested = wantBalance() - _before;
-
-        chargeFees(harvested);
+        // Charge performance fee for earned want + rewards
+        _beforeMovement();
 
         // re-deposit
         if (!paused() && wantBalance() > 0) { _leverage(); }
 
-        emit Harvested(want, harvested);
+        // Update lastBalance for the next
+        _afterMovement();
     }
 
     function swapRewards() internal {
