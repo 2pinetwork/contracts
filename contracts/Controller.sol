@@ -22,6 +22,7 @@ interface IStrategy {
     function withdraw(uint _amount) external returns (uint);
     function paused() external view returns (bool);
     function retireStrat() external;
+    function beforeMovement() external;
 }
 
 contract Controller is ERC20, PiAdmin, ReentrancyGuard {
@@ -137,6 +138,8 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         require(!_strategyPaused(), "Strategy paused");
         _checkDepositCap(_amount);
 
+        IStrategy(strategy).beforeMovement();
+
         uint _before = balance();
 
         want.safeTransferFrom(
@@ -161,6 +164,8 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
 
     // Withdraw partial funds, normally used with a vault withdrawal
     function withdraw(address _senderUser, uint _shares) external onlyFarm nonReentrant returns (uint) {
+        IStrategy(strategy).beforeMovement();
+
         // This line has to be calc before burn
         uint _withdraw = (balance() * _shares) / totalSupply();
 
