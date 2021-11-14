@@ -38,4 +38,6 @@ interface IUniswapRouter {
       address to,
       uint deadline
   ) external returns (uint amountToken, uint amountETH);
+
+  function getAmountsOut(uint amountIn, address[] memory path) external view returns (uint[] memory amounts);
 }
