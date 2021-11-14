@@ -11,6 +11,8 @@ const main = async function () {
   const contract = await (await hre.ethers.getContractFactory('UniZap')).deploy()
   await contract.deployed();
 
+  await contract.deployTransaction.wait(10) // 10 confirmations
+
   await verify('UniZap', contract.address)
 
   deploy.UniZap = contract.address
