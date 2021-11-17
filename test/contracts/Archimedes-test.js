@@ -307,7 +307,7 @@ describe('Archimedes', () => {
     })
   })
 
-  describe('depositMATIC', async () => {
+  describe('depositNative', async () => {
     let wmaticCtroller
 
     beforeEach(async () => {
@@ -320,28 +320,28 @@ describe('Archimedes', () => {
     it('should revert for depositAll', async () => {
       await expect(
         archimedes.depositAll(1, zeroAddress)
-      ).to.be.revertedWith("Can't deposit all Matic")
+      ).to.be.revertedWith("Can't deposit all Native")
     })
 
     it('Should revert with 0 amount', async () => {
       await expect(
-        archimedes.depositMATIC(1, zeroAddress, { value: 0 })
+        archimedes.depositNative(1, zeroAddress, { value: 0 })
       ).to.be.revertedWith('Insufficient deposit')
     })
 
-    it('Should revert for not wmatic pool', async () => {
+    it('Should revert for not wNative pool', async () => {
       await expect(
-        archimedes.depositMATIC(0, zeroAddress, { value: 10 })
-      ).to.be.revertedWith('Only MATIC pool')
+        archimedes.depositNative(0, zeroAddress, { value: 10 })
+      ).to.be.revertedWith('Only Native token pool')
     })
 
-    it('Should get wmatic shares and then withdraw', async () => {
+    it('Should get wNative shares and then withdraw', async () => {
       // initial accounts balance  less a few gas fees
       const balance = new BigNumber(
         (await ethers.provider.getBalance(owner.address)) / 1e18
       )
 
-      await waitFor(archimedes.depositMATIC(1, zeroAddress, { value: toNumber(1e18) }))
+      await waitFor(archimedes.depositNative(1, zeroAddress, { value: toNumber(1e18) }))
       expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
 
       // This is because eth is the main token and every transaction has fees

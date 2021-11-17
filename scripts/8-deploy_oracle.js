@@ -2,13 +2,13 @@ const hre = require('hardhat');
 const fs = require('fs');
 const { verify } = require('./verify');
 
-const deploy = JSON.parse(
-  fs.readFileSync('utils/deploy.json', 'utf8')
-)
-
 const main = async () => {
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
   const args = [
-    deploy.LPs['DAI-LP'].address,
+    deploy.LPs['2Pi-DAI'].address,
     deploy.PiToken
   ]
   const contract = await (
@@ -20,7 +20,12 @@ const main = async () => {
 
   deploy.PiOracle = contract.address
 
-  fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
+
+  console.log('Waiting 60s and updating oracle price')
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+  await delay(61000) // wait 60s to add an oracle price
+  await (await contract.update()).wait()
 
   const feeMgr = await (
     await hre.ethers.getContractFactory('FeeManager')

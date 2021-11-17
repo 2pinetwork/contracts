@@ -2,11 +2,11 @@ const hre = require("hardhat");
 const fs = require("fs");
 const { verify } = require('./verify');
 
-const deploy = JSON.parse(
-  fs.readFileSync('utils/deploy.json', 'utf8')
-)
-
 async function main() {
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
   const args = [
     deploy.treasury, // treasury
     deploy.PiVault,  // PiVault
@@ -24,7 +24,7 @@ async function main() {
   // Falta el oraculo
 
   // ensure write
-  fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 
   await (await contract.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
   await (await contract.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay

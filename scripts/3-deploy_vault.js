@@ -2,12 +2,12 @@ const hre = require("hardhat");
 const fs = require("fs");
 const { verify } = require('./verify');
 
-const deploy = JSON.parse(
-  fs.readFileSync('utils/deploy.json', 'utf8')
-)
-
 async function main() {
   let now = (await hre.ethers.provider.getBlock()).timestamp
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
   const args = [
     deploy.PiToken, // PiToken
     now + (3600 * 24), // +1 day
@@ -29,7 +29,7 @@ async function main() {
     await (await vault.addFounder(wallet)).wait()
   }
 
-  fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()
