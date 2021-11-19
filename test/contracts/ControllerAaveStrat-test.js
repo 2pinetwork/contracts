@@ -365,13 +365,13 @@ describe('Controller Aave Strat', () => {
       await waitFor(wantFeed.setPrice(20))
 
       // 1 x 0.2 ratio
-      await expect(strat.harvest()).to.emit(
-        strat, 'Harvested'
-      ).withArgs(piToken.address, 0) // claim rewards didn't happen
 
       // RATIO => (100 * 1e9 / 20) * 99 / 100 == 4950000000.0
       // 1e6 * RATIO / 1e9 => 4950000.0 (swapped)
       // 4950000.0 * 0.035 == 173250  (perf fee)
+      await expect(strat.harvest()).to.emit(
+        strat, 'Harvested'
+      ).withArgs(piToken.address, 4950000)
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
         balance.add(173250)
       )

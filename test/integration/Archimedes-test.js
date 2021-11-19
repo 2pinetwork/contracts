@@ -165,9 +165,9 @@ describe('Archimedes', () => {
       const pid = await ctroller.pid()
 
       await waitFor(pair.approve(archimedes.address, 100))
-      await expect(archimedes.deposit(pid, 1, zeroAddress)).to.emit(
+      await expect(archimedes.deposit(pid, 100, zeroAddress)).to.emit(
         archimedes, 'Deposit'
-      ).withArgs(pid, owner.address, 1)
+      ).withArgs(pid, owner.address, 100)
     })
   })
 
