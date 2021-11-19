@@ -201,7 +201,7 @@ describe('ArchimedesAPI', () => {
   })
 
   describe('FullFlow', async () => {
-    it.only('with 2 accounts && just 1 referral', async () => {
+    it('with 2 accounts && just 1 referral', async () => {
       await waitFor(piToken.initRewardsOn(rewardsBlock))
 
       const piPerBlock = await archimedes.piTokenPerBlock()
@@ -511,7 +511,7 @@ describe('ArchimedesAPI', () => {
       const deposited = await controller.balanceOf(alice.address)
 
       // CI fails with low gas?
-      await waitFor(archimedes.emergencyWithdraw(0, alice.address), {gasLimit: 2e6})
+      await waitFor(archimedes.emergencyWithdraw(0, alice.address), {gasLimit: 30e6})
       expect(await(WMATIC.balanceOf(alice.address))).to.be.within(
         aliceBalance.add(deposited).mul(slippage).div(slippagePrecision),
         aliceBalance.add(deposited)

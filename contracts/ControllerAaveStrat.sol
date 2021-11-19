@@ -350,18 +350,19 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         assets[0] = aToken;
         assets[1] = debtToken;
 
-        uint harvested = IAaveIncentivesController(INCENTIVES).claimRewards(
+        IAaveIncentivesController(INCENTIVES).claimRewards(
             assets, type(uint).max, address(this)
         );
-
-        emit Harvested(want, harvested);
     }
 
     function harvest() public nonReentrant {
+        uint _balance = balance();
         claimRewards();
 
         // only need swap when is different =)
         if (want != wNative) { swapRewards(); }
+
+        uint harvested = balance() - _balance;
 
         // Charge performance fee for earned want + rewards
         _beforeMovement();
@@ -369,8 +370,10 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         // re-deposit
         if (!paused() && wantBalance() > 0) { _leverage(); }
 
-        // Update lastBalance for the next
+        // Update lastBalance for the next movement
         _afterMovement();
+
+        emit Harvested(want, harvested);
     }
 
     function swapRewards() internal {

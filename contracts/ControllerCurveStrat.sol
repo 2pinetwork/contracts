@@ -52,6 +52,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
     uint public performanceFee = 350; // 3.5%
+    uint internal lastBalance;
 
     address public treasury;
     address public exchange;
@@ -71,6 +72,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     event NewExchange(address oldExchange, address newExchange);
     event NewPerformanceFee(uint oldFee, uint newFee);
     event Harvested(address _want, uint _amount);
+    event PerformanceFee(uint _amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -120,8 +122,48 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         ratioForFullWithdraw = _ratio;
     }
 
+    // Charge BTC auto-generation with performanceFee
+    // Basically we assign `lastBalance` with current balance each time that
+    // we charge or make a movement.
+    function beforeMovement() external onlyController nonReentrant {
+        _beforeMovement();
+    }
+
+    function _beforeMovement() internal {
+        uint currentBalance = balance();
+
+        if (currentBalance > lastBalance) {
+            uint perfFee = ((currentBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
+
+            if (perfFee > 0) {
+                uint _balance = btcBalance();
+
+                if (_balance < perfFee) {
+                    uint _diff = perfFee - _balance;
+
+                    withdrawBtc(_diff, false);
+                }
+
+                // Just in case
+                _balance = btcBalance();
+                if (_balance < perfFee) { perfFee = _balance; }
+
+                if (perfFee > 0) {
+                    IERC20(BTC).safeTransfer(treasury, perfFee);
+                    emit PerformanceFee(perfFee);
+                }
+            }
+        }
+    }
+
+    // Update new `lastBalance` for the next charge
+    function _afterMovement() internal {
+        lastBalance = balance();
+    }
+
     function deposit() external whenNotPaused onlyController nonReentrant {
         _deposit();
+        _afterMovement();
     }
 
     function _deposit() internal {
@@ -167,6 +209,8 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         // Redeposit
         if (!paused()) { _deposit(); }
 
+        _afterMovement();
+
         return _amount;
     }
 
@@ -179,10 +223,14 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
         uint harvested = btcBalance() - _before;
 
-        chargeFees(harvested);
+        // Charge performance fee for earned want + rewards
+        _beforeMovement();
 
         // re-deposit
         if (!paused()) { _deposit(); }
+
+        // Update lastBalance for the next movement
+        _afterMovement();
 
         emit Harvested(BTC, harvested);
     }
