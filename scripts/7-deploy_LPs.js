@@ -2,11 +2,11 @@ const hre = require('hardhat');
 const fs = require('fs');
 const { verify } = require('./verify');
 
-const deploy = JSON.parse(
-  fs.readFileSync('utils/deploy.json', 'utf8')
-)
-
 const main = async () => {
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
   const archimedes = await (
     await hre.ethers.getContractFactory('Archimedes')
   ).attach(deploy.Archimedes)
@@ -15,7 +15,7 @@ const main = async () => {
     let lp = deploy.LPs[name]
 
     let ctrollerArgs = [
-      lp.address, deploy.Archimedes, deploy.FeeManager, `2pi-SLP-${name}`
+      lp.address, deploy.Archimedes, deploy.FeeManager, `2pi-PGL-${name}`
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
@@ -49,7 +49,7 @@ const main = async () => {
     deploy.LPs[name] = lp
   }
 
-  fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()

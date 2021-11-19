@@ -121,7 +121,9 @@ module.exports = {
     avax_test: {
       url:        'https://api.avax-test.network/ext/bc/C/rpc',
       network_id: 43113,
-      accounts:   accounts
+      chainId:    43113,
+      accounts:   accounts,
+      timeout:    60000
     },
     ganache: {
       url:        'http://localhost:8545',

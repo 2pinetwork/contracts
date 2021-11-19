@@ -2,13 +2,13 @@ const fs = require('fs')
 const hre = require('hardhat');
 const { verify } = require('./verify');
 
-const deploy = JSON.parse(
-  fs.readFileSync('utils/deploy.json', 'utf8')
-)
-
 async function main() {
   const owner = (await hre.ethers.getSigners())[0]
-  const onlyCurrency = process.env.CURRENCY
+  // const onlyCurrency = process.env.CURRENCY
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
   const pools = deploy.aavePools
 
   let pool
@@ -41,8 +41,8 @@ async function main() {
 
       let decimals = parseInt(await controller.decimals(), 10)
 
-      console.log(`Set ${poo.currency} cap to ${cap}`)
-      await controller.setDepositCap(cap + '0'.repeat(decimals))
+      console.log(`Set ${pool.currency} cap to ${cap}`)
+      await (await controller.setDepositCap(cap + '0'.repeat(decimals))).wait()
     }
 
     args = [
@@ -73,8 +73,8 @@ async function main() {
     let pid = await controller.pid()
     console.log(`Configured ${pool.currency} in ${pid}`)
 
-    await (await strategy.setPriceFeed(deploy.WMATIC, deploy.chainlink[deploy.WMATIC])).wait()
-    if (pool.currency != 'MATIC') {
+    await (await strategy.setPriceFeed(deploy.WNATIVE, deploy.chainlink[deploy.WNATIVE])).wait()
+    if (pool.currency != 'AVAX') {
       await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
       await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
       await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
@@ -88,7 +88,7 @@ async function main() {
     }
   }
 
-  fs.writeFileSync('utils/deploy.json', JSON.stringify(deploy, undefined, 2))
+  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()

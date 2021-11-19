@@ -69,7 +69,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         WNative = _wNative;
     }
 
-    // Deposit MATIC
+    // Deposit Native
     receive() external payable { }
 
     // Add a new want token to the pool. Can only be called by the owner.
@@ -183,11 +183,11 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         pool.lastRewardBlock = blockNumber();
     }
 
-    // Direct MATIC (native) deposit
-    function depositMATIC(uint _pid, address _referrer) external payable nonReentrant {
+    // Direct native deposit
+    function depositNative(uint _pid, address _referrer) external payable nonReentrant {
         uint _amount = msg.value;
         require(_amount > 0, "Insufficient deposit");
-        require(address(poolInfo[_pid].want) == address(WNative), "Only MATIC pool");
+        require(address(poolInfo[_pid].want) == address(WNative), "Only Native token pool");
 
         // Update pool rewards
         updatePool(_pid);
@@ -198,7 +198,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         // Pay rewards
         calcPendingAndPayRewards(_pid, msg.sender);
 
-        // With that Archimedes already has the wmatics
+        // With that Archimedes already has the wNative
         WNative.deposit{value: _amount}();
 
         // Deposit in the controller
@@ -226,7 +226,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     function depositAll(uint _pid, address _referrer) external {
-        require(address(poolInfo[_pid].want) != address(WNative), "Can't deposit all Matic");
+        require(address(poolInfo[_pid].want) != address(WNative), "Can't deposit all Native");
         uint _balance = poolInfo[_pid].want.balanceOf(msg.sender);
 
         deposit(_pid, _balance, _referrer);
@@ -251,9 +251,9 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
         uint _wantBalance = wantBalance(pool.want) - _before;
 
-        // In case we have WNative we unwrap to matic
+        // In case we have WNative we unwrap to Native
         if (address(pool.want) == address(WNative)) {
-            // Unwrap WNative => MATIC
+            // Unwrap WNative => Native
             WNative.withdraw(_wantBalance);
 
             payable(msg.sender).transfer(_wantBalance);
