@@ -3,17 +3,6 @@ const { merge } = require('sol-merger')
 const fs = require('fs')
 
 exports.verify = async function (name, address, args) {
-  try {
-    await hre.tenderly.verify({ name: name, address: address });
-  } catch (e) {
-    console.log(`Error verificando en tenderly: ${e}`)
-  }
-  try {
-    await hre.run('verify:verify', { address: address, contract: `contracts/${name}.sol:${name}`, constructorArguments: args });
-  } catch (e) {
-    console.log(`Error verificando en explorer: ${e}`)
-  }
-
   // console.log(`Verifying ${name}:`)
   // // console.log(JSON.stringify(args))
   // await hre.tenderly.verify({ name: name, address: address });
@@ -37,4 +26,14 @@ exports.verify = async function (name, address, args) {
   // }
 
   // fs.writeFileSync('a_mano.sol', finalOutput)
+  try {
+    await hre.tenderly.verify({ name: name, address: address });
+  } catch (e) {
+    console.log(`Error verificando en tenderly: ${e}`)
+  }
+  try {
+    await hre.run('verify:verify', { address: address, contract: `contracts/${name}.sol:${name}`, constructorArguments: args });
+  } catch (e) {
+    console.log(`Error verificando en explorer: ${e}`)
+  }
 }
