@@ -71,6 +71,14 @@ contract UniZap is PiAdmin, ReentrancyGuard {
         }
     }
 
+    function estimateReceiveTokens(address _from, address _to, uint _amount) public view returns (uint) {
+        address[] memory route = _getRoute(_from, _to);
+
+        uint[] memory amounts = exchange.getAmountsOut(_amount, route);
+
+        return amounts[amounts.length - 1];
+    }
+
     /* ========== Private Functions ========== */
     function _approveToken(address _token, uint _amount) internal {
         IERC20(_token).safeApprove(address(exchange), _amount);
@@ -137,8 +145,16 @@ contract UniZap is PiAdmin, ReentrancyGuard {
     }
 
     function _swap(address _from, uint amount, address _to, address receiver) private returns (uint) {
-        address[] memory route;
+        address[] memory route = _getRoute(_from, _to);
 
+        _approveToken(_from, amount);
+        uint[] memory amounts = exchange.swapExactTokensForTokens(amount, 0, route, receiver, block.timestamp);
+        _removeAllowance(_from);
+
+        return amounts[amounts.length - 1];
+    }
+
+    function _getRoute(address _from, address _to) internal view returns (address[] memory route) {
         if (
             routePairAddresses[_from] != address(0) &&
             routePairAddresses[_to] != address(0) &&
@@ -180,12 +196,6 @@ contract UniZap is PiAdmin, ReentrancyGuard {
             route[1] = WETH;
             route[2] = _to;
         }
-
-        _approveToken(_from, amount);
-        uint[] memory amounts = exchange.swapExactTokensForTokens(amount, 0, route, receiver, block.timestamp);
-        _removeAllowance(_from);
-
-        return amounts[amounts.length - 1];
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */

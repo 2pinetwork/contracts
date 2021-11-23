@@ -365,11 +365,22 @@ describe('Controller Aave Strat', () => {
       await waitFor(wantFeed.setPrice(20))
 
       // 1 x 0.2 ratio
-      await waitFor(strat.harvest())
 
       // RATIO => (100 * 1e9 / 20) * 99 / 100 == 4950000000.0
       // 1e6 * RATIO / 1e9 => 4950000.0 (swapped)
       // 4950000.0 * 0.035 == 173250  (perf fee)
+      await expect(strat.harvest()).to.emit(
+        strat, 'Harvested'
+      ).withArgs(piToken.address, 4950000)
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(
+        balance.add(173250)
+      )
+
+      // Nothing to harvest
+      await expect(strat.harvest()).to.emit(
+        strat, 'Harvested'
+      ).withArgs(piToken.address, 0)
+
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
         balance.add(173250)
       )
@@ -589,6 +600,32 @@ describe('Controller Aave Strat', () => {
       const ctrollerSigner = await impersonateContract(controller.address)
 
       await waitFor(strat.connect(ctrollerSigner).retireStrat())
+    })
+  })
+
+  describe('PerformanceFee', async () => {
+    it('should be well calculated', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+      strat = strat.connect(ctrollerSigner)
+
+      expect(await piToken.balanceOf(pool.address)).to.equal(0)
+      await waitFor(piToken.transfer(strat.address, 15))
+
+      let treasury = await piToken.balanceOf(owner.address)
+
+      await waitFor(strat.beforeMovement())
+      await waitFor(strat.deposit())
+
+      // No earnings
+      expect(await piToken.balanceOf(owner.address)).to.equal(treasury)
+
+      // This will happend in one step/tx in a real case
+      await waitFor(piToken.transfer(strat.address, 100))
+      treasury = await piToken.balanceOf(owner.address)
+      await expect(strat.beforeMovement()).to.emit(strat, 'PerformanceFee').withArgs(3)
+      await waitFor(strat.deposit())
+
+      expect(await piToken.balanceOf(owner.address)).to.equal(treasury.add(3))
     })
   })
 })

@@ -60,11 +60,7 @@ if (isIntegration) {
 
 module.exports = {
   etherscan: {
-    apiKey:    process.env.POLYGON_API_KEY,
-    optimizer: {
-      enabled: true,
-      runs:    10000
-    }
+    apiKey: process.env.POLYGON_API_KEY
   },
   tenderly: {
     project:  process.env.TENDERLY_PROJECT,

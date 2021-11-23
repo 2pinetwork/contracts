@@ -154,6 +154,8 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(strat.address)).to.be.equal(100)
       expect(await piToken.balanceOf(otherStrat.address)).to.be.equal(0)
 
+      const treasuryBal = await piToken.balanceOf(owner.address)
+
       await expect(controller.setStrategy(otherStrat.address)).to.emit(
         controller, 'NewStrategy'
       ).withArgs(strat.address, otherStrat.address)
@@ -161,7 +163,8 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       // Should be deposited
       expect(await piToken.balanceOf(otherStrat.address)).to.be.equal(0)
-      expect(await piToken.balanceOf(pool.address)).to.be.equal(100)
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(97)
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(treasuryBal.add(3))
     })
 
     it('should revert with 0 address', async () => {

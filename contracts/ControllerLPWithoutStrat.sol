@@ -39,6 +39,8 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
         return _amount;
     }
 
+    function beforeMovement() external nonReentrant { }
+
     function LPBalance() public view returns (uint) {
         return IERC20(LP).balanceOf(address(this));
     }

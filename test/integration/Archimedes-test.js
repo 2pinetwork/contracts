@@ -165,9 +165,9 @@ describe('Archimedes', () => {
       const pid = await ctroller.pid()
 
       await waitFor(pair.approve(archimedes.address, 100))
-      await expect(archimedes.deposit(pid, 1, zeroAddress)).to.emit(
+      await expect(archimedes.deposit(pid, 100, zeroAddress)).to.emit(
         archimedes, 'Deposit'
-      ).withArgs(pid, owner.address, 1)
+      ).withArgs(pid, owner.address, 100)
     })
   })
 
@@ -396,7 +396,7 @@ describe('Archimedes', () => {
     it('Should revert for not wnative pool', async () => {
       await expect(
         archimedes.depositNative(0, zeroAddress, { value: 10 })
-      ).to.be.revertedWith('Only Native pool')
+      ).to.be.revertedWith('Only Native token pool')
     })
 
     it('Should get wnative shares and then withdraw', async () => {
@@ -418,7 +418,7 @@ describe('Archimedes', () => {
         Math.floor(balance.minus(1).toNumber())
       )
 
-      await waitFor(archimedes.withdraw(1, toNumber(1e18)))
+      await waitFor(archimedes.withdraw(1, toNumber(1e18), {gasLimit: 30e6}))
 
       expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(0)
 

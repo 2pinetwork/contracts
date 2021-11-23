@@ -1907,7 +1907,7 @@ contract UUPSProxy is Proxy {
  *
  */
 contract NativeSuperTokenProxy is INativeSuperTokenCustom, CustomSuperTokenBase, UUPSProxy {
-    function initialize(string calldata /*name*/, string calldata /*symbol*/, uint256 /*initialSupply*/) external pure {
+    function initialize(string calldata /*name*/, string calldata /*symbol*/, uint256 /*initialSupply*/) external pure override {
         revert("Can't call initialize directly");
     }
 }
