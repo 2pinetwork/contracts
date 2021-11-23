@@ -16,10 +16,11 @@ const hardhatNetwork = () => {
     return {
       network_id: 137,
       chainId: 137,
-      gasMultiplier: 4,
+      gasMultiplier: 10,
       forking:    {
         url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
         // url:         `http://localhost:8545`,
+        gasMultiplier: 10,
         blockNumber: 19880876
       }
     }

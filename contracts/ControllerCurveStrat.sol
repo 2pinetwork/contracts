@@ -371,7 +371,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
     // called as part of strat migration. Sends all the available funds back to the vault.
     function retireStrat() external onlyController {
-        _pause();
+        if (!paused()) { _pause(); }
 
         // max withdraw can fail if not staked (in case of panic)
         if (balanceOfPool() > 0) { withdrawBtc(0, true); }

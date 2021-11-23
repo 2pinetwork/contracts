@@ -315,7 +315,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         borrowRate = _borrowRate;
         borrowDepth = _borrowDepth;
 
-        if (wantBalance() > 0) { _leverage(); }
+        if (!paused() && wantBalance() > 0) { _leverage(); }
     }
 
     // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
@@ -439,7 +439,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
     // called as part of strat migration. Sends all the available funds back to the vault.
     function retireStrat() external onlyController {
-        _pause();
+        if (!paused()) { _pause(); }
 
         if (balanceOfPool() > 0) { _fullDeleverage(); }
 
