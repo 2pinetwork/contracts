@@ -62,8 +62,9 @@ mkdir -p shares_cov/
 
 # Deploys
 
-## Mumbai
 <details>
+  <summary><strong>Mumbai</strong></summary>
+  
 ```json
 {
   "exchange": "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506",
@@ -205,10 +206,12 @@ mkdir -p shares_cov/
   "TestNetMint": "0x90305218d28f3A75fDAA288c0ed143Fa6F2efC88"
 }
 ```
+  
 </details>
 
-## Fuji
 <details>
+<summary><strong>Fuji</strong></summary>
+  
 ```json
 {
   "exchange": "0x2D99ABD9008Dc933ff5c0CD271B88309593aB921",
@@ -305,4 +308,5 @@ mkdir -p shares_cov/
   "TestNetMint": "0x49b78c682a2ed1b3b3565dea8f5b81706a028ea7"
 }
 ```
+  
 </details>
