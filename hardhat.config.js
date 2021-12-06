@@ -32,9 +32,10 @@ const hardhatNetwork = () => {
 const getStringReplacements = (hre) => {
   const chainId = hre.network.config.network_id
 
-  return JSON.parse(
-    fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
-  )
+  if (chainId)
+    return JSON.parse(
+      fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
+    )
 }
 
 let stringReplacements
@@ -42,10 +43,13 @@ let stringReplacements
 const mochaSettings = JSON.parse(fs.readFileSync('.mocharc.json'))
 const transformLine = (hre, line) => {
   let newLine = line
-  stringReplacements = stringReplacements || getStringReplacements(hre)
 
-  for (let [string, replacement] of Object.entries(stringReplacements)) {
-    newLine = newLine.replace(string, replacement)
+  if (hre.network.config.network_id) {
+    stringReplacements = stringReplacements || getStringReplacements(hre)
+
+    for (let [string, replacement] of Object.entries(stringReplacements)) {
+      newLine = newLine.replace(string, replacement)
+    }
   }
 
   return newLine

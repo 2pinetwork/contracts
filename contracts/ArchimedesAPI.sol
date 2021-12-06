@@ -17,7 +17,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeERC20 for IPiToken;
 
-    address public handler;
+    address public handler; // 0x640bb21185093058549dFB000D566358dc40C584
     address public exchange;
     mapping(uint => address[]) public piTokenToWantRoute;
 
@@ -31,7 +31,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     }
 
     // IPiToken already have safe transfer from SuperToken
-    IPiToken public piToken;
+    IPiToken public immutable piToken;
     bytes private constant txData = new bytes(0); // just to support SuperToken mint
 
     // Used to made multiplications and divitions over shares
@@ -45,7 +45,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     // Total weighing. Must be the sum of all pools weighing.
     uint public totalWeighing;
     // The block number when PI mining starts.
-    uint public startBlock;
+    uint public immutable startBlock;
 
     // PiToken referral contract address.
     IReferral public referralMgr;
