@@ -400,11 +400,14 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     // Update the referral contract address by the owner
     function setReferralAddress(IReferral _newReferral) external onlyAdmin {
+        require(_newReferral != referralMgr, "Same Manager");
+        require(address(_newReferral) != address(0), "!ZeroAddress");
         referralMgr = _newReferral;
     }
 
     // Update referral commission rate by the owner
     function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyAdmin {
+        require(_referralCommissionRate != referralCommissionRate, "Same rate");
         require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "rate greater than MaxCommission");
         referralCommissionRate = _referralCommissionRate;
     }

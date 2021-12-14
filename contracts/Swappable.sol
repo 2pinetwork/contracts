@@ -18,11 +18,13 @@ abstract contract Swappable is PiAdmin {
     uint public maxPriceOffset = 600; // 10 minutes
 
     function setSwapSlippageRatio(uint _ratio) external onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != swapSlippageRatio, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         swapSlippageRatio = _ratio;
     }
 
     function setMaxPriceOffset(uint _offset) external onlyAdmin {
+        require(_offset != maxPriceOffset, "Same offset");
         require(_offset <= 86400, "Can't be more than 1 day");
         maxPriceOffset = _offset;
     }

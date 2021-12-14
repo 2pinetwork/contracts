@@ -84,18 +84,21 @@ contract FeeManager is Swappable, ReentrancyGuard {
     }
 
     function setTreasuryRatio(uint _ratio) external onlyAdmin nonReentrant {
+        require(_ratio != treasuryRatio, "Same ratio");
         require(_ratio <= MAX_TREASURY_RATIO, "Can't be greater than 50%");
         emit NewTreasuryRatio(treasuryRatio, _ratio);
         treasuryRatio = _ratio;
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same Address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != exchange, "Same Address");
         require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 

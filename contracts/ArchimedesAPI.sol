@@ -80,6 +80,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     }
 
     function setExchange(address _newExchange) external onlyAdmin {
+        require(_newExchange != exchange, "Same address");
         require(_newExchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _newExchange);
         exchange = _newExchange;
@@ -89,11 +90,13 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
         // Last address in path should be the same than pool.want
         require(_route[0] == address(piToken), "First token is not PiToken");
         require(_route[_route.length - 1] == address(poolInfo[_pid].want), "Last token is not want");
+        require(poolInfo[_pid].controller != address(0), "Unknown pool");
 
         piTokenToWantRoute[_pid] = _route;
     }
 
     function setHandler(address _newHandler) external onlyAdmin {
+        require(_newHandler != handler, "Same address");
         require(_newHandler != address(0), "!ZeroAddress");
         emit NewHandler(handler, _newHandler);
         handler = _newHandler;
@@ -367,11 +370,14 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
 
     // Update the referral contract address by the admin
     function setReferralAddress(IReferral _newReferral) external onlyAdmin {
+        require(_newReferral != referralMgr, "Same Manager");
+        require(address(_newReferral) != address(0), "!ZeroAddress");
         referralMgr = _newReferral;
     }
 
     // Update referral commission rate by the admin
     function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyAdmin {
+        require(_referralCommissionRate != referralCommissionRate, "Same rate");
         require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "rate greater than MaxCommission");
         referralCommissionRate = _referralCommissionRate;
     }

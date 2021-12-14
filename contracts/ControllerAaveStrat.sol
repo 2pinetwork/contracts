@@ -104,27 +104,35 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
+        require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != exchange, "Same address");
+        require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 
         exchange = _exchange;
     }
 
     function setSwapRoute(address[] calldata _route) external onlyAdmin nonReentrant {
+        require(_route[0] == wNative, "route[0] isn't wNative");
+        require(_route[_route.length - 1] == want, "Last route isn't want");
         wNativeToWantRoute = _route;
     }
 
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != ratioForFullWithdraw, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         ratioForFullWithdraw = _ratio;
     }
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee != performanceFee, "Same fee");
         require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 

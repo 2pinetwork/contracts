@@ -102,12 +102,15 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
+        require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
         treasury = _treasury;
     }
 
     function setStrategy(address newStrategy) external onlyAdmin nonReentrant {
+        require(newStrategy != strategy, "Same strategy");
         require(newStrategy != address(0), "!ZeroAddress");
         emit NewStrategy(strategy, newStrategy);
 
@@ -125,12 +128,15 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     }
 
     function setWithdrawFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee != withdrawFee, "Same fee");
         require(_fee <= MAX_WITHDRAW_FEE, "!cap");
 
         withdrawFee = _fee;
     }
 
     function setDepositCap(uint _amount) external onlyAdmin nonReentrant {
+        require(_amount != depositCap, "Same cap");
+
         emit NewDepositCap(depositCap, _amount);
 
         depositCap = _amount;

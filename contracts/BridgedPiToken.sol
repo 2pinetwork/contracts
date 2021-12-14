@@ -52,12 +52,16 @@ contract BridgedPiToken is PiAdmin {
     }
 
     function setCommunityMintPerBlock(uint _rate) external onlyAdmin {
+        require(_rate != communityMintPerBlock, "Same rate");
+
         _beforeChangeMintRate();
         communityMintPerBlock = _rate;
         _updateCurrentTranch();
     }
 
     function setApiMintPerBlock(uint _rate) external onlyAdmin {
+        require(_rate != apiMintPerBlock, "Same rate");
+
         _beforeChangeMintRate();
         apiMintPerBlock = _rate;
         _updateCurrentTranch();

@@ -150,24 +150,26 @@ describe('Controller Curve Strat', () => {
 
     it('Should set wNative swap route', async () => {
       // change to test the function
-      expect(await strat.wNativeToBtcRoute(0)).to.not.equal(piToken.address)
-      expect(await strat.wNativeToBtcRoute(1)).to.not.equal(BTC.address)
+      expect(await strat.wNativeToBtcRoute(0)).to.equal(WMATIC.address)
+      expect(await strat.wNativeToBtcRoute(2)).to.equal(BTC.address)
 
-      await strat.setWNativeSwapRoute([piToken.address, BTC.address])
+      await strat.setWNativeSwapRoute([WMATIC.address, piToken.address, BTC.address])
 
-      expect(await strat.wNativeToBtcRoute(0)).to.equal(piToken.address)
-      expect(await strat.wNativeToBtcRoute(1)).to.equal(BTC.address)
+      expect(await strat.wNativeToBtcRoute(0)).to.equal(WMATIC.address)
+      expect(await strat.wNativeToBtcRoute(1)).to.equal(piToken.address)
+      expect(await strat.wNativeToBtcRoute(2)).to.equal(BTC.address)
     })
 
     it('Should set CRV swap route', async () => {
       // change to test the function
-      expect(await strat.crvToBtcRoute(0)).to.not.equal(piToken.address)
-      expect(await strat.crvToBtcRoute(1)).to.not.equal(BTC.address)
+      expect(await strat.crvToBtcRoute(0)).to.equal(CRV.address)
+      expect(await strat.crvToBtcRoute(2)).to.equal(BTC.address)
 
-      await strat.setCrvSwapRoute([piToken.address, BTC.address])
+      await strat.setCrvSwapRoute([CRV.address, piToken.address, BTC.address])
 
-      expect(await strat.crvToBtcRoute(0)).to.equal(piToken.address)
-      expect(await strat.crvToBtcRoute(1)).to.equal(BTC.address)
+      expect(await strat.crvToBtcRoute(0)).to.equal(CRV.address)
+      expect(await strat.crvToBtcRoute(1)).to.equal(piToken.address)
+      expect(await strat.crvToBtcRoute(2)).to.equal(BTC.address)
     })
 
     it('Should harvest without rewards', async () => {
@@ -422,7 +424,7 @@ describe('Controller Curve Strat', () => {
     it('should be reverted for big ratio', async () => {
       await expect(
         strat.setPoolSlippageRatio(10001)
-      ).to.be.revertedWith("can't be more than 100%")
+      ).to.be.revertedWith("Can't be more than 100%")
     })
     it('should be changed', async () => {
       expect(await strat.poolSlippageRatio()).to.not.be.equal(123)
@@ -440,7 +442,7 @@ describe('Controller Curve Strat', () => {
     it('should be reverted for big ratio', async () => {
       await expect(
         strat.setSwapSlippageRatio(10001)
-      ).to.be.revertedWith("can't be more than 100%")
+      ).to.be.revertedWith("Can't be more than 100%")
     })
     it('should be changed', async () => {
       expect(await strat.swapSlippageRatio()).to.not.be.equal(123)
@@ -458,7 +460,7 @@ describe('Controller Curve Strat', () => {
     it('should be reverted for big ratio', async () => {
       await expect(
         strat.setRatioForFullWithdraw(10001)
-      ).to.be.revertedWith("can't be more than 100%")
+      ).to.be.revertedWith("Can't be more than 100%")
     })
     it('should be changed', async () => {
       expect(await strat.ratioForFullWithdraw()).to.not.be.equal(123)

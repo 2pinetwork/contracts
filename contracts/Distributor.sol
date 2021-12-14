@@ -86,6 +86,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
     event TreasoryDistributed(uint amount);
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 

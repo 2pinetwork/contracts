@@ -80,6 +80,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
@@ -87,6 +88,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != exchange, "Same address");
         require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 
@@ -94,14 +96,19 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setWNativeSwapRoute(address[] calldata _route) external onlyAdmin {
+        require(_route[0] == WNATIVE, "First route isn't wNative");
+        require(_route[_route.length - 1] == BTC, "Last route isn't BTC");
         wNativeToBtcRoute = _route;
     }
 
     function setCrvSwapRoute(address[] calldata _route) external onlyAdmin {
+        require(_route[0] == CRV, "First route isn't CRV");
+        require(_route[_route.length - 1] == BTC, "Last route isn't BTC");
         crvToBtcRoute = _route;
     }
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee != performanceFee, "Same fee");
         require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 
@@ -109,16 +116,19 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setPoolMinVirtualPrice(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != poolMinVirtualPrice, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         poolMinVirtualPrice = _ratio;
     }
 
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != poolSlippageRatio, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         poolSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != ratioForFullWithdraw, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         ratioForFullWithdraw = _ratio;
     }
 
