@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./PiAdmin.sol";
-import "../interfaces/IUniswapPair.sol";
+// import "hardhat/console.sol";
 
 interface IFarm {
     function piToken() external view returns (address);
@@ -59,6 +59,8 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         string memory _shareSymbol
     ) ERC20(_shareSymbol, _shareSymbol) {
         _want.symbol(); // Check that want is at least an ERC20
+        require(_want.balanceOf(address(this)) == 0, "Invalid ERC20"); // Check that want is at least an ERC20
+        require(_want.allowance(msg.sender, address(this)) == 0, "Invalid ERC20"); // Check that want is at least an ERC20
         require(IFarm(_farm).piToken() != address(0), "Invalid PiToken on Farm");
         require(_treasury != address(0), "Treasury !ZeroAddress");
 

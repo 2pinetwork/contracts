@@ -72,6 +72,11 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     // Deposit Native
     receive() external payable { }
 
+    modifier onlyController(uint _pid) {
+        require(poolInfo[_pid].controller == msg.sender, "!Controller");
+        _;
+    }
+
     // Add a new want token to the pool. Can only be called by the owner.
     function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyAdmin {
         require(address(_want) != address(0), "Address zero not allowed");
@@ -314,9 +319,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Controller callback before transfer to harvest users rewards
-    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
+    function beforeSharesTransfer(uint _pid, address _from, address _to, uint amount) external onlyController(_pid) {
         if (amount <= 0) { return; }
 
         // harvest rewards for
@@ -327,9 +330,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Controller callback after transfer to update users rewards
-    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external {
-        require(poolInfo[_pid].controller == msg.sender, "!Controller");
-
+    function afterSharesTransfer(uint _pid, address _from, address _to, uint amount) external onlyController(_pid) {
         if (amount <= 0) { return; }
 
         // Reset users "paidRewards"
