@@ -61,7 +61,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     constructor(IPiToken _piToken, uint _startBlock, IWNative _wNative) {
         require(address(_piToken) != address(0), "Pi address !ZeroAddress");
-        require(_startBlock > blockNumber(), "StartBlock must be in the future");
+        require(_startBlock > _blockNumber(), "StartBlock must be in the future");
 
         piToken = _piToken;
         startBlock = _startBlock;
@@ -85,7 +85,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         // Update pools before a weighing change
         if (_massUpdate) { massUpdatePools(); }
 
-        uint lastRewardBlock = blockNumber() > startBlock ? blockNumber() : startBlock;
+        uint lastRewardBlock = _blockNumber() > startBlock ? _blockNumber() : startBlock;
 
         totalWeighing += _weighing;
 
@@ -120,7 +120,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint _from, uint _to) internal pure returns (uint) {
+    function _getMultiplier(uint _from, uint _to) internal pure returns (uint) {
         return _to - _from;
     }
 
@@ -129,21 +129,21 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
 
         uint accPiTokenPerShare = pool.accPiTokenPerShare;
-        uint sharesTotal = controller(_pid).totalSupply();
+        uint sharesTotal = _controller(_pid).totalSupply();
 
-        if (blockNumber() > pool.lastRewardBlock && sharesTotal > 0 && piToken.communityLeftToMint() > 0) {
-            uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
+        if (_blockNumber() > pool.lastRewardBlock && sharesTotal > 0 && piToken.communityLeftToMint() > 0) {
+            uint multiplier = _getMultiplier(pool.lastRewardBlock, _blockNumber());
             uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
             accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
         }
-        return ((userShares(_pid, _user) * accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
+        return ((_userShares(_pid, _user) * accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
     }
 
     // Update reward variables for all pools. Be careful of gas spending!
     function massUpdatePools() public {
         for (uint pid = 0; pid < poolInfo.length; ++pid) {
             updatePool(pid);
-            if (_out_of_gas_for_loop()) { break; }
+            if (_outOfGasForLoop()) { break; }
         }
     }
 
@@ -152,28 +152,28 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
 
         // If same block as last update return
-        if (blockNumber() <= pool.lastRewardBlock) { return; }
+        if (_blockNumber() <= pool.lastRewardBlock) { return; }
 
         // If community Mint is already finished
         uint communityLeftToMint = piToken.communityLeftToMint();
         if (communityLeftToMint <= 0) {
-            pool.lastRewardBlock = blockNumber();
+            pool.lastRewardBlock = _blockNumber();
             return;
         }
 
-        uint sharesTotal = controller(_pid).totalSupply();
+        uint sharesTotal = _controller(_pid).totalSupply();
 
         if (sharesTotal <= 0 || pool.weighing <= 0) {
-            pool.lastRewardBlock = blockNumber();
+            pool.lastRewardBlock = _blockNumber();
             return;
         }
 
-        uint multiplier = getMultiplier(pool.lastRewardBlock, blockNumber());
+        uint multiplier = _getMultiplier(pool.lastRewardBlock, _blockNumber());
         uint piTokenReward = (multiplier * piTokenPerBlock() * pool.weighing) / totalWeighing;
 
         // No rewards =( update lastRewardBlock
         if (piTokenReward <= 0) {
-            pool.lastRewardBlock = blockNumber();
+            pool.lastRewardBlock = _blockNumber();
             return;
         }
 
@@ -185,7 +185,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         piToken.communityMint(address(this), piTokenReward);
 
         pool.accPiTokenPerShare += (piTokenReward * SHARE_PRECISION) / sharesTotal;
-        pool.lastRewardBlock = blockNumber();
+        pool.lastRewardBlock = _blockNumber();
     }
 
     // Direct native deposit
@@ -201,7 +201,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         _recordReferral(_pid, _referrer);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid, msg.sender);
+        _calcPendingAndPayRewards(_pid, msg.sender);
 
         // With that Archimedes already has the wNative
         WNative.deposit{value: _amount}();
@@ -221,7 +221,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         _recordReferral(_pid, _referrer);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid, msg.sender);
+        _calcPendingAndPayRewards(_pid, msg.sender);
 
         // Transfer from user => Archimedes
         poolInfo[_pid].want.safeTransferFrom(msg.sender, address(this), _amount);
@@ -240,30 +240,30 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     // Withdraw want token from Archimedes.
     function withdraw(uint _pid, uint _shares) public nonReentrant {
         require(_shares > 0, "0 shares");
-        require(userShares(_pid) >= _shares, "withdraw: not sufficient founds");
+        require(_userShares(_pid) >= _shares, "withdraw: not sufficient founds");
 
         updatePool(_pid);
 
         // Pay rewards
-        calcPendingAndPayRewards(_pid, msg.sender);
+        _calcPendingAndPayRewards(_pid, msg.sender);
 
         PoolInfo storage pool = poolInfo[_pid];
 
-        uint _before = wantBalance(pool.want);
+        uint _before = _wantBalance(pool.want);
         // this should burn shares and control the amount
-        uint withdrawn = controller(_pid).withdraw(msg.sender, _shares);
+        uint withdrawn = _controller(_pid).withdraw(msg.sender, _shares);
         require(withdrawn > 0, "No funds withdrawn");
 
-        uint _wantBalance = wantBalance(pool.want) - _before;
+        uint __wantBalance = _wantBalance(pool.want) - _before;
 
         // In case we have WNative we unwrap to Native
         if (address(pool.want) == address(WNative)) {
             // Unwrap WNative => Native
-            WNative.withdraw(_wantBalance);
+            WNative.withdraw(__wantBalance);
 
-            payable(msg.sender).transfer(_wantBalance);
+            payable(msg.sender).transfer(__wantBalance);
         } else {
-            pool.want.safeTransfer(address(msg.sender), _wantBalance);
+            pool.want.safeTransfer(address(msg.sender), __wantBalance);
         }
 
         // This is to "save" like the new amount of shares was paid
@@ -273,7 +273,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     function withdrawAll(uint _pid) external {
-        withdraw(_pid, userShares(_pid));
+        withdraw(_pid, _userShares(_pid));
     }
 
     // Claim rewards for a pool
@@ -282,11 +282,11 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     function _harvest(uint _pid, address _user) internal {
-        if (userShares(_pid, _user) <= 0) { return; }
+        if (_userShares(_pid, _user) <= 0) { return; }
 
         updatePool(_pid);
 
-        calcPendingAndPayRewards(_pid, _user);
+        _calcPendingAndPayRewards(_pid, _user);
 
         _updateUserPaidRewards(_pid, _user);
     }
@@ -295,7 +295,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid);
-            if (_out_of_gas_for_loop()) { break; }
+            if (_outOfGasForLoop()) { break; }
         }
     }
 
@@ -305,16 +305,16 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
         userPaidRewards[_pid][msg.sender] = 0;
 
-        uint _shares = userShares(_pid);
+        uint _shares = _userShares(_pid);
 
         require(_shares > 0, "No shares to withdraw");
 
-        uint _before = wantBalance(want);
+        uint _before = _wantBalance(want);
         // this should burn shares and control the amount
-        controller(_pid).withdraw(msg.sender, _shares);
+        _controller(_pid).withdraw(msg.sender, _shares);
 
-        uint _wantBalance = wantBalance(want) - _before;
-        want.safeTransfer(address(msg.sender), _wantBalance);
+        uint __wantBalance = _wantBalance(want) - _before;
+        want.safeTransfer(address(msg.sender), __wantBalance);
 
         emit EmergencyWithdraw(_pid, msg.sender, _shares);
     }
@@ -340,17 +340,17 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     function _updateUserPaidRewards(uint _pid, address _user) internal {
-        userPaidRewards[_pid][_user] = (userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
+        userPaidRewards[_pid][_user] = (_userShares(_pid, _user) * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION;
     }
 
-    function wantBalance(IERC20 _want) internal view returns (uint) {
+    function _wantBalance(IERC20 _want) internal view returns (uint) {
         return _want.balanceOf(address(this));
     }
 
     // Record referral in referralMgr contract if needed
     function _recordReferral(uint _pid, address _referrer) internal {
         // only if it's the first deposit
-        if (userShares(_pid) <= 0 && _referrer != address(0) &&
+        if (_userShares(_pid) <= 0 && _referrer != address(0) &&
             _referrer != msg.sender && address(referralMgr) != address(0)) {
 
             referralMgr.recordReferral(msg.sender, _referrer);
@@ -362,7 +362,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
         // Archimedes => controller transfer & deposit
         pool.want.safeIncreaseAllowance(pool.controller, _amount);
-        controller(_pid).deposit(msg.sender, _amount);
+        _controller(_pid).deposit(msg.sender, _amount);
 
         // This is to "save" like the new amount of shares was paid
         _updateUserPaidRewards(_pid, msg.sender);
@@ -371,15 +371,15 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Pay rewards
-    function calcPendingAndPayRewards(uint _pid, address _user) internal returns (uint pending) {
-        uint _shares = userShares(_pid, _user);
+    function _calcPendingAndPayRewards(uint _pid, address _user) internal returns (uint pending) {
+        uint _shares = _userShares(_pid, _user);
 
         if (_shares > 0) {
             pending = ((_shares * poolInfo[_pid].accPiTokenPerShare) / SHARE_PRECISION) - paidRewards(_pid, _user);
 
             if (pending > 0) {
-                safePiTokenTransfer(_user, pending);
-                payReferralCommission(_user, pending);
+                _safePiTokenTransfer(_user, pending);
+                _payReferralCommission(_user, pending);
 
                 emit Harvested(_pid, _user, pending);
             }
@@ -387,7 +387,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Safe piToken transfer function, just in case if rounding error causes pool to not have enough PI.
-    function safePiTokenTransfer(address _to, uint _amount) internal {
+    function _safePiTokenTransfer(address _to, uint _amount) internal {
         uint piTokenBal = piToken.balanceOf(address(this));
 
         if (_amount > piTokenBal) {
@@ -410,7 +410,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Pay referral commission to the referrer who referred this user.
-    function payReferralCommission(address _user, uint _pending) internal {
+    function _payReferralCommission(address _user, uint _pending) internal {
         if (address(referralMgr) != address(0) && referralCommissionRate > 0) {
             address referrer = referralMgr.getReferrer(_user);
 
@@ -435,11 +435,11 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         return poolInfo.length;
     }
 
-    function userShares(uint _pid) public view returns (uint) {
-        return controller(_pid).balanceOf(msg.sender);
+    function _userShares(uint _pid) public view returns (uint) {
+        return _controller(_pid).balanceOf(msg.sender);
     }
-    function userShares(uint _pid, address _user) public view returns (uint) {
-        return controller(_pid).balanceOf(_user);
+    function _userShares(uint _pid, address _user) public view returns (uint) {
+        return _controller(_pid).balanceOf(_user);
     }
 
     function paidRewards(uint _pid) public view returns (uint) {
@@ -448,24 +448,24 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     function paidRewards(uint _pid, address _user) public view returns (uint) {
         return userPaidRewards[_pid][_user];
     }
-    function controller(uint _pid) internal view returns (IController) {
+    function _controller(uint _pid) internal view returns (IController) {
         return IController(poolInfo[_pid].controller);
     }
 
     function getPricePerFullShare(uint _pid) external view returns (uint) {
-        uint _totalSupply = controller(_pid).totalSupply();
+        uint _totalSupply = _controller(_pid).totalSupply();
         uint precision = 10 ** decimals(_pid);
 
-        return _totalSupply <= 0 ? precision : ((controller(_pid).balance() * precision) / _totalSupply);
+        return _totalSupply <= 0 ? precision : ((_controller(_pid).balance() * precision) / _totalSupply);
     }
     function decimals(uint _pid) public view returns (uint) {
-        return controller(_pid).decimals();
+        return _controller(_pid).decimals();
     }
     function balance(uint _pid) external view returns (uint) {
-        return controller(_pid).balance();
+        return _controller(_pid).balance();
     }
     function balanceOf(uint _pid, address _user) external view returns (uint) {
-        return controller(_pid).balanceOf(_user);
+        return _controller(_pid).balanceOf(_user);
     }
 
     function piTokenPerBlock() public view returns (uint) {
@@ -475,7 +475,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Only to be mocked
-    function blockNumber() internal view virtual returns (uint) {
+    function _blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
 
@@ -485,7 +485,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     function redeemStuckedPiTokens() external onlyAdmin {
         require(piToken.totalSupply() == piToken.MAX_SUPPLY(), "PiToken still minting");
         // 2.5 years (2.5 * 365 * 24 * 3600) / 2.4s per block == 32850000
-        require(blockNumber() > (startBlock + 32850000), "Still waiting");
+        require(_blockNumber() > (startBlock + 32850000), "Still waiting");
 
         uint _balance = piToken.balanceOf(address(this));
 

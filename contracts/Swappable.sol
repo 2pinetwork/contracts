@@ -50,13 +50,13 @@ abstract contract Swappable is PiAdmin {
             (10 ** IERC20Metadata(_fromToken).decimals()) / (10 ** IERC20Metadata(_toToken).decimals())
         ) * SWAP_PRECISION;
         uint ratio = (
-            (getPriceFor(_fromToken) * SWAP_PRECISION) / getPriceFor(_toToken)
+            (_getPriceFor(_fromToken) * SWAP_PRECISION) / _getPriceFor(_toToken)
         ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
 
         return (_amount * ratio / tokenDiffPrecision);
     }
 
-    function getPriceFor(address _token) internal view returns (uint) {
+    function _getPriceFor(address _token) internal view returns (uint) {
         // This could be implemented with FeedRegistry but it's not available in polygon
         (, int price,,uint timestamp,) = oracles[_token].latestRoundData();
 

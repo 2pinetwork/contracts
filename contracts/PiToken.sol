@@ -49,9 +49,9 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
 
     // Should be called from a wallet
     function init() external onlyAdmin {
-        require(self().totalSupply() <= 0, "Already initialized");
+        require(_self().totalSupply() <= 0, "Already initialized");
 
-        self().initialize(IERC20(address(0x0)), 18, '2Pi', '2Pi');
+        _self().initialize(IERC20(address(0x0)), 18, '2Pi', '2Pi');
 
         _ERC1820_REGISTRY.setInterfaceImplementer(
             address(this),
@@ -59,22 +59,22 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
             address(this)
         );
 
-        self().selfMint(msg.sender, INITIAL_SUPPLY, abi.encodePacked(keccak256("Tokens for INITIAL SUPPLY")));
+        _self().selfMint(msg.sender, INITIAL_SUPPLY, abi.encodePacked(keccak256("Tokens for INITIAL SUPPLY")));
     }
 
     function addMinter(address newMinter) external onlyAdmin {
         _setupRole(MINTER_ROLE, newMinter);
     }
 
-    function initRewardsOn(uint _blockNumber) external onlyAdmin {
+    function initRewardsOn(uint __blockNumber) external onlyAdmin {
         require(tranchesBlock <= 0, "Already set");
-        tranchesBlock = _blockNumber;
+        tranchesBlock = __blockNumber;
     }
 
     // Before change api or community RatePerBlock or before mintForMultiChain is called
     // Calculate and accumulate the un-minted amounts.
     function _beforeChangeMintRate() internal {
-        if (tranchesBlock > 0 && blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
+        if (tranchesBlock > 0 && _blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
             // Accumulate both proportions to keep track of "un-minted" amounts
             apiReserveFromOldTranches += _leftToMintForCurrentBlock(API_TYPE);
             communityReserveFromOldTranches += _leftToMintForCurrentBlock(COMMUNITY_TYPE);
@@ -95,8 +95,8 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
 
     function _updateCurrentTranch() internal {
         // Update variables to making calculations from this moment
-        if (tranchesBlock > 0 && blockNumber() > tranchesBlock) {
-            tranchesBlock = blockNumber();
+        if (tranchesBlock > 0 && _blockNumber() > tranchesBlock) {
+            tranchesBlock = _blockNumber();
         }
 
         apiMintedForCurrentTranch = 0;
@@ -106,14 +106,14 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     // This function is made to mint an arbitrary amount for other chains
     function mintForMultiChain(uint _amount, bytes calldata data) external onlyAdmin {
         require(_amount > 0, "Insufficient supply");
-        require(self().totalSupply() + _amount <= MAX_SUPPLY, "Cant' mint more than cap");
+        require(_self().totalSupply() + _amount <= MAX_SUPPLY, "Cant' mint more than cap");
 
         _beforeChangeMintRate();
 
         // Mint + transfer to skip the 777-receiver callback
-        self().selfMint(address(this), _amount, data);
+        _self().selfMint(address(this), _amount, data);
         // SuperToken transfer is safe
-        self().transfer(msg.sender, _amount);
+        _self().transfer(msg.sender, _amount);
 
         _updateCurrentTranch();
     }
@@ -125,8 +125,8 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
         require(tranchesBlock > 0, "Rewards not initialized");
-        require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
-        require(self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.8M");
+        require(tranchesBlock < _blockNumber(), "Still waiting for rewards block");
+        require(_self().totalSupply() + _supply <= MAX_SUPPLY, "Mint capped to 62.8M");
 
         uint _ratePerBlock = communityMintPerBlock;
         if (_type == API_TYPE) { _ratePerBlock = apiMintPerBlock; }
@@ -173,18 +173,18 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
         _checkMintFor(_receiver, _supply, COMMUNITY_TYPE);
 
         // Mint + transfer to skip the 777-receiver callback
-        self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for Community")));
+        _self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for Community")));
         // SuperToken transfer is safe
-        self().transfer(_receiver, _supply);
+        _self().transfer(_receiver, _supply);
     }
 
     function apiMint(address _receiver, uint _supply) external {
         _checkMintFor(_receiver, _supply, API_TYPE);
 
         // Mint + transfer to skip the 777-receiver callback
-        self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for API")));
+        _self().selfMint(address(this), _supply, abi.encodePacked(keccak256("Tokens for API")));
         // SuperToken transfer is safe
-        self().transfer(_receiver, _supply);
+        _self().transfer(_receiver, _supply);
     }
 
     function communityLeftToMint() public view returns (uint) {
@@ -196,9 +196,9 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     }
 
     function _leftToMintForCurrentBlock(uint _type) internal view returns (uint) {
-        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) { return 0; }
+        if (tranchesBlock <= 0 || tranchesBlock > _blockNumber()) { return 0; }
 
-       uint left = blockNumber() - tranchesBlock;
+       uint left = _blockNumber() - tranchesBlock;
 
        if (_type == API_TYPE) {
            left *= apiMintPerBlock;
@@ -212,7 +212,7 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     }
 
     function _leftToMint(uint _type) internal view returns (uint) {
-        uint totalLeft = MAX_SUPPLY - self().totalSupply();
+        uint totalLeft = MAX_SUPPLY - _self().totalSupply();
         if (totalLeft <= 0) { return 0; }
 
         // Get the max mintable supply for the current tranche
@@ -245,10 +245,10 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     function burn(uint _amount, bytes calldata data) external {
         require(hasRole(BURNER_ROLE, msg.sender), "Only burners");
 
-        self().selfBurn(msg.sender, _amount, data);
+        _self().selfBurn(msg.sender, _amount, data);
     }
 
-    function self() internal view returns (ISuperToken) {
+    function _self() internal view returns (ISuperToken) {
         return ISuperToken(address(this));
     }
 
@@ -257,7 +257,7 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     }
 
     // Implemented to be mocked in tests
-    function blockNumber() internal view virtual returns (uint) {
+    function _blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
 }

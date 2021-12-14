@@ -216,7 +216,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
             IERC20(want).safeApprove(POOL, _amount);
             IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
 
-            if (_amount < minLeverage || _out_of_gas_for_loop()) { break; }
+            if (_amount < minLeverage || _outOfGasForLoop()) { break; }
         }
     }
 
@@ -226,7 +226,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         uint toRepay;
 
         while (borrowBal > 0) {
-            toWithdraw = maxWithdrawFromSupply(supplyBal);
+            toWithdraw = _maxWithdrawFromSupply(supplyBal);
 
             IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
 
@@ -260,15 +260,13 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         // _needed amount
         uint toWithdraw = wantBalance() + _needed;
 
-        while (toWithdraw > wantBalance()) {
-            withdrawAndRepay(toWithdraw);
-        }
+        while (toWithdraw > wantBalance()) { _withdrawAndRepay(toWithdraw); }
     }
 
-    function withdrawAndRepay(uint _needed) internal {
+    function _withdrawAndRepay(uint _needed) internal {
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
         // This amount with borrowDepth = 0 will return the entire deposit
-        uint toWithdraw = maxWithdrawFromSupply(supplyBal);
+        uint toWithdraw = _maxWithdrawFromSupply(supplyBal);
 
         if (toWithdraw > _needed) { toWithdraw = _needed; }
 
@@ -292,7 +290,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
         (uint supplyBal, uint borrowBal) = supplyAndBorrow();
 
-        uint toWithdraw = (maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
+        uint toWithdraw = (_maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
 
         IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
 
@@ -319,7 +317,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     }
 
     // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
-    function maxWithdrawFromSupply(uint _supply) internal view returns (uint) {
+    function _maxWithdrawFromSupply(uint _supply) internal view returns (uint) {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
@@ -344,7 +342,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         return supplyBal - borrowBal;
     }
 
-    function claimRewards() internal {
+    function _claimRewards() internal {
         // Incentive controller only receive aToken addresses
         address[] memory assets = new address[](2);
         assets[0] = aToken;
@@ -357,10 +355,10 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
     function harvest() public nonReentrant {
         uint _balance = balance();
-        claimRewards();
+        _claimRewards();
 
         // only need swap when is different =)
-        if (want != wNative) { swapRewards(); }
+        if (want != wNative) { _swapRewards(); }
 
         uint harvested = balance() - _balance;
 
@@ -376,7 +374,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         emit Harvested(want, harvested);
     }
 
-    function swapRewards() internal {
+    function _swapRewards() internal {
         uint _balance = IERC20(wNative).balanceOf(address(this));
 
         if (_balance > 0) {
@@ -393,7 +391,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     /**
      * @dev Takes out performance fee.
      */
-    function chargeFees(uint _harvested) internal {
+    function _chargeFees(uint _harvested) internal {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed

@@ -141,7 +141,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
                 if (_balance < perfFee) {
                     uint _diff = perfFee - _balance;
 
-                    withdrawBtc(_diff, false);
+                    _withdrawBtc(_diff, false);
                 }
 
                 // Just in case
@@ -193,9 +193,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
             // If the requested amount is greater than xx% of the founds just withdraw everything
             if (_amount > (poolBalance * ratioForFullWithdraw / RATIO_PRECISION)) {
-                withdrawBtc(0, true);
+                _withdrawBtc(0, true);
             } else {
-                withdrawBtc(_amount, false);
+                _withdrawBtc(_amount, false);
             }
 
             _balance = btcBalance();
@@ -217,9 +217,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     function harvest() public nonReentrant {
         uint _before = btcBalance();
 
-        claimRewards();
-        swapWMaticRewards();
-        swapCrvRewards();
+        _claimRewards();
+        _swapWMaticRewards();
+        _swapCrvRewards();
 
         uint harvested = btcBalance() - _before;
 
@@ -238,11 +238,11 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
-    function claimRewards() internal {
+    function _claimRewards() internal {
         IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
-    function swapWMaticRewards() internal {
+    function _swapWMaticRewards() internal {
         uint _balance = wNativeBalance();
 
         if (_balance > 0) {
@@ -259,7 +259,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         }
     }
 
-    function swapCrvRewards() internal {
+    function _swapCrvRewards() internal {
         uint _balance = crvBalance();
 
         if (_balance > 0) {
@@ -279,7 +279,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     /**
      * @dev Takes out performance fee.
      */
-    function chargeFees(uint _harvested) internal {
+    function _chargeFees(uint _harvested) internal {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
@@ -287,7 +287,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     // amount is the BTC expected to be withdrawn
-    function withdrawBtc(uint _amount, bool _maxWithdraw) internal {
+    function _withdrawBtc(uint _amount, bool _maxWithdraw) internal {
         uint btcCrvAmount;
 
         if (_maxWithdraw) {
@@ -374,7 +374,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         if (!paused()) { _pause(); }
 
         // max withdraw can fail if not staked (in case of panic)
-        if (balanceOfPool() > 0) { withdrawBtc(0, true); }
+        if (balanceOfPool() > 0) { _withdrawBtc(0, true); }
 
         // Can be called without rewards
         harvest();
@@ -385,7 +385,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
     // pauses deposits and withdraws all funds from third party systems.
     function panic() external onlyAdmin nonReentrant {
-        withdrawBtc(0, true); // max withdraw
+        _withdrawBtc(0, true); // max withdraw
         pause();
     }
 

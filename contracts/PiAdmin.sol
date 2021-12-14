@@ -15,7 +15,7 @@ abstract contract PiAdmin is AccessControl {
     }
 
     // @dev Used to break loops if gasleft is less than 20k
-    function _out_of_gas_for_loop() internal view returns (bool) {
+    function _outOfGasForLoop() internal view returns (bool) {
         return gasleft() <= 20_000;
     }
 }

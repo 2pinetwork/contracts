@@ -21,7 +21,7 @@ library UniswapV2OracleLibrary {
     using FixedPoint for *;
 
     // helper function that returns the current block timestamp within the range of uint32, i.e. [0, 2**32 - 1]
-    function currentBlockTimestamp() internal view returns (uint32) {
+    function _currentBlockTimestamp() internal view returns (uint32) {
         return uint32(block.timestamp % 2 ** 32);
     }
 
@@ -29,7 +29,7 @@ library UniswapV2OracleLibrary {
     function currentCumulativePrices(
         address pair
     ) internal view returns (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) {
-        blockTimestamp = currentBlockTimestamp();
+        blockTimestamp = _currentBlockTimestamp();
         price0Cumulative = IUniswapV2Pair(pair).price0CumulativeLast();
         price1Cumulative = IUniswapV2Pair(pair).price1CumulativeLast();
 
