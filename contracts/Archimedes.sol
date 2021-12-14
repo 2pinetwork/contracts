@@ -79,7 +79,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     // Add a new want token to the pool. Can only be called by the owner.
     function addNewPool(IERC20 _want, address _ctroller, uint _weighing, bool _massUpdate) external onlyAdmin {
         require(address(_want) != address(0), "Address zero not allowed");
-        require(IController(_ctroller).farm() == address(this), "Not a farm controller");
+        require(IController(_ctroller).archimedes() == address(this), "Not an Archimedes controller");
         require(IController(_ctroller).strategy() != address(0), "Controller without strategy");
 
         // Update pools before a weighing change
@@ -98,7 +98,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         }));
 
         uint _pid = poolInfo.length - 1;
-        uint _setPid = IController(_ctroller).setFarmPid(_pid);
+        uint _setPid = IController(_ctroller).setPid(_pid);
         require(_pid == _setPid, "Pid doesn't match");
 
         emit NewPool(_pid, address(_want), _weighing);

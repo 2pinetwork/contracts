@@ -156,7 +156,7 @@ describe('ArchimedesAPI', () => {
       ).to.be.revertedWith('Address zero not allowed')
     })
 
-    it('Should reverse with non-farm controller', async () => {
+    it('Should reverse with non-archimedes controller', async () => {
       const otherFarm = await deploy(
         'ArchimedesAPI',
         piToken.address,
@@ -168,7 +168,7 @@ describe('ArchimedesAPI', () => {
 
       expect(
         archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
-      ).to.be.revertedWith('Not a farm controller')
+      ).to.be.revertedWith('Not an Archimedes controller')
     })
 
     it('Should reverse for controller without strategy', async () => {

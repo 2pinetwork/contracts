@@ -8,8 +8,8 @@ interface IController {
     function balance() external view returns (uint);
     function balanceOf(address _user) external view returns (uint);
     function decimals() external view returns (uint);
-    function farm() external view returns (address);
+    function archimedes() external view returns (address);
     function deposit(address _depositor, uint _amount) external;
     function withdraw(address _depositor, uint _shares) external returns (uint);
-    function setFarmPid(uint pid) external returns (uint);
+    function setPid(uint pid) external returns (uint);
 }

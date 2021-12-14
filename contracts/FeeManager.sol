@@ -6,13 +6,10 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+
 
 import "./Swappable.sol";
-
-interface IPiVault {
-    function piToken() external view returns (address);
-}
+import "../interfaces/IPiVault.sol";
 
 // Swappable contract has the AccessControl module
 contract FeeManager is Swappable, ReentrancyGuard {

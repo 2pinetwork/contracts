@@ -4,6 +4,7 @@ pragma solidity =0.6.6;
 import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
 import 'hardhat/console.sol';
 
+// Manual interface declaration because of the @openzeppelin lib is for solidity 0.8
 interface IERC20Metadata {
     function decimals() external view returns (uint8);
 }

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -9,21 +8,8 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
 import "./Swappable.sol";
-
-interface ICurvePool {
-    // _use_underlying If True, withdraw underlying assets instead of aTokens
-    function add_liquidity(uint[2] calldata amounts, uint min_mint_amount, bool _use_underlying) external;
-    function remove_liquidity_one_coin(uint _token_amount, int128 i, uint _min_amount, bool _use_underlying) external returns (uint);
-    function calc_withdraw_one_coin(uint _token_amount, int128 i) external view returns (uint);
-    function calc_token_amount(uint[2] calldata _amounts, bool is_deposit) external view returns (uint);
-}
-
-interface IRewardsGauge {
-    function balanceOf(address account) external view returns (uint);
-    function claim_rewards(address _addr) external;
-    function deposit(uint _value) external;
-    function withdraw(uint _value) external;
-}
+import "../interfaces/ICurvePool.sol";
+import "../interfaces/IRewardsGauge.sol";
 
 contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
