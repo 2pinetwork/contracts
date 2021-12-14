@@ -216,7 +216,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
             IERC20(want).safeApprove(POOL, _amount);
             IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
 
-            if (_amount < minLeverage) { break; }
+            if (_amount < minLeverage || _out_of_gas_for_loop()) { break; }
         }
     }
 

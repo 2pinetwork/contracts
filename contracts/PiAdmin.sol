@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "hardhat/console.sol";
 
 abstract contract PiAdmin is AccessControl {
     constructor() {
@@ -11,5 +12,10 @@ abstract contract PiAdmin is AccessControl {
     modifier onlyAdmin() {
         require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Not an admin");
         _;
+    }
+
+    // @dev Used to break loops if gasleft is less than 20k
+    function _out_of_gas_for_loop() internal view returns (bool) {
+        return gasleft() <= 20_000;
     }
 }

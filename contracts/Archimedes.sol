@@ -4,7 +4,6 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 import "./PiAdmin.sol";
 import "../interfaces/IPiToken.sol";
@@ -144,6 +143,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     function massUpdatePools() public {
         for (uint pid = 0; pid < poolInfo.length; ++pid) {
             updatePool(pid);
+            if (_out_of_gas_for_loop()) { break; }
         }
     }
 
@@ -295,6 +295,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid);
+            if (_out_of_gas_for_loop()) { break; }
         }
     }
 

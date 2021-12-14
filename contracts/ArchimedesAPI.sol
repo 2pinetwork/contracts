@@ -150,6 +150,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
     function massUpdatePools() public {
         for (uint pid = 0; pid < poolInfo.length; ++pid) {
             updatePool(pid);
+            if (_out_of_gas_for_loop()) { break; }
         }
     }
 
@@ -269,6 +270,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
         uint length = poolInfo.length;
         for (uint pid = 0; pid < length; ++pid) {
             harvest(pid, _user);
+            if (_out_of_gas_for_loop()) { break; }
         }
     }
 
