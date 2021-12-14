@@ -197,6 +197,9 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
             } else {
                 _partialDeleverage(_diff);
             }
+
+           _balance =  wantBalance();
+           if (_balance < _amount) { _amount = _balance; }
         }
 
         IERC20(want).safeTransfer(controller, _amount);

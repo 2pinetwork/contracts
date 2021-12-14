@@ -177,6 +177,9 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
             // positive
             withdrawn = IStrategy(strategy).withdraw(_diff);
             require(withdrawn > 0, "Can't withdraw from strategy...");
+
+            _balance = wantBalance();
+            if (_balance < _withdraw) { _withdraw = _balance; }
         }
 
         uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
