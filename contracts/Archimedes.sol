@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -29,7 +29,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // IPiToken already have safe transfer from SuperToken
-    IPiToken public piToken;
+    IPiToken public immutable piToken;
 
     // Used to made multiplications and divitions over shares
     uint public constant SHARE_PRECISION = 1e18;
@@ -42,7 +42,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     // Total weighing. Must be the sum of all pools weighing.
     uint public totalWeighing;
     // The block number when PI mining starts.
-    uint public startBlock;
+    uint public immutable startBlock;
 
     // PiToken referral contract address.
     IReferral public referralMgr;
