@@ -30,15 +30,27 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
         _;
     }
 
+    // @dev Just receive LPs from Controller
     function deposit() external whenNotPaused onlyController nonReentrant {
+        // This function is ALWAYS called from the Controller and is used just
+        // to receive the LPs.
+        // As Controller implementation:
+        //       want.safeTransfer(strategy, _amount);
+        //       IStrategy(strategy).deposit();
+        //
+        // At the moment we're not investing LPs in any pool. But to keep all the
+        // strategies working in the same way we keep deposit/withdraw functions without
+        // anything else more than receive and return LPs.
     }
 
+    // @dev Just return LPs to Controller
     function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
         IERC20(LP).safeTransfer(controller, _amount);
 
         return _amount;
     }
 
+    // @dev Just to be called from Controller for compatibility
     function beforeMovement() external nonReentrant { }
 
     function LPBalance() public view returns (uint) {
