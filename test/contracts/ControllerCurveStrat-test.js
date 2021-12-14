@@ -512,7 +512,7 @@ describe('Controller Curve Strat', () => {
       expect(await strat.paused()).to.be.equal(false)
 
       // Revert for 0 deposit
-      await expect(strat.panic()).to.be.revertedWith('remove_liquidity should expect more than 0')
+      await expect(strat.panic()).to.be.revertedWith('remove_liquidity expected = 0')
 
       const ctrollerSigner = await impersonateContract(controller.address)
 

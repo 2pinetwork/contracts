@@ -66,7 +66,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
 
     constructor(IPiToken _piToken, uint _startBlock, address _handler) {
         require(address(_piToken) != address(0), "Pi address !ZeroAddress");
-        require(_startBlock > blockNumber(), "StartBlock should be in the future");
+        require(_startBlock > blockNumber(), "StartBlock must be in the future");
         require(_handler != address(0), "Handler !ZeroAddress");
 
         piToken = _piToken;
@@ -370,7 +370,7 @@ contract ArchimedesAPI is Swappable, ReentrancyGuard {
 
     // Update referral commission rate by the admin
     function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyAdmin {
-        require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "setReferralCommissionRate: invalid referral commission rate basis points");
+        require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "rate greater than MaxCommission");
         referralCommissionRate = _referralCommissionRate;
     }
 

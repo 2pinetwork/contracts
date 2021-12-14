@@ -25,7 +25,7 @@ describe('Archimedes setup', () => {
 
   it('should revert for old block number', async () => {
     await expect(Archimedes.deploy(PiToken.address, 0, WMATIC.address)).to.be.revertedWith(
-      'StartBlock should be in the future'
+      'StartBlock must be in the future'
     )
   })
 })
@@ -538,7 +538,7 @@ describe('Archimedes', () => {
       const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()) + 1
 
       await expect(archimedes.setReferralCommissionRate(max)).to.be.revertedWith(
-        'setReferralCommissionRate: invalid referral commission rate basis points'
+        'rate greater than MaxCommission'
       )
     })
   })

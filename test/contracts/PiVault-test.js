@@ -101,7 +101,7 @@ describe('PiVault', () => {
     it('Should not withdraw more than available', async () => {
       expect(
         piVault.withdraw(11)
-      ).to.be.revertedWith("Can't withdraw more than available")
+      ).to.be.revertedWith("Amount not available")
     })
   })
 
@@ -201,7 +201,7 @@ describe('PiVault', () => {
         toNumber(0.03e24)
       )
       expect(await piVault.foundersLeftToWithdraw(owner.address)).to.be.equal(0)
-      await expect(piVault.withdraw(1)).to.be.revertedWith("Can't withdraw more than expected")
+      await expect(piVault.withdraw(1)).to.be.revertedWith("Max withdraw reached")
     })
 
     it('should withdraw everything after 2 years', async () => {

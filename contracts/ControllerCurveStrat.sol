@@ -312,7 +312,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         uint minExpected = _balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
         if (minExpected > expected) { expected = minExpected; }
 
-        require(expected > 0, "remove_liquidity should expect more than 0");
+        require(expected > 0, "remove_liquidity expected = 0");
 
         ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
     }

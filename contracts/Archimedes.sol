@@ -62,7 +62,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     constructor(IPiToken _piToken, uint _startBlock, IWNative _wNative) {
         require(address(_piToken) != address(0), "Pi address !ZeroAddress");
-        require(_startBlock > blockNumber(), "StartBlock should be in the future");
+        require(_startBlock > blockNumber(), "StartBlock must be in the future");
 
         piToken = _piToken;
         startBlock = _startBlock;
@@ -252,7 +252,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         uint _before = wantBalance(pool.want);
         // this should burn shares and control the amount
         uint withdrawn = controller(_pid).withdraw(msg.sender, _shares);
-        require(withdrawn > 0, "Can't withdraw from controller...");
+        require(withdrawn > 0, "No funds withdrawn");
 
         uint _wantBalance = wantBalance(pool.want) - _before;
 
@@ -404,7 +404,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     // Update referral commission rate by the owner
     function setReferralCommissionRate(uint16 _referralCommissionRate) external onlyAdmin {
-        require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "setReferralCommissionRate: invalid referral commission rate basis points");
+        require(_referralCommissionRate <= MAXIMUM_REFERRAL_COMMISSION_RATE, "rate greater than MaxCommission");
         referralCommissionRate = _referralCommissionRate;
     }
 

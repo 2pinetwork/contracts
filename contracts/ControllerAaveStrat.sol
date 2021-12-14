@@ -73,8 +73,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         require(_want != address(0), "want !ZeroAddress");
         require(_controller != address(0), "Controller !ZeroAddress");
         require(_treasury != address(0), "Treasury !ZeroAddress");
-        require(_borrowRate <= _borrowRateMax, "Borrow can't be greater than MaxBorrow");
-        require(_borrowRateMax <= RATIO_PRECISION, "MaxBorrow can't be greater than 100%");
+        require(_borrowRate <= _borrowRateMax, "!Borrow <= MaxBorrow");
+        require(_borrowRateMax <= RATIO_PRECISION, "!MaxBorrow <= 100%");
 
         want = _want;
         borrowRate = _borrowRate;
