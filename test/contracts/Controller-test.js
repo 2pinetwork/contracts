@@ -35,7 +35,7 @@ describe('Controller wrong deployment', () => {
         owner.address,
         '2pi-WMATIC'
       )
-    ).to.be.revertedWith('Invalid PiToken on Farm')
+    ).to.be.revertedWith('Invalid PiToken on Archimedes')
   })
 
   it('Should not deploy with zero address treasury', async () => {
@@ -175,15 +175,15 @@ describe('Controller', () => {
   })
 
   describe('setFarmPid', async () => {
-    it('should be reverted for not farm', async () => {
-      await expect(controller.setFarmPid(0)).to.be.revertedWith('Not from farm')
+    it('should be reverted for not Archimedes', async () => {
+      await expect(controller.setPid(0)).to.be.revertedWith('Not from Archimedes')
     })
   })
 
   describe('Deposit', async () => {
-    it('should be reverted for not farm)', async () => {
+    it('should be reverted for not archimedes)', async () => {
       await expect(controller.deposit(bob.address, 10000)).to.be.revertedWith(
-        'Not from farm'
+        'Not from Archimedes'
       )
     })
     it('should be reverted for paused strategy', async () => {
@@ -193,7 +193,7 @@ describe('Controller', () => {
       await piToken.approve(archimedes.address, 10000)
 
       await expect(controller.deposit(bob.address, 10000)).to.be.revertedWith(
-        'Not from farm'
+        'Not from Archimedes'
       )
       await expect(archimedes.deposit(0, 10000, zeroAddress)).to.be.revertedWith(
         'Strategy paused'

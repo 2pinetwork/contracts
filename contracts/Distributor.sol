@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -50,7 +50,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
         piToken = IPiToken(_piToken);
         piVault = IPiVault(_piVault);
         treasury = _treasury;
-        lastBlock = blockNumber();
+        lastBlock = _blockNumber();
 
         // Will be changed for the right wallets before deploy
         founders[0] = address(0x1cC86b9b67C93B8Fa411554DB761f68979E7995A);
@@ -86,6 +86,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
     event TreasoryDistributed(uint amount);
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
@@ -93,7 +94,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
     }
 
     function distribute() external nonReentrant {
-        require(blockNumber() > lastBlock, "Have to wait");
+        require(_blockNumber() > lastBlock, "Have to wait");
         require(
             leftTokensForInvestors > 0 ||
             leftTokensForFounders > 0 ||
@@ -101,16 +102,16 @@ contract Distributor is PiAdmin, ReentrancyGuard {
             "Nothing more to do"
         );
 
-        uint multiplier = blockNumber() - lastBlock;
+        uint multiplier = _blockNumber() - lastBlock;
 
-        depositToInvestors(multiplier);
-        depositToFounders(multiplier);
-        transferToTreasury(multiplier);
+        _depositToInvestors(multiplier);
+        _depositToFounders(multiplier);
+        _transferToTreasury(multiplier);
 
-        lastBlock = blockNumber();
+        lastBlock = _blockNumber();
     }
 
-    function depositToInvestors(uint multiplier) internal {
+    function _depositToInvestors(uint multiplier) internal {
         if (leftTokensForInvestors <= 0) { return; }
 
         uint amount = multiplier * INVESTOR_PER_BLOCK * INVESTORS_TICKETS;
@@ -139,7 +140,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
         emit InvestorsDistributed(amount);
     }
 
-    function depositToFounders(uint multiplier) internal {
+    function _depositToFounders(uint multiplier) internal {
         if (leftTokensForFounders <= 0) { return; }
 
         uint amount = multiplier * FOUNDER_PER_BLOCK * FOUNDERS_COUNT;
@@ -166,7 +167,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
         emit FoundersDistributed(amount);
     }
 
-    function transferToTreasury(uint multiplier) internal {
+    function _transferToTreasury(uint multiplier) internal {
         // Just in case of division "rest"
         uint shares = piVault.balanceOf(address(this));
         if (shares > 0) { piVault.safeTransfer(treasury, shares); }
@@ -189,7 +190,7 @@ contract Distributor is PiAdmin, ReentrancyGuard {
     }
 
     // Only to be mocked
-    function blockNumber() internal view virtual returns (uint) {
+    function _blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
 }

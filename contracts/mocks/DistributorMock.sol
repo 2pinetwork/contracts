@@ -12,7 +12,7 @@ contract DistributorMock is Distributor {
         mockedBlockNumber = _n;
     }
 
-    function blockNumber() internal view override returns (uint) {
+    function _blockNumber() internal view override returns (uint) {
         return mockedBlockNumber == 0 ? block.number : mockedBlockNumber;
     }
 }
