@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "hardhat/console.sol";
@@ -18,11 +18,13 @@ abstract contract Swappable is PiAdmin {
     uint public maxPriceOffset = 600; // 10 minutes
 
     function setSwapSlippageRatio(uint _ratio) external onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != swapSlippageRatio, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         swapSlippageRatio = _ratio;
     }
 
     function setMaxPriceOffset(uint _offset) external onlyAdmin {
+        require(_offset != maxPriceOffset, "Same offset");
         require(_offset <= 86400, "Can't be more than 1 day");
         maxPriceOffset = _offset;
     }
@@ -50,13 +52,13 @@ abstract contract Swappable is PiAdmin {
             (10 ** IERC20Metadata(_fromToken).decimals()) / (10 ** IERC20Metadata(_toToken).decimals())
         ) * SWAP_PRECISION;
         uint ratio = (
-            (getPriceFor(_fromToken) * SWAP_PRECISION) / getPriceFor(_toToken)
+            (_getPriceFor(_fromToken) * SWAP_PRECISION) / _getPriceFor(_toToken)
         ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
 
         return (_amount * ratio / tokenDiffPrecision);
     }
 
-    function getPriceFor(address _token) internal view returns (uint) {
+    function _getPriceFor(address _token) internal view returns (uint) {
         // This could be implemented with FeedRegistry but it's not available in polygon
         (, int price,,uint timestamp,) = oracles[_token].latestRoundData();
 

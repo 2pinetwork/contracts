@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
-
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -9,21 +8,8 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
 import "./Swappable.sol";
-
-interface ICurvePool {
-    // _use_underlying If True, withdraw underlying assets instead of aTokens
-    function add_liquidity(uint[2] calldata amounts, uint min_mint_amount, bool _use_underlying) external;
-    function remove_liquidity_one_coin(uint _token_amount, int128 i, uint _min_amount, bool _use_underlying) external returns (uint);
-    function calc_withdraw_one_coin(uint _token_amount, int128 i) external view returns (uint);
-    function calc_token_amount(uint[2] calldata _amounts, bool is_deposit) external view returns (uint);
-}
-
-interface IRewardsGauge {
-    function balanceOf(address account) external view returns (uint);
-    function claim_rewards(address _addr) external;
-    function deposit(uint _value) external;
-    function withdraw(uint _value) external;
-}
+import "../interfaces/ICurvePool.sol";
+import "../interfaces/IRewardsGauge.sol";
 
 contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -80,6 +66,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
 
@@ -87,6 +74,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != exchange, "Same address");
         require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 
@@ -94,14 +82,19 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setWNativeSwapRoute(address[] calldata _route) external onlyAdmin {
+        require(_route[0] == WNATIVE, "First route isn't wNative");
+        require(_route[_route.length - 1] == BTC, "Last route isn't BTC");
         wNativeToBtcRoute = _route;
     }
 
     function setCrvSwapRoute(address[] calldata _route) external onlyAdmin {
+        require(_route[0] == CRV, "First route isn't CRV");
+        require(_route[_route.length - 1] == BTC, "Last route isn't BTC");
         crvToBtcRoute = _route;
     }
 
     function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
+        require(_fee != performanceFee, "Same fee");
         require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
         emit NewPerformanceFee(performanceFee, _fee);
 
@@ -109,16 +102,19 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function setPoolMinVirtualPrice(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != poolMinVirtualPrice, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         poolMinVirtualPrice = _ratio;
     }
 
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != poolSlippageRatio, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         poolSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
-        require(_ratio <= RATIO_PRECISION, "can't be more than 100%");
+        require(_ratio != ratioForFullWithdraw, "Same ratio");
+        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         ratioForFullWithdraw = _ratio;
     }
 
@@ -141,7 +137,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
                 if (_balance < perfFee) {
                     uint _diff = perfFee - _balance;
 
-                    withdrawBtc(_diff, false);
+                    _withdrawBtc(_diff, false);
                 }
 
                 // Just in case
@@ -193,9 +189,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
             // If the requested amount is greater than xx% of the founds just withdraw everything
             if (_amount > (poolBalance * ratioForFullWithdraw / RATIO_PRECISION)) {
-                withdrawBtc(0, true);
+                _withdrawBtc(0, true);
             } else {
-                withdrawBtc(_amount, false);
+                _withdrawBtc(_amount, false);
             }
 
             _balance = btcBalance();
@@ -217,9 +213,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     function harvest() public nonReentrant {
         uint _before = btcBalance();
 
-        claimRewards();
-        swapWMaticRewards();
-        swapCrvRewards();
+        _claimRewards();
+        _swapWMaticRewards();
+        _swapCrvRewards();
 
         uint harvested = btcBalance() - _before;
 
@@ -238,11 +234,11 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
-    function claimRewards() internal {
+    function _claimRewards() internal {
         IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
-    function swapWMaticRewards() internal {
+    function _swapWMaticRewards() internal {
         uint _balance = wNativeBalance();
 
         if (_balance > 0) {
@@ -259,7 +255,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         }
     }
 
-    function swapCrvRewards() internal {
+    function _swapCrvRewards() internal {
         uint _balance = crvBalance();
 
         if (_balance > 0) {
@@ -279,7 +275,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     /**
      * @dev Takes out performance fee.
      */
-    function chargeFees(uint _harvested) internal {
+    function _chargeFees(uint _harvested) internal {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
@@ -287,7 +283,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     }
 
     // amount is the BTC expected to be withdrawn
-    function withdrawBtc(uint _amount, bool _maxWithdraw) internal {
+    function _withdrawBtc(uint _amount, bool _maxWithdraw) internal {
         uint btcCrvAmount;
 
         if (_maxWithdraw) {
@@ -312,7 +308,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         uint minExpected = _balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
         if (minExpected > expected) { expected = minExpected; }
 
-        require(expected > 0, "remove_liquidity should expect more than 0");
+        require(expected > 0, "remove_liquidity expected = 0");
 
         ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
     }
@@ -374,7 +370,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         if (!paused()) { _pause(); }
 
         // max withdraw can fail if not staked (in case of panic)
-        if (balanceOfPool() > 0) { withdrawBtc(0, true); }
+        if (balanceOfPool() > 0) { _withdrawBtc(0, true); }
 
         // Can be called without rewards
         harvest();
@@ -385,7 +381,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
 
     // pauses deposits and withdraws all funds from third party systems.
     function panic() external onlyAdmin nonReentrant {
-        withdrawBtc(0, true); // max withdraw
+        _withdrawBtc(0, true); // max withdraw
         pause();
     }
 

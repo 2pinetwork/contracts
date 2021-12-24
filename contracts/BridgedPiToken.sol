@@ -36,15 +36,15 @@ contract BridgedPiToken is PiAdmin {
         piToken = _piToken;
     }
 
-    function initRewardsOn(uint _blockNumber) external onlyAdmin {
+    function initRewardsOn(uint __blockNumber) external onlyAdmin {
         require(tranchesBlock <= 0, "Already set");
-        tranchesBlock = _blockNumber;
+        tranchesBlock = __blockNumber;
     }
 
     // Before change api or community RatePerBlock or before mintForMultiChain is called
     // Calculate and accumulate the un-minted amounts.
     function _beforeChangeMintRate() internal {
-        if (tranchesBlock > 0 && blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
+        if (tranchesBlock > 0 && _blockNumber() > tranchesBlock && (apiMintPerBlock > 0 || communityMintPerBlock > 0)) {
             // Accumulate both proportions to keep track of "un-minted" amounts
             apiReserveFromOldTranches += _leftToMintForCurrentBlock(API_TYPE);
             communityReserveFromOldTranches += _leftToMintForCurrentBlock(COMMUNITY_TYPE);
@@ -52,12 +52,16 @@ contract BridgedPiToken is PiAdmin {
     }
 
     function setCommunityMintPerBlock(uint _rate) external onlyAdmin {
+        require(_rate != communityMintPerBlock, "Same rate");
+
         _beforeChangeMintRate();
         communityMintPerBlock = _rate;
         _updateCurrentTranch();
     }
 
     function setApiMintPerBlock(uint _rate) external onlyAdmin {
+        require(_rate != apiMintPerBlock, "Same rate");
+
         _beforeChangeMintRate();
         apiMintPerBlock = _rate;
         _updateCurrentTranch();
@@ -65,8 +69,8 @@ contract BridgedPiToken is PiAdmin {
 
     function _updateCurrentTranch() internal {
         // Update variables to making calculations from this moment
-        if (tranchesBlock > 0 && blockNumber() > tranchesBlock) {
-            tranchesBlock = blockNumber();
+        if (tranchesBlock > 0 && _blockNumber() > tranchesBlock) {
+            tranchesBlock = _blockNumber();
         }
 
         // mintedForCurrentTranch = self().totalSupply();
@@ -90,7 +94,7 @@ contract BridgedPiToken is PiAdmin {
         require(_receiver != address(0), "Can't mint to zero address");
         require(_supply > 0, "Insufficient supply");
         require(tranchesBlock > 0, "Rewards not initialized");
-        require(tranchesBlock < blockNumber(), "Still waiting for rewards block");
+        require(tranchesBlock < _blockNumber(), "Still waiting for rewards block");
         require(available() >= _supply, "Can't mint more than available");
 
         uint _ratePerBlock = communityMintPerBlock;
@@ -149,9 +153,9 @@ contract BridgedPiToken is PiAdmin {
     }
 
     function _leftToMintForCurrentBlock(uint _type) internal view returns (uint) {
-        if (tranchesBlock <= 0 || tranchesBlock > blockNumber()) { return 0; }
+        if (tranchesBlock <= 0 || tranchesBlock > _blockNumber()) { return 0; }
 
-       uint left = blockNumber() - tranchesBlock;
+       uint left = _blockNumber() - tranchesBlock;
 
        if (_type == API_TYPE) {
            left *= apiMintPerBlock;
@@ -191,7 +195,7 @@ contract BridgedPiToken is PiAdmin {
     }
 
     // Implemented to be mocked in tests
-    function blockNumber() internal view virtual returns (uint) {
+    function _blockNumber() internal view virtual returns (uint) {
         return block.number;
     }
 }

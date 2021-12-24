@@ -149,13 +149,14 @@ describe('Controller Aave Strat', () => {
 
 
     it('Should set the swap route', async () => {
-      expect(await strat.wNativeToWantRoute(0)).to.not.equal(piToken.address)
-      expect(await strat.wNativeToWantRoute(1)).to.not.equal(WMATIC.address)
+      expect(await strat.wNativeToWantRoute(0)).to.equal(WMATIC.address)
+      expect(await strat.wNativeToWantRoute(1)).to.equal(piToken.address)
 
-      await strat.setSwapRoute([piToken.address, WMATIC.address])
+      await strat.setSwapRoute([WMATIC.address, CRV.address, piToken.address])
 
-      expect(await strat.wNativeToWantRoute(0)).to.equal(piToken.address)
-      expect(await strat.wNativeToWantRoute(1)).to.equal(WMATIC.address)
+      expect(await strat.wNativeToWantRoute(0)).to.equal(WMATIC.address)
+      expect(await strat.wNativeToWantRoute(1)).to.equal(CRV.address)
+      expect(await strat.wNativeToWantRoute(2)).to.equal(piToken.address)
     })
   })
 
@@ -459,7 +460,7 @@ describe('Controller Aave Strat', () => {
     it('should be reverted for big ratio', async () => {
       await expect(
         strat.setSwapSlippageRatio(10001)
-      ).to.be.revertedWith("can't be more than 100%")
+      ).to.be.revertedWith("Can't be more than 100%")
     })
     it('should be changed', async () => {
       expect(await strat.swapSlippageRatio()).to.not.be.equal(123)
@@ -477,7 +478,7 @@ describe('Controller Aave Strat', () => {
     it('should be reverted for big ratio', async () => {
       await expect(
         strat.setRatioForFullWithdraw(10001)
-      ).to.be.revertedWith("can't be more than 100%")
+      ).to.be.revertedWith("Can't be more than 100%")
     })
     it('should be changed', async () => {
       expect(await strat.ratioForFullWithdraw()).to.not.be.equal(123)

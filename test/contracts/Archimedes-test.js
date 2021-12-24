@@ -19,7 +19,7 @@ describe('Archimedes setup', () => {
 
   it('should revert for old block number', async () => {
     await expect(Archimedes.deploy(PiToken.address, 0, WMATIC.address)).to.be.revertedWith(
-      'StartBlock should be in the future'
+      'StartBlock must be in the future'
     )
   })
 })
@@ -71,7 +71,7 @@ describe('Archimedes', () => {
       ).to.be.revertedWith('Address zero not allowed')
     })
 
-    it('Should reverse with non-farm controller', async () => {
+    it('Should reverse with non-archimedes controller', async () => {
       const otherFarm = await deploy(
         'Archimedes',
         piToken.address,
@@ -83,7 +83,7 @@ describe('Archimedes', () => {
 
       expect(
         archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
-      ).to.be.revertedWith('Not a farm controller')
+      ).to.be.revertedWith('Not an Archimedes controller')
     })
 
     it('Should reverse for controller without strategy', async () => {
@@ -463,7 +463,7 @@ describe('Archimedes', () => {
       const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()) + 1
 
       await expect(archimedes.setReferralCommissionRate(max)).to.be.revertedWith(
-        'setReferralCommissionRate: invalid referral commission rate basis points'
+        'rate greater than MaxCommission'
       )
     })
   })

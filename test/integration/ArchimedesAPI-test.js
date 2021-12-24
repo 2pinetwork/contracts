@@ -31,7 +31,7 @@ describe('ArchimedesAPI setup', () => {
     await expect(ArchimedesAPI.deploy(
       PiToken.address, 0, owner.address
     )).to.be.revertedWith(
-      'StartBlock should be in the future'
+      'StartBlock must be in the future'
     )
   })
 
@@ -79,7 +79,9 @@ describe('ArchimedesAPI', () => {
 
     await waitFor(archimedes.setReferralAddress(refMgr.address))
     await waitFor(piToken.addMinter(archimedes.address))
-    await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
+    if ((await piToken.apiMintPerBlock()) != 0.09691e18) {
+      await waitFor(piToken.setApiMintPerBlock(0.09691e18 + ''))
+    }
 
     expect(await archimedes.piToken()).to.equal(piToken.address)
     expect(await archimedes.poolLength()).to.equal(0)
@@ -156,7 +158,7 @@ describe('ArchimedesAPI', () => {
       ).to.be.revertedWith('Address zero not allowed')
     })
 
-    it('Should reverse with non-farm controller', async () => {
+    it('Should reverse with non-archimedes controller', async () => {
       const otherFarm = await deploy(
         'ArchimedesAPI',
         piToken.address,
@@ -168,7 +170,7 @@ describe('ArchimedesAPI', () => {
 
       expect(
         archimedes.addNewPool(piToken.address, otherCtroller.address, 1, false)
-      ).to.be.revertedWith('Not a farm controller')
+      ).to.be.revertedWith('Not an Archimedes controller')
     })
 
     it('Should reverse for controller without strategy', async () => {
@@ -606,7 +608,7 @@ describe('ArchimedesAPI', () => {
       const max = (await archimedes.MAXIMUM_REFERRAL_COMMISSION_RATE()) + 1
 
       await expect(archimedes.setReferralCommissionRate(max)).to.be.revertedWith(
-        'setReferralCommissionRate: invalid referral commission rate basis points'
+        'rate greater than MaxCommission'
       )
     })
   })

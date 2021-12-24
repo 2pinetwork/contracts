@@ -6,13 +6,10 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+
 
 import "./Swappable.sol";
-
-interface IPiVault {
-    function piToken() external view returns (address);
-}
+import "../interfaces/IPiVault.sol";
 
 // Swappable contract has the AccessControl module
 contract FeeManager is Swappable, ReentrancyGuard {
@@ -84,18 +81,21 @@ contract FeeManager is Swappable, ReentrancyGuard {
     }
 
     function setTreasuryRatio(uint _ratio) external onlyAdmin nonReentrant {
+        require(_ratio != treasuryRatio, "Same ratio");
         require(_ratio <= MAX_TREASURY_RATIO, "Can't be greater than 50%");
         emit NewTreasuryRatio(treasuryRatio, _ratio);
         treasuryRatio = _ratio;
     }
 
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+        require(_treasury != treasury, "Same Address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
         treasury = _treasury;
     }
 
     function setExchange(address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != exchange, "Same Address");
         require(_exchange != address(0), "!ZeroAddress");
         emit NewExchange(exchange, _exchange);
 

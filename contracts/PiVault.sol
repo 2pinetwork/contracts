@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -105,7 +105,7 @@ contract PiVault is ERC20, PiAdmin, ReentrancyGuard {
      * @dev Function to exit the system. The vault will pay up the piToken holder.
      */
     function withdraw(uint _shares) public nonReentrant {
-        require(_shares <= balanceOf(msg.sender), "Can't withdraw more than available");
+        require(_shares <= balanceOf(msg.sender), "Amount not available");
 
         uint r = balance() * _shares / totalSupply();
 
@@ -135,7 +135,7 @@ contract PiVault is ERC20, PiAdmin, ReentrancyGuard {
 
             // This branch is for the 2º year (between investors release and founders release)
             if (block.timestamp <= foundersLockTime) {
-                require(_amount <= foundersLeftToWithdraw[msg.sender], "Can't withdraw more than expected");
+                require(_amount <= foundersLeftToWithdraw[msg.sender], "Max withdraw reached");
                 // Accumulate withdrawn for founder
                 // (will revert if the amount is greater than the left to withdraw)
                 foundersLeftToWithdraw[msg.sender] -= _amount;
