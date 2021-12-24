@@ -65,7 +65,12 @@ if (isIntegration) {
 
 module.exports = {
   etherscan: {
-    apiKey: process.env.POLYGON_API_KEY
+    apiKey: {
+      avalanche:            process.env.AVALANCHE_SCAN_API_KEY,
+      avalancheFujiTestnet: process.env.AVALANCHE_SCAN_API_KEY,
+      polygon:              process.env.POLYGON_SCAN_API_KEY,
+      polygonMumbai:        process.env.POLYGON_SCAN_API_KEY
+    }
   },
   tenderly: {
     project:  process.env.TENDERLY_PROJECT,
@@ -107,7 +112,8 @@ module.exports = {
       network_id: 137,
     },
     mumbai: {
-      url:        'https://rpc-mumbai.maticvigil.com',
+      url:        'https://polygon-mumbai.g.alchemy.com/v2/TtkAvDHwt8_PFPo3n9WZiZ8v4zP8324V',
+      // url:        'https://rpc-mumbai.maticvigil.com',
       accounts:   accounts,
       network_id: 80001,
     },

@@ -51,7 +51,7 @@ contract PiToken is NativeSuperTokenProxy, PiAdmin {
     function init() external onlyAdmin {
         require(self().totalSupply() <= 0, "Already initialized");
 
-        self().initialize(IERC20(address(0x0)), 18, '2Pi', '2Pi');
+        self().initialize(IERC20(address(0x0)), 18, 'Test-2Pi', 'Test-2Pi');
 
         _ERC1820_REGISTRY.setInterfaceImplementer(
             address(this),
