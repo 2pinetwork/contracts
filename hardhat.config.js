@@ -112,7 +112,7 @@ module.exports = {
       network_id: 137,
     },
     mumbai: {
-      url:        'https://polygon-mumbai.g.alchemy.com/v2/TtkAvDHwt8_PFPo3n9WZiZ8v4zP8324V',
+      url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
       // url:        'https://rpc-mumbai.maticvigil.com',
       accounts:   accounts,
       network_id: 80001,
@@ -134,6 +134,13 @@ module.exports = {
       network_id: 43113,
       chainId:    43113,
       accounts:   accounts,
+      timeout:    60000
+    },
+    avax: {
+      url:        'https://api.avax.network/ext/bc/C/rpc',
+      network_id: 43114,
+      chainId:    43114,
+      accounts:   process.env.DEPLOYER ? [process.env.DEPLOYER] : accounts,
       timeout:    60000
     },
     ganache: {
