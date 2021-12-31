@@ -51,4 +51,10 @@ interface IBalancerV2Vault {
         uint256[] memory balances,
         uint256 lastChangeBlock
     );
+
+    function getPool(bytes32 poolId) external view returns (address, uint8);
+}
+
+interface IBalancerPool {
+    function getRate() external view returns (uint);
 }

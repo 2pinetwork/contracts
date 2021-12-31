@@ -14,21 +14,25 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address public immutable want;
-    address public immutable poolId;
-    IBalancerV2Vault public immutable pool;
+    bytes32 public immutable poolId;
+    IBalancerV2Vault public immutable vault;
 
     // Pool settings
-    uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
-    // uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
-    // Min % to add/remove to an amount to conver BTC<=>BTCCRV
-    // The virtualPrice will ALWAYS be greater than 1.0 (in other case we're loosing BTC
-    // so we only consider the decimal part
-    uint public poolMinVirtualPrice = 100; // 1.0%
+    uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw]
+    uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
+    // JoinKind { INIT = 0, EXACT_TOKENS_IN_FOR_BPT_OUT = 1, TOKEN_IN_FOR_EXACT_BPT_OUT = 2}
+    uint public constant JOIN_KIND = 1;
+    // ExitKind {EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0, EXACT_BPT_IN_FOR_TOKENS_OUT = 1, BPT_IN_FOR_EXACT_TOKENS_OUT = 2}
+    uint public constant EXACT_BPT_IN_FOR_ONE_TOKEN_OUT = 0;
+    uint public constant BPT_IN_FOR_EXACT_TOKENS_OUT = 2;
+    uint public immutable WANT_PRECISION;
+    uint public constant SHARES_PRECISION = 1e18; // same as BPT token
+
+    // Rewards
+    address[] public rewardsTokens;
 
     // Routes for Swap
     mapping(address => address[]) tokenRoutes;
-    // address[] public wNativeToBtcRoute = [WNATIVE, ETH, BTC];
-    // address[] public crvToBtcRoute = [CRV, ETH, BTC];
 
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
@@ -39,20 +43,24 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
     address public exchange;
     address public immutable controller; // immutable to prevent anyone to change it and withdraw
 
-    constructor(IBalancerV2Vault _pool, bytes32 _poolId, address _want, address _controller, address _exchange, address _treasury) {
-        require(_pool.getPoolTokens().length > 0, "Pool without tokens");
+    constructor(IBalancerV2Vault _vault, bytes32 _poolId, address _want, address _controller, address _exchange, address _treasury) {
         require(_poolId != "", "Empty poolId");
         require(_want != address(0), "Want !ZeroAddress");
         require(_controller != address(0), "Controller !ZeroAddress");
         require(_exchange != address(0), "Exchange !ZeroAddress");
         require(_treasury != address(0), "Treasury !ZeroAddress");
 
-        pool = _pool;
+        vault = _vault;
         poolId = _poolId;
         want = _want;
         controller = _controller;
         exchange = _exchange;
         treasury = _treasury;
+
+        // USDT / USDC has less decimal precision
+        WANT_PRECISION = 1e18 / (10 ** IERC20Metadata(_want).decimals());
+
+        require(_assets().length > 0, "Vault without tokens");
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -97,19 +105,19 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
         performanceFee = _fee;
     }
 
-    function setPoolMinVirtualPrice(uint _ratio) public onlyAdmin {
-        require(_ratio != poolMinVirtualPrice, "Same ratio");
+    function setPoolSlippageRatio(uint _ratio) external onlyAdmin {
+        require(_ratio != poolSlippageRatio, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
-        poolMinVirtualPrice = _ratio;
+        poolSlippageRatio = _ratio;
     }
 
-    function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
+    function setRatioForFullWithdraw(uint _ratio) external onlyAdmin {
         require(_ratio != ratioForFullWithdraw, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
         ratioForFullWithdraw = _ratio;
     }
 
-    // Charge BTC auto-generation with performanceFee
+    // Charge want auto-generation with performanceFee
     // Basically we assign `lastBalance` with current balance each time that
     // we charge or make a movement.
     function beforeMovement() external onlyController nonReentrant {
@@ -123,20 +131,20 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
             uint perfFee = ((currentBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
 
             if (perfFee > 0) {
-                uint _balance = btcBalance();
+                uint _balance = wantBalance();
 
                 if (_balance < perfFee) {
                     uint _diff = perfFee - _balance;
 
-                    _withdrawBtc(_diff, false);
+                    _withdraw(_diff);
                 }
 
                 // Just in case
-                _balance = btcBalance();
+                _balance = wantBalance();
                 if (_balance < perfFee) { perfFee = _balance; }
 
                 if (perfFee > 0) {
-                    IERC20(BTC).safeTransfer(treasury, perfFee);
+                    IERC20(want).safeTransfer(treasury, perfFee);
                     emit PerformanceFee(perfFee);
                 }
             }
@@ -154,62 +162,67 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function _deposit() internal {
-        (IERC20[] memory poolTokens,,) = pool.getPoolTokens(poolId);
-        IAsset[] memory tokens = new IAsset[](poolTokens.length);
-        uint[] memory amounts = new uint[](poolTokens.length);
+        IAsset[] memory tokens = _assets();
+        uint[] memory amounts = new uint[](tokens.length);
 
-        uint bal = wantBalance();
-        if (bal > 0) {
-            for (uint i = 0; i < poolTokens.length; i++) {
-                // assign index of want
-                if (address(poolTokens[i]) == want) {
-                    amounts[i] = bal;
-                } else {
-                    amounts[i] = 0;
-                }
+        uint _balance = wantBalance();
 
-                tokens[i] = IAsset(address(poolTokens[i]));
+        for (uint i = 0; i < tokens.length; i++) {
+            // assign index of want
+            if (address(tokens[i]) == want) {
+                amounts[i] = _balance;
+            } else {
+                amounts[i] = 0;
             }
-
-            // StablePoolJoinKind { INIT = 0, EXACT_TOKENS_IN_FOR_BPT_OUT = 1, TOKEN_IN_FOR_EXACT_BPT_OUT = 2}
-            uint expected = bal * 9900 / 10000;
-            bytes userData = abi.encode([1, amounts, expected]);
-
-
-            pool.joinPool(
-                poolId,
-                address(this),
-                address(this),
-                JoinPoolRequest({
-                    assets: poolTokens,
-                    maxAmountsIn: amounts,
-                    userData: userData,
-                    fromInternalBalance: false
-                })
-            );
         }
+
+        uint expected = _balance * WANT_PRECISION * SHARES_PRECISION / _pricePerShare();
+
+        require(expected > 0, "Insufficient expected amount");
+
+        bytes memory userData = abi.encode(JOIN_KIND, amounts, expected);
+
+        IERC20(want).safeApprove(address(vault), _balance);
+
+        vault.joinPool(
+            poolId,
+            address(this),
+            address(this),
+            IBalancerV2Vault.JoinPoolRequest({
+                assets: tokens,
+                maxAmountsIn: amounts,
+                userData: userData,
+                fromInternalBalance: false
+            })
+        );
+
+        console.log("Balance despues de depositar:", balanceOfPoolInWant());
+        console.log("Balance despues de depositar en BPT:", balanceOfPool());
     }
 
     function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
-        uint _balance = btcBalance();
+        uint _balance = wantBalance();
 
+        console.log("Balance antes de sacar:", balanceOfPoolInWant());
+        console.log("Balance antes de sacar en BPT:", balanceOfPool());
         if (_balance < _amount) {
-            uint poolBalance = balanceOfPoolInBtc();
+            uint vaultBalance = balanceOfPoolInWant();
 
             // If the requested amount is greater than xx% of the founds just withdraw everything
-            if (_amount > (poolBalance * ratioForFullWithdraw / RATIO_PRECISION)) {
-                _withdrawBtc(0, true);
+            if (_amount > (vaultBalance * ratioForFullWithdraw / RATIO_PRECISION)) {
+                _withdrawAll();
             } else {
-                _withdrawBtc(_amount, false);
+                _withdraw(_amount);
             }
 
-            _balance = btcBalance();
+            _balance = wantBalance();
 
             if (_balance < _amount) { _amount = _balance; }
         }
 
-
-        IERC20(BTC).safeTransfer(controller, _amount);
+        console.log("Balance antes de sacar:", balanceOfPoolInWant());
+        console.log("Balance antes de sacar en BPT:", balanceOfPool());
+        IERC20(want).safeTransfer(controller, _amount);
 
         // Redeposit
         if (!paused()) { _deposit(); }
@@ -220,13 +233,13 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
     }
 
     function harvest() public nonReentrant {
-        uint _before = btcBalance();
+        uint _before = wantBalance();
 
         _claimRewards();
-        _swapWMaticRewards();
-        _swapCrvRewards();
+        // _swapWMaticRewards();
+        // _swapCrvRewards();
 
-        uint harvested = btcBalance() - _before;
+        uint harvested = wantBalance() - _before;
 
         // Charge performance fee for earned want + rewards
         _beforeMovement();
@@ -237,49 +250,16 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
         // Update lastBalance for the next movement
         _afterMovement();
 
-        emit Harvested(BTC, harvested);
+        emit Harvested(want, harvested);
     }
 
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
     function _claimRewards() internal {
-        IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
+        // IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
-    function _swapWMaticRewards() internal {
-        uint _balance = wNativeBalance();
-
-        if (_balance > 0) {
-            uint expected = _expectedForSwap(_balance, WNATIVE, BTC);
-
-            // BTC price is too high so sometimes it requires a lot of rewards to swap
-            if (expected > 1) {
-                IERC20(WNATIVE).safeApprove(exchange, _balance);
-
-                IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _balance, expected, wNativeToBtcRoute, address(this), block.timestamp + 60
-                );
-            }
-        }
-    }
-
-    function _swapCrvRewards() internal {
-        uint _balance = crvBalance();
-
-        if (_balance > 0) {
-            uint expected = _expectedForSwap(_balance, CRV, BTC);
-
-            // BTC price is too high so sometimes it requires a lot of rewards to swap
-            if (expected > 1) {
-
-                IERC20(CRV).safeApprove(exchange, _balance);
-                IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
-                );
-            }
-        }
-    }
 
     /**
      * @dev Takes out performance fee.
@@ -288,90 +268,104 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
-        if (fee > 0) { IERC20(BTC).safeTransfer(treasury, fee); }
+        if (fee > 0) { IERC20(want).safeTransfer(treasury, fee); }
     }
 
-    // amount is the BTC expected to be withdrawn
-    function _withdrawBtc(uint _amount, bool _maxWithdraw) internal {
-        uint btcCrvAmount;
+    // amount is the want expected to be withdrawn
+    function _withdraw(uint _amount) internal {
+        IAsset[] memory tokens = _assets();
+        uint[] memory amounts = new uint[](tokens.length);
 
-        if (_maxWithdraw) {
-            btcCrvAmount = balanceOfPool();
-        } else {
-            // To know how much we have to un-stake we use the same method to
-            // calculate the expected BTCCRV at deposit
-            btcCrvAmount = _btcToBtcCrvDoubleCheck(_amount, false);
-        }
+        uint _balance = wantBalance();
+        if (_balance < _amount) {
+            uint diff = _amount - _balance;
 
-        // Remove staked from gauge
-        IRewardsGauge(REWARDS_GAUGE).withdraw(btcCrvAmount);
+            for (uint i = 0; i < tokens.length; i++) {
+                // assign index of want
+                if (address(tokens[i]) == want) { amounts[i] = diff; }
+            }
 
-        // remove_liquidity
-        uint _balance = btcCRVBalance();
-        // Calculate at least xx% of the expected. The function doesn't
-        // consider the fee.
-        uint expected = (calc_withdraw_one_coin(_balance) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
 
-        // Double check for expected value
-        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap BTCCRV => BTC
-        uint minExpected = _balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
-        if (minExpected > expected) { expected = minExpected; }
+            // We put a little more than the expected amount because of the fees & the pool swaps
+            uint expected = (
+                diff * WANT_PRECISION * SHARES_PRECISION *
+                (RATIO_PRECISION + poolSlippageRatio) / RATIO_PRECISION /
+                _pricePerShare()
+            );
 
-        require(expected > 0, "remove_liquidity expected = 0");
+            require(expected > 0, "Insufficient expected amount");
 
-        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
-    }
+            bytes memory userData = abi.encode(BPT_IN_FOR_EXACT_TOKENS_OUT, amounts, expected);
 
-    function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
-        // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
-        // the expected amount is represented with 18 decimals as crvBtc token
-        // so we have to add 10 decimals to the btc balance.
-        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 BTCCRV tokens
-        return _amount * 1e10 * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
-    }
-
-    function _btcToBtcCrvDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint btcCrvAmount) {
-        uint[2] memory amounts = [_amount, 0];
-        // calc_token_amount doesn't consider fee
-        btcCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, _isDeposit);
-        // Remove max fee
-        btcCrvAmount = btcCrvAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
-
-        // In case the pool is unbalanced (attack), make a double check for
-        // the expected amount with minExpected set ratios.
-        uint btcToBtcCrv = _minBtcToBtcCrv(_amount);
-
-        if (btcToBtcCrv > btcCrvAmount) { btcCrvAmount = btcToBtcCrv; }
-    }
-
-    function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
-        if (_amount > 0) {
-            return ICurvePool(CURVE_POOL).calc_withdraw_one_coin(_amount, 0);
-        } else {
-            return 0;
+            vault.exitPool(
+                poolId,
+                address(this),
+                payable(address(this)),
+                IBalancerV2Vault.ExitPoolRequest({
+                    assets: tokens,
+                    minAmountsOut: amounts,
+                    userData: userData,
+                    toInternalBalance: false
+                })
+            );
         }
     }
 
-    function btcBalance() public view returns (uint) {
-        return IERC20(BTC).balanceOf(address(this));
+    function _withdrawAll() internal {
+        IAsset[] memory tokens = _assets();
+        uint[] memory amounts = new uint[](tokens.length);
+
+        uint bpt_balance = balanceOfPool();
+        uint index = 0;
+
+        uint expected = (
+            bpt_balance * _pricePerShare() *
+            (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION /
+            WANT_PRECISION / SHARES_PRECISION
+        );
+
+        require(expected > 0, "Insufficient expected amount");
+
+        for (uint i = 0; i < tokens.length; i++) {
+            // assign index of want
+            if (address(tokens[i]) == want) {
+                index = i;
+                amounts[i] = expected;
+                break;
+            }
+        }
+
+        // Withdraw all the BPT directly
+        bytes memory userData = abi.encode(EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, bpt_balance, index);
+
+        vault.exitPool(
+            poolId,
+            address(this),
+            payable(address(this)),
+            IBalancerV2Vault.ExitPoolRequest({
+                assets: tokens,
+                minAmountsOut: amounts,
+                userData: userData,
+                toInternalBalance: false
+            })
+        );
+
+        // Not sure if the minAmountsOut are respected in this case so re-check
+        require(wantBalance() >= expected, "Less tokens than expected");
     }
-    function wNativeBalance() public view returns (uint) {
-        return IERC20(WNATIVE).balanceOf(address(this));
-    }
-    function crvBalance() public view returns (uint) {
-        return IERC20(CRV).balanceOf(address(this));
-    }
-    function btcCRVBalance() public view returns (uint) {
-        return IERC20(BTCCRV).balanceOf(address(this));
+
+    function wantBalance() public view returns (uint) {
+        return IERC20(want).balanceOf(address(this));
     }
     function balance() public view returns (uint) {
-        return btcBalance() + balanceOfPoolInBtc();
+        return wantBalance() + balanceOfPoolInWant();
     }
     function balanceOfPool() public view returns (uint) {
-        return IRewardsGauge(REWARDS_GAUGE).balanceOf(address(this));
+        (address pool,) = vault.getPool(poolId);
+        return IERC20(pool).balanceOf(address(this));
     }
-    function balanceOfPoolInBtc() public view returns (uint) {
-        return calc_withdraw_one_coin(balanceOfPool());
+    function balanceOfPoolInWant() public view returns (uint) {
+        return balanceOfPool() * _pricePerShare() / WANT_PRECISION / SHARES_PRECISION;
     }
 
     // called as part of strat migration. Sends all the available funds back to the vault.
@@ -379,18 +373,18 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
         if (!paused()) { _pause(); }
 
         // max withdraw can fail if not staked (in case of panic)
-        if (balanceOfPool() > 0) { _withdrawBtc(0, true); }
+        if (balanceOfPool() > 0) { _withdrawAll(); }
 
         // Can be called without rewards
         harvest();
 
         require(balanceOfPool() <= 0, "Strategy still has deposits");
-        IERC20(BTC).safeTransfer(controller, btcBalance());
+        IERC20(want).safeTransfer(controller, wantBalance());
     }
 
     // pauses deposits and withdraws all funds from third party systems.
     function panic() external onlyAdmin nonReentrant {
-        _withdrawBtc(0, true); // max withdraw
+        _withdrawAll(); // max withdraw
         pause();
     }
 
@@ -402,5 +396,23 @@ contract ControllerBalancerV2Strat is Swappable, Pausable, ReentrancyGuard {
         _unpause();
 
         _deposit();
+    }
+
+    function _pricePerShare() internal view returns (uint) {
+        (address pool,) = vault.getPool(poolId);
+
+        uint rate = IBalancerPool(pool).getRate();
+
+        require(rate > 1e18, "Under 1");
+
+        return rate;
+    }
+
+    function _assets() internal view returns (IAsset[] memory assets) {
+        (IERC20[] memory poolTokens,,) = vault.getPoolTokens(poolId);
+
+        for (uint i = 0; i < poolTokens.length; i++) {
+            assets[i] = IAsset(address(poolTokens[i]));
+        }
     }
 }
