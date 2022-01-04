@@ -171,7 +171,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     function _poolTokenToWantDoubleCheck(uint _amount) internal view returns (uint wantAmount) {
         // Calculate at least xx% of the expected. The function doesn't
         // consider the fee.
-        wantAmount = (calc_withdraw_one_coin(_amount) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
+        wantAmount = (calcWithdrawOneCoin(_amount) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
 
         uint minWant = _minPoolTokenToWant(_amount);
 
@@ -192,7 +192,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         if (wantToPoolToken > poolTokenAmount) { poolTokenAmount = wantToPoolToken; }
     }
 
-    function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
+    function calcWithdrawOneCoin(uint _amount) public view returns (uint) {
         if (_amount > 0) {
             return POOL.calc_withdraw_one_coin(_amount, TOKEN_INDEX);
         } else {
@@ -204,7 +204,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         return _amount;
     }
     function balanceOfPoolInWant() public view override returns (uint) {
-        return calc_withdraw_one_coin(balanceOfPool());
+        return calcWithdrawOneCoin(balanceOfPool());
     }
 
     function _amountToAmountsList(uint _amount) internal view returns (uint[TOKENS_COUNT] memory) {
