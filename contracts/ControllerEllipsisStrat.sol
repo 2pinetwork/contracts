@@ -8,44 +8,51 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
 import "./ControllerStratAbs.sol";
+import "../interfaces/IEps.sol";
 
-contract ControllerCurveStrat is ControllerStratAbs {
-    address constant public REWARD_TOKEN = address(0);
+contract ControllerEllipsisStrat is ControllerStratAbs {
+    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
 
-    constructor(IERC20Metadata _want, address _controller, address _exchange, address _treasury)
-        ControllerStratAbs(_want, _controller, _exchange, _treasury) {}
+    address constant public REWARD_TOKEN = address(0xA7f552078dcC247C2684336020c03648500C6d9F);
+    IEpsPool constant public POOL = IEpsPool(0x160CAed03795365F3A589f10C379FfA7d75d4E76);
+    IERC20 constant public POOL_TOKEN = IERC20(0xaF4dE8E872131AE328Ce21D909C74705d3Aaf452);
+    IEpsStaker constant public STAKE = IEpsStaker(0xcce949De564fE60e7f96C85e55177F8B9E4CF61b);
+    IEpsMultiFeeDistribution constant public FEE_DISTRIBUTION = IEpsMultiFeeDistribution(0x4076CC26EFeE47825917D0feC3A79d0bB9a6bB5c);
 
-    // function setWNativeSwapRoute(address[] calldata _route) external onlyAdmin {
-    //     require(_route[0] == WNATIVE, "First route isn't wNative");
-    //     require(_route[_route.length - 1] == BTC, "Last route isn't BTC");
-    //     wNativeToBtcRoute = _route;
-    // }
+    address[] rewardToWantRoute;
 
-    function _deposit() internal override {
-        // uint _balance = wantBalance();
+    int128 private immutable TOKEN_INDEX; // want token index in the pool
+    uint private constant TOKENS_COUNT = 3; // 3Eps pool
+    uint private constant STAKE_POOL_ID = 1; // 3Eps pool
 
-        // if (_balance > 0) {
-        //     uint[2] memory amounts = [_balance, 0];
-        //     // uint btcCrvAmount = _wantToPoolTokenDoubleCheck(wantBal, true);
+    constructor(
+        IERC20Metadata _want,
+        address _controller,
+        address _exchange,
+        address _treasury
+    ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
+        rewardToWantRoute = [REWARD_TOKEN, address(want)];
+        uint i = 0;
 
-        //     // IERC20(BTC).safeApprove(CURVE_POOL, wantBal);
-        //     // ICurvePool(CURVE_POOL).add_liquidity(amounts, btcCrvAmount, true);
-        // }
+        for (i; i < TOKENS_COUNT; i++) {
+            if (address(want) == POOL.coins(i)) { break; }
+        }
 
-        // uint _btcCRVBalance = btcCRVBalance();
+        TOKEN_INDEX = int128(uint128(i));
+    }
 
-        // if (_btcCRVBalance > 0) {
-        //     // IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, _btcCRVBalance);
-        //     // IRewardsGauge(REWARDS_GAUGE).deposit(_btcCRVBalance);
-        // }
+    function setRewardToWantRoute(address[] calldata _route) external onlyAdmin {
+        require(_route[0] == REWARD_TOKEN, "First route isn't REWARD");
+        require(_route[_route.length - 1] == address(want), "Last route isn't want");
+        rewardToWantRoute = _route;
     }
 
     function harvest() public nonReentrant override {
         uint _before = wantBalance();
 
         _claimRewards();
-        _swapWMaticRewards();
-        _swapCrvRewards();
+        _swapRewards();
 
         uint harvested = wantBalance() - _before;
 
@@ -61,108 +68,149 @@ contract ControllerCurveStrat is ControllerStratAbs {
         emit Harvested(address(want), harvested);
     }
 
+    function _deposit() internal override {
+        uint wantBal = wantBalance();
+
+        if (wantBal > 0) {
+            uint[TOKENS_COUNT] memory amounts = _amountToAmountsList(wantBal);
+
+            uint expected = _wantToPoolTokenDoubleCheck(wantBal, true);
+
+            want.safeApprove(address(POOL), wantBal);
+            POOL.add_liquidity(amounts, expected);
+        }
+
+        uint poolTokenBal = POOL_TOKEN.balanceOf(address(this));
+
+        if (poolTokenBal > 0) {
+            POOL_TOKEN.safeApprove(address(STAKE), poolTokenBal);
+            STAKE.deposit(STAKE_POOL_ID, poolTokenBal);
+        }
+    }
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
     function _claimRewards() internal {
-        // IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
+        uint[] memory pids = new uint[](1);
+        pids[0] = STAKE_POOL_ID;
+
+        STAKE.claim(pids);
+        FEE_DISTRIBUTION.exit();
     }
 
-    function _swapWMaticRewards() internal {
-        // uint _balance = wNativeBalance();
+    function _swapRewards() internal {
+        uint _balance = IERC20(REWARD_TOKEN).balanceOf(address(this));
 
-        // if (_balance > 0) {
-        //     // uint expected = _expectedForSwap(_balance, WNATIVE, BTC);
+        if (_balance > 0) {
+            uint expected = _expectedForSwap(_balance, REWARD_TOKEN, address(want));
 
-        //     // // BTC price is too high so sometimes it requires a lot of rewards to swap
-        //     // if (expected > 1) {
-        //     //     IERC20(WNATIVE).safeApprove(exchange, _balance);
+            // Want price sometimes is too high so it requires a lot of rewards to swap
+            if (expected > 1) {
+                IERC20(REWARD_TOKEN).safeApprove(exchange, _balance);
 
-        //     //     IUniswapRouter(exchange).swapExactTokensForTokens(
-        //     //         _balance, expected, wNativeToBtcRoute, address(this), block.timestamp + 60
-        //     //     );
-        //     // }
-        // }
-    }
-
-    function _swapCrvRewards() internal {
-        // uint _balance = crvBalance();
-
-        // if (_balance > 0) {
-        //     // uint expected = _expectedForSwap(_balance, CRV, BTC);
-
-        //     // // BTC price is too high so sometimes it requires a lot of rewards to swap
-        //     // if (expected > 1) {
-
-        //     //     IERC20(CRV).safeApprove(exchange, _balance);
-        //     //     IUniswapRouter(exchange).swapExactTokensForTokens(
-        //     //         _balance, expected, crvToBtcRoute, address(this), block.timestamp + 60
-        //     //     );
-        //     // }
-        // }
+                IUniswapRouter(exchange).swapExactTokensForTokens(
+                    _balance, 1, rewardToWantRoute, address(this), block.timestamp + 60
+                );
+            }
+        }
     }
 
     // amount is the BTC expected to be withdrawn
     function _withdraw(uint _amount) internal override returns (uint) {
-        return _amount;
-        // uint btcCrvAmount;
-
         // To know how much we have to un-stake we use the same method to
-        // calculate the expected BTCCRV at deposit
-        // btcCrvAmount = _wantToPoolTokenDoubleCheck(_amount, false);
+        // calculate the expected poolToken at deposit
+        uint poolTokenAmount = _wantToPoolTokenDoubleCheck(_amount, false);
 
-        // // Remove staked from gauge
-        // IRewardsGauge(REWARDS_GAUGE).withdraw(btcCrvAmount);
+        // Remove staked from gauge
+        STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
 
-        // // remove_liquidity
-        // uint _balance = btcCRVBalance();
-        // // Calculate at least xx% of the expected. The function doesn't
-        // // consider the fee.
-        // uint expected = (calc_withdraw_one_coin(_balance) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
+        // remove_liquidity
+        uint _balance = POOL_TOKEN.balanceOf(address(this));
+        uint expected = _poolTokenToWantDoubleCheck(_balance);
 
-        // // Double check for expected value
-        // // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap BTCCRV => BTC
-        // uint minExpected = _balance * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * 1e10);
-        // if (minExpected > expected) { expected = minExpected; }
+        require(expected > 0, "remove_liquidity expected = 0");
 
-        // require(expected > 0, "remove_liquidity expected = 0");
+        uint wantBal = wantBalance();
+        POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
 
-        // ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
+        return wantBalance() - wantBal;
     }
 
-    function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
+    function _withdrawAll() internal override returns (uint) {
+        // Remove everything from stake
+        uint poolTokenAmount = balanceOfPool();
+        STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
+
+        // remove_liquidity
+        uint _balance = POOL_TOKEN.balanceOf(address(this));
+        uint expected = _poolTokenToWantDoubleCheck(_balance);
+
+        require(expected > 0, "remove_liquidity expected = 0");
+
+        uint wantBal = wantBalance();
+        POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
+
+        return wantBalance() - wantBal;
+    }
+
+
+    function _minWantToPoolToken(uint _amount) internal view returns (uint) {
         // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
-        // the expected amount is represented with 18 decimals as crvBtc token
-        // so we have to add 10 decimals to the btc balance.
-        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 BTCCRV tokens
-        return _amount * 1e10 * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+        // the expected amount is represented with 18 decimals as POOL_TOKEN
+        // so we have to add X decimals to the want balance.
+        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 poolToken tokens
+        return _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+    }
+    function _minPoolTokenToWant(uint _amount) internal view returns (uint) {
+        // Double check for expected value
+        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap poolToken => BTC
+        return _amount * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * WANT_MISSING_PRECISION);
+
     }
 
-    function _wantToPoolTokenDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint btcCrvAmount) {
-        uint[2] memory amounts = [_amount, 0];
+    function _poolTokenToWantDoubleCheck(uint _amount) internal view returns (uint wantAmount) {
+        // Calculate at least xx% of the expected. The function doesn't
+        // consider the fee.
+        wantAmount = (calc_withdraw_one_coin(_amount) * (RATIO_PRECISION - poolSlippageRatio)) / RATIO_PRECISION;
+
+        uint minWant = _minPoolTokenToWant(_amount);
+
+        if (minWant > wantAmount) { wantAmount = minWant; }
+    }
+
+    function _wantToPoolTokenDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint poolTokenAmount) {
+        uint[TOKENS_COUNT] memory amounts = _amountToAmountsList(_amount);
         // calc_token_amount doesn't consider fee
-        // btcCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, _isDeposit);
-        // // Remove max fee
-        // btcCrvAmount = btcCrvAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
+        poolTokenAmount = POOL.calc_token_amount(amounts, _isDeposit);
+        // Remove max fee
+        poolTokenAmount = poolTokenAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
 
-        // // In case the pool is unbalanced (attack), make a double check for
-        // // the expected amount with minExpected set ratios.
-        // uint wantToPoolToken = _minBtcToBtcCrv(_amount);
+        // In case the pool is unbalanced (attack), make a double check for
+        // the expected amount with minExpected set ratios.
+        uint wantToPoolToken = _minWantToPoolToken(_amount);
 
-        // if (wantToPoolToken > btcCrvAmount) { btcCrvAmount = wantToPoolToken; }
+        if (wantToPoolToken > poolTokenAmount) { poolTokenAmount = wantToPoolToken; }
     }
 
     function calc_withdraw_one_coin(uint _amount) public view returns (uint) {
-        // if (_amount > 0) {
-        //     return ICurvePool(CURVE_POOL).calc_withdraw_one_coin(_amount, 0);
-        // } else {
-        //     return 0;
-        // }
+        if (_amount > 0) {
+            return POOL.calc_withdraw_one_coin(_amount, TOKEN_INDEX);
+        } else {
+            return 0;
+        }
     }
     function balanceOfPool() public view override returns (uint) {
-        // return IRewardsGauge(REWARDS_GAUGE).balanceOf(address(this));
+        (uint _amount, ) = STAKE.userInfo(STAKE_POOL_ID, address(this));
+        return _amount;
     }
     function balanceOfPoolInWant() public view override returns (uint) {
         return calc_withdraw_one_coin(balanceOfPool());
+    }
+
+    function _amountToAmountsList(uint _amount) internal view returns (uint[TOKENS_COUNT] memory) {
+        uint[TOKENS_COUNT]  memory amounts; // #  = new uint[](TOKENS_COUNT);
+        amounts[uint(uint128(TOKEN_INDEX))] = _amount;
+
+        return amounts;
     }
 }

@@ -13,16 +13,32 @@ const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
 const hardhatNetwork = () => {
   if (isIntegration) {
-    return {
-      network_id: 137,
-      chainId: 137,
-      gasMultiplier: 10,
-      forking:    {
-        url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
-        // url:         `http://localhost:8545`,
-        gasMultiplier: 10,
-        blockNumber: 19880876
-      }
+    switch (parseInt(process.env.HARDHAT_INTEGRATION_CHAIN, 10)) {
+      case 56:
+        return {
+          network_id: 56,
+          chainId: 56,
+          gasMultiplier: 5,
+          forking:    {
+            url:         `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/bsc/mainnet/archive`,
+            // url:         `http://localhost:8545`,
+            gasMultiplier: 5,
+            blockNumber:  14051137
+          }
+        }
+
+      default:
+        return {
+          network_id: 137,
+          chainId: 137,
+          gasMultiplier: 10,
+          forking:    {
+            url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+            // url:         `http://localhost:8545`,
+            gasMultiplier: 10,
+            blockNumber: 19880876
+          }
+        }
     }
   }
 

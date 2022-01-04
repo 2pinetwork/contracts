@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -10,10 +9,12 @@ import "hardhat/console.sol";
 import "./Swappable.sol";
 
 abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
 
     // Want
     IERC20Metadata immutable public want;
+    // want "missing" decimals precision
+    uint internal immutable WANT_MISSING_PRECISION;
 
     // Pool settings
     uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
@@ -50,6 +51,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         controller = _controller;
         exchange = _exchange;
         treasury = _treasury;
+
+        WANT_MISSING_PRECISION = (10 ** (18 - _want.decimals()));
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -135,7 +138,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
             if (_balance < _amount) { _amount = _balance; } // solhint-disable-unreachable-code
         }
 
-        IERC20(want).safeTransfer(controller, _amount);
+        want.safeTransfer(controller, _amount);
 
         // Redeposit
         if (!paused()) { _deposit(); }
@@ -147,7 +150,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     }
 
     function harvest() public nonReentrant virtual {
-        revert("should be implemented");
+        // should be implemented
     }
 
     function _beforeMovement() internal {
@@ -170,7 +173,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
                 if (_balance < perfFee) { perfFee = _balance; }
 
                 if (perfFee > 0) {
-                    IERC20(want).safeTransfer(treasury, perfFee);
+                    want.safeTransfer(treasury, perfFee);
                     emit PerformanceFee(perfFee);
                 }
             }
@@ -178,15 +181,15 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     }
 
     function _deposit() internal virtual {
-        revert("should be implemented");
+        // should be implemented
     }
 
     function _withdraw(uint) internal virtual returns (uint) {
-        revert("should be implemented");
+        // should be implemented
     }
 
     function _withdrawAll() internal virtual returns (uint) {
-        revert("should be implemented");
+        // should be implemented
     }
 
     /**
@@ -196,21 +199,21 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
-        if (fee > 0) { IERC20(want).safeTransfer(treasury, fee); }
+        if (fee > 0) { want.safeTransfer(treasury, fee); }
     }
 
     function wantBalance() public view returns (uint) {
-        return IERC20(want).balanceOf(address(this));
+        return want.balanceOf(address(this));
     }
 
     function balance() public view returns (uint) {
         return wantBalance() + balanceOfPoolInWant();
     }
     function balanceOfPool() public view virtual returns (uint) {
-        revert("should be implemented");
+        // should be implemented
     }
     function balanceOfPoolInWant() public view virtual returns (uint) {
-        revert("should be implemented");
+        // should be implemented
     }
 
     // called as part of strat migration. Sends all the available funds back to the vault.
@@ -224,7 +227,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         harvest();
 
         require(balanceOfPool() <= 0, "Strategy still has deposits");
-        IERC20(want).safeTransfer(controller, wantBalance());
+        want.safeTransfer(controller, wantBalance());
     }
 
     // pauses deposits and withdraws all funds from third party systems.
