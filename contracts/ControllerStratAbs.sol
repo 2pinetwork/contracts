@@ -20,8 +20,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
     uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
     // Min % to add/remove to an amount to conver BTC<=>BTCCRV
-    // The virtualPrice will ALWAYS be greater than 1.0 (in other case we're loosing BTC
-    // so we only consider the decimal part
+    // The virtualPrice will ALWAYS be greater than 1.0 (otherwise we're loosing BTC
+    // so we only consider the decimal part)
     uint public poolMinVirtualPrice = 30; // 0.3%
 
     // Fees
@@ -93,23 +93,27 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     function setPoolMinVirtualPrice(uint _ratio) public onlyAdmin {
         require(_ratio != poolMinVirtualPrice, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
+
         poolMinVirtualPrice = _ratio;
     }
 
     function setPoolSlippageRatio(uint _ratio) public onlyAdmin {
         require(_ratio != poolSlippageRatio, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
+
         poolSlippageRatio = _ratio;
     }
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio != ratioForFullWithdraw, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
+
         ratioForFullWithdraw = _ratio;
     }
 
     function beforeMovement() external onlyController nonReentrant {
         _beforeMovement();
     }
+
     // Update new `lastBalance` for the next charge
     function _afterMovement() internal {
         lastBalance = balance();
@@ -209,9 +213,11 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     function balance() public view returns (uint) {
         return wantBalance() + balanceOfPoolInWant();
     }
+
     function balanceOfPool() public view virtual returns (uint) {
         // should be implemented
     }
+
     function balanceOfPoolInWant() public view virtual returns (uint) {
         // should be implemented
     }

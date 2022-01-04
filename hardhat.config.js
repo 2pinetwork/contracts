@@ -13,7 +13,7 @@ const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
 const hardhatNetwork = () => {
   if (isIntegration) {
-    switch (parseInt(process.env.HARDHAT_INTEGRATION_CHAIN, 10)) {
+    switch (+process.env.HARDHAT_INTEGRATION_CHAIN) {
       case 56:
         return {
           network_id: 56,
