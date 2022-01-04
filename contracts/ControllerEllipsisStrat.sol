@@ -199,10 +199,12 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
             return 0;
         }
     }
+
     function balanceOfPool() public view override returns (uint) {
         (uint _amount, ) = STAKE.userInfo(STAKE_POOL_ID, address(this));
         return _amount;
     }
+
     function balanceOfPoolInWant() public view override returns (uint) {
         return calcWithdrawOneCoin(balanceOfPool());
     }

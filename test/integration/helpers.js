@@ -1,7 +1,7 @@
 /* eslint no-console: 0 */
 
-const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
-const { Framework } = require('@superfluid-finance/js-sdk');
+const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework')
+const { Framework } = require('@superfluid-finance/js-sdk')
 const { createPiToken, } = require('../helpers')
 
 const setWMaticBalanceFor = async (address, amount) => {
@@ -64,8 +64,8 @@ const setChainlinkRound = async (address, roundId, timestamp, price) => {
 }
 
 const setChainlinkRoundForNow = async (feed) => {
-   const data = await feed.latestRoundData();
-   const agg = await feed.aggregator();
+   const data = await feed.latestRoundData()
+   const agg = await feed.aggregator()
 
   let roundId = data.roundId._hex
   if (feed.address != '0xF9680D99D6C9589e2a93a78A04A279e509205945') {
@@ -131,7 +131,7 @@ const resetHardhat = async () => {
   });
 
   global.PiToken = await createPiToken(false, true)
-  if (hre.network.config.network_id != 56)
+  if (hre.network.config.network_id !== 56)
     expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 }
 
@@ -177,9 +177,9 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     const superWeb3 = web3
     superWeb3.eth.net.getId = async () => { return hre.network.config.network_id }
 
-    if (hre.network.config.network_id != 137) {
+    if (hre.network.config.network_id !== 137) {
       const  errorHandler = async err => { if (err) console.log(err) }
-      await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address });
+      await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
     }
 
     const sf = new Framework({ web3: superWeb3, version: 'test' })
@@ -192,7 +192,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     // DEPLOY PiToken
     console.log('Deploying PiToken')
     global.PiToken = await createPiToken(false, true)
-    if (hre.network.config.network_id != 56)
+    if (hre.network.config.network_id !== 56)
       expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 
     console.log('===============  SETUP DONE  ===============\n\n')
