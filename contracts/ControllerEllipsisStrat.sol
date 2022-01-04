@@ -115,7 +115,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         }
     }
 
-    // amount is the BTC expected to be withdrawn
+    // amount is the `want` expected to be withdrawn
     function _withdraw(uint _amount) internal override returns (uint) {
         // To know how much we have to un-stake we use the same method to
         // calculate the expected poolToken at deposit
@@ -163,7 +163,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     }
     function _minPoolTokenToWant(uint _amount) internal view returns (uint) {
         // Double check for expected value
-        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap poolToken => BTC
+        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap poolToken => want
         return _amount * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * WANT_MISSING_PRECISION);
 
     }
