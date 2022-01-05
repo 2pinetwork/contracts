@@ -289,8 +289,11 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
             uint toRepay = (toWithdraw * borrowRate) / RATIO_PRECISION;
             if (toRepay > borrowBal) { toRepay = borrowBal; }
 
-            IERC20(want).safeApprove(POOL, toRepay);
-            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
+            // In case the toWithdraw is really low it fails to repay 0
+            if (toRepay > 0) {
+                IERC20(want).safeApprove(POOL, toRepay);
+                IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
+            }
         }
     }
 
