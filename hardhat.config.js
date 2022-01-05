@@ -83,7 +83,8 @@ module.exports = {
       avalanche:            process.env.AVALANCHE_SCAN_API_KEY,
       avalancheFujiTestnet: process.env.AVALANCHE_SCAN_API_KEY,
       polygon:              process.env.POLYGON_SCAN_API_KEY,
-      polygonMumbai:        process.env.POLYGON_SCAN_API_KEY
+      polygonMumbai:        process.env.POLYGON_SCAN_API_KEY,
+      bsc:                  process.env.BSC_SCAN_API_KEY,
     }
   },
   tenderly: {
