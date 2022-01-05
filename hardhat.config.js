@@ -8,7 +8,7 @@ require('hardhat-gas-reporter')
 require('hardhat-preprocessor')
 
 const fs            = require('fs')
-const accounts      = JSON.parse(fs.readFileSync('.accounts'))
+const accounts      = process.env.DEPLOYER ? [process.env.DEPLOYER] : JSON.parse(fs.readFileSync('.accounts'))
 const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
 const hardhatNetwork = () => {
@@ -143,6 +143,13 @@ module.exports = {
       url:        'https://api.avax-test.network/ext/bc/C/rpc',
       network_id: 43113,
       chainId:    43113,
+      accounts:   accounts,
+      timeout:    60000
+    },
+    bsc: {
+      url:        'https://bsc-dataseed.binance.org/',
+      network_id: 56,
+      chainId:    56,
       accounts:   accounts,
       timeout:    60000
     },
