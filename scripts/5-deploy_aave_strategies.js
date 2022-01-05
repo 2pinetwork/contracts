@@ -60,7 +60,7 @@ async function main() {
       await hre.ethers.getContractFactory('ControllerAaveStrat')
     ).deploy(...args);
 
-    await strategy.deployed();
+    await strategy.deployed(2);
 
     console.log('Strategy ' + pool.currency + ':')
 
