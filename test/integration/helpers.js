@@ -1,6 +1,7 @@
 /* eslint no-console: 0 */
 
-const { Framework } = require('@superfluid-finance/js-sdk');
+const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework')
+const { Framework } = require('@superfluid-finance/js-sdk')
 const { createPiToken, } = require('../helpers')
 
 const setWMaticBalanceFor = async (address, amount) => {
@@ -30,13 +31,20 @@ const setWbtcBalanceFor = async (address, amount) => {
   await ethers.provider.send('hardhat_setStorageAt', [global.BTC.address, index.toString(), balance32])
 }
 
+const setCustomBalanceFor = async (token, address, weiAmount, slot) => {
+  const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [address, slot || 0])
+  const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(weiAmount.toHexString(), 32))
+
+  await ethers.provider.send('hardhat_setStorageAt', [token, index.toString(), balance32])
+}
+
 const setChainlinkRound = async (address, roundId, timestamp, price) => {
   // 0x00000000615c9b11000000000000000000000000000000000000000007bf4a9c
   const slot       = 43  // most of pricess are 43 slot
   const timestampL = 16
   const priceL     = 48
   const timestampHex = timestamp.toString(16)
-  const priceHex   = (price * 1e8).toString(16)
+  const priceHex   = parseInt(price * 1e8, 10).toString(16)
   const newValue   = [
     '0x',
     '0'.repeat(timestampL - timestampHex.length),
@@ -56,8 +64,8 @@ const setChainlinkRound = async (address, roundId, timestamp, price) => {
 }
 
 const setChainlinkRoundForNow = async (feed) => {
-  const data = await feed.latestRoundData();
-  let agg = await feed.aggregator();
+   const data = await feed.latestRoundData()
+   const agg = await feed.aggregator()
 
   let roundId = data.roundId._hex
   if (feed.address != '0xF9680D99D6C9589e2a93a78A04A279e509205945') {
@@ -123,7 +131,8 @@ const resetHardhat = async () => {
   });
 
   global.PiToken = await createPiToken(false, true)
-  expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
+  if (hre.network.config.network_id !== 56)
+    expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 }
 
 const fetchNeededTokens = async () => {
@@ -166,9 +175,14 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
 
     // Little hack to use deployed SuperFluid contracts
     const superWeb3 = web3
-    superWeb3.eth.net.getId = async () => { return 137 }
+    superWeb3.eth.net.getId = async () => { return hre.network.config.network_id }
 
-    const sf = new Framework({ web3: superWeb3 })
+    if (hre.network.config.network_id !== 137) {
+      const  errorHandler = async err => { if (err) console.log(err) }
+      await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
+    }
+
+    const sf = new Framework({ web3: superWeb3, version: 'test' })
     await sf.initialize()
 
     global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
@@ -178,7 +192,8 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     // DEPLOY PiToken
     console.log('Deploying PiToken')
     global.PiToken = await createPiToken(false, true)
-    expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
+    if (hre.network.config.network_id !== 56)
+      expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 
     console.log('===============  SETUP DONE  ===============\n\n')
   })
@@ -199,6 +214,7 @@ module.exports = {
   setWMaticBalanceFor,
   setWbtcBalanceFor,
   setWethBalanceFor,
+  setCustomBalanceFor,
   setChainlinkRound,
   setChainlinkRoundForNow,
 }

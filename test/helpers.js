@@ -143,6 +143,15 @@ const createController = async (token, archimedes, stratName) => {
           token.address
         )
         break
+      case 'ControllerEllipsisStrat':
+        strategy = await deploy(
+          'ControllerEllipsisStrat',
+          token.address,
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))
