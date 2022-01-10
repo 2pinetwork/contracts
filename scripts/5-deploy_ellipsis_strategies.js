@@ -9,18 +9,18 @@ async function main() {
   const deploy = JSON.parse(
     fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
   )
-  const pools = deploy.aavePools
 
-  let pool
   const archimedes = await (
     await hre.ethers.getContractFactory('Archimedes')
   ).attach(deploy.Archimedes)
 
+  const pools = deploy.ellipsisPools
+  let pool
   let args
 
   for (pool of pools) {
     let ctrollerArgs = [
-      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${pool.currency}`
+      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-EPS-${pool.currency}`
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
@@ -47,24 +47,20 @@ async function main() {
 
     args = [
       pool.address,
-      pool.rate, // rate
-      pool.aave_rate_max, // rate max
-      pool.depth, // depth
-      pool.min_leverage, // min leverage
       controller.address,
       deploy.exchange,  // sushiswap Exchange
       deploy.FeeManager
     ]
 
     let strategy = await (
-      await hre.ethers.getContractFactory('ControllerAaveStrat')
+      await hre.ethers.getContractFactory('ControllerEllipsisStrat')
     ).deploy(...args);
 
     await strategy.deployed(2);
 
     console.log('Strategy ' + pool.currency + ':')
 
-    await verify('ControllerAaveStrat', strategy.address, args)
+    await verify('ControllerEllipsisStrat', strategy.address, args)
 
     await (await controller.setStrategy(strategy.address)).wait()
 
@@ -73,14 +69,12 @@ async function main() {
     let pid = await controller.pid()
     console.log(`Configured ${pool.currency} in ${pid}`)
 
-    await (await strategy.setPriceFeed(deploy.WNATIVE, deploy.chainlink[deploy.WNATIVE])).wait()
-    if (pool.currency != 'AVAX') {
-      await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
-      await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
-      await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
-    }
+    await (await strategy.setPriceFeed(pool.reward, deploy.chainlink[pool.reward])).wait()
+    await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
+    // await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
+    await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
 
-    deploy[`strat-aave-${pool.currency}`] = {
+    deploy[`strat-eps-${pool.currency}`] = {
       controller: controller.address,
       strategy:   strategy.address,
       pid:        pid.toBigInt().toString(),

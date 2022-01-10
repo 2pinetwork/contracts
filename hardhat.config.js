@@ -8,21 +8,35 @@ require('hardhat-gas-reporter')
 require('hardhat-preprocessor')
 
 const fs            = require('fs')
-const accounts      = JSON.parse(fs.readFileSync('.accounts'))
+const accounts      = process.env.DEPLOYER ? [process.env.DEPLOYER] : JSON.parse(fs.readFileSync('.accounts'))
 const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
 const hardhatNetwork = () => {
   if (isIntegration) {
-    return {
-      network_id: 137,
-      chainId: 137,
-      gasMultiplier: 10,
-      forking:    {
-        url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
-        // url:         `http://localhost:8545`,
-        gasMultiplier: 10,
-        blockNumber: 19880876
-      }
+    switch (+process.env.HARDHAT_INTEGRATION_CHAIN) {
+        case 56:
+          return {
+            network_id:    56,
+            chainId:       56,
+            gasMultiplier: 5,
+            forking:       {
+              url:           `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/bsc/mainnet/archive`,
+              gasMultiplier: 5,
+              blockNumber:   14051137
+            }
+          }
+
+        default:
+          return {
+            network_id:    137,
+            chainId:       137,
+            gasMultiplier: 10,
+            forking:       {
+              url:           `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+              gasMultiplier: 10,
+              blockNumber:   19880876
+            }
+          }
     }
   }
 
@@ -65,7 +79,13 @@ if (isIntegration) {
 
 module.exports = {
   etherscan: {
-    apiKey: process.env.POLYGON_API_KEY
+    apiKey: {
+      avalanche:            process.env.AVALANCHE_SCAN_API_KEY,
+      avalancheFujiTestnet: process.env.AVALANCHE_SCAN_API_KEY,
+      polygon:              process.env.POLYGON_SCAN_API_KEY,
+      polygonMumbai:        process.env.POLYGON_SCAN_API_KEY,
+      bsc:                  process.env.BSC_SCAN_API_KEY,
+    }
   },
   tenderly: {
     project:  process.env.TENDERLY_PROJECT,
@@ -93,21 +113,22 @@ module.exports = {
       }
     ],
     overrides: {
-      "@uniswap/lib/contracts/libraries/Babylonian.sol": { version: "0.6.6" },
-      "@uniswap/lib/contracts/libraries/BitMath.sol": { version: "0.6.6" },
-      "@uniswap/lib/contracts/libraries/FixedPoint.sol": { version: "0.6.6" },
-      "@uniswap/lib/contracts/libraries/FullMath.sol": { version: "0.6.6" },
+      '@uniswap/lib/contracts/libraries/Babylonian.sol': { version: '0.6.6' },
+      '@uniswap/lib/contracts/libraries/BitMath.sol':    { version: '0.6.6' },
+      '@uniswap/lib/contracts/libraries/FixedPoint.sol': { version: '0.6.6' },
+      '@uniswap/lib/contracts/libraries/FullMath.sol':   { version: '0.6.6' },
     }
   },
   networks: {
     hardhat: hardhatNetwork(),
     polygon: {
-      url:      'https://polygon-rpc.com',
-      accounts: accounts,
+      url:        'https://polygon-rpc.com',
+      accounts:   accounts,
       network_id: 137,
     },
     mumbai: {
-      url:        'https://rpc-mumbai.maticvigil.com',
+      url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
+      // url:        'https://rpc-mumbai.maticvigil.com',
       accounts:   accounts,
       network_id: 80001,
     },
@@ -127,6 +148,20 @@ module.exports = {
       url:        'https://api.avax-test.network/ext/bc/C/rpc',
       network_id: 43113,
       chainId:    43113,
+      accounts:   accounts,
+      timeout:    60000
+    },
+    bsc: {
+      url:        'https://bsc-dataseed.binance.org/',
+      network_id: 56,
+      chainId:    56,
+      accounts:   accounts,
+      timeout:    60000
+    },
+    avax: {
+      url:        'https://api.avax.network/ext/bc/C/rpc',
+      network_id: 43114,
+      chainId:    43114,
       accounts:   accounts,
       timeout:    60000
     },

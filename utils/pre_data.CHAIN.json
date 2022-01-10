@@ -1,0 +1,21 @@
+{
+ "exchange": "",
+ "treasury": "",
+ "owner": "",
+ "investors": {},
+ "founders": {},
+ "WNATIVE": "",
+ "chainlink": {
+   "token": "chainlink-token-oracle"
+ },
+ "aavePools": [
+    {
+      "currency": "BTC",
+      "aave_rate_max": 70,
+      "rate": 68,
+      "depth": 8,
+      "min_leverage": 1000,
+      "address": "0x9C1DCacB57ADa1E9e2D3a8280B7cfC7EB936186F"
+    }
+  ]
+}
