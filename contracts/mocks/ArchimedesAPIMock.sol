@@ -1,5 +1,6 @@
-//SPDX-License-Identifier: MIT
-pragma solidity 0.8.9;
+// SPDX-License-Identifier: MIT
+
+pragma solidity 0.8.11;
 
 import { ArchimedesAPI, IPiToken } from "../ArchimedesAPI.sol";
 

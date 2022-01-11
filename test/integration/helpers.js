@@ -171,18 +171,22 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
     global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
-    fetchNeededTokens()
+    await fetchNeededTokens()
 
+    let sf
     // Little hack to use deployed SuperFluid contracts
     const superWeb3 = web3
     superWeb3.eth.net.getId = async () => { return hre.network.config.network_id }
 
-    if (hre.network.config.network_id !== 137) {
-      const  errorHandler = async err => { if (err) console.log(err) }
+    if (hre.network.config.network_id === 137) {
+      sf = new Framework({ web3: superWeb3 })
+    } else {
+      const errorHandler = async err => { if (err) console.log(err) }
       await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
+
+      sf = new Framework({ web3: superWeb3, version: 'test' })
     }
 
-    const sf = new Framework({ web3: superWeb3, version: 'test' })
     await sf.initialize()
 
     global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(

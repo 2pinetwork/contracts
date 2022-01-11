@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.9;
+
+pragma solidity 0.8.11;
 
 interface ICurvePool {
     // _use_underlying If True, withdraw underlying assets instead of aTokens
