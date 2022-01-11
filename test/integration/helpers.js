@@ -182,7 +182,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
       await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
     }
 
-    const sf = new Framework({ web3: superWeb3, version: 'test' })
+    const sf = new Framework({ web3: superWeb3 })
     await sf.initialize()
 
     global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(

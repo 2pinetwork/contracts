@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
 import "./ControllerStratAbs.sol";
@@ -20,8 +16,6 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     IEpsStaker constant public STAKE = IEpsStaker(0xcce949De564fE60e7f96C85e55177F8B9E4CF61b);
     IEpsMultiFeeDistribution constant public FEE_DISTRIBUTION = IEpsMultiFeeDistribution(0x4076CC26EFeE47825917D0feC3A79d0bB9a6bB5c);
 
-    address[] rewardToWantRoute;
-
     int128 private immutable TOKEN_INDEX; // want token index in the pool
     uint private constant TOKENS_COUNT = 3; // 3Eps pool
     uint private constant STAKE_POOL_ID = 1; // 3Eps pool
@@ -32,7 +26,6 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         address _exchange,
         address _treasury
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        rewardToWantRoute = [REWARD_TOKEN, address(want)];
         uint i = 0;
 
         for (i; i < TOKENS_COUNT; i++) {
@@ -45,7 +38,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     function setRewardToWantRoute(address[] calldata _route) external onlyAdmin {
         require(_route[0] == REWARD_TOKEN, "First route isn't REWARD");
         require(_route[_route.length - 1] == address(want), "Last route isn't want");
-        rewardToWantRoute = _route;
+        rewardToWantRoute[REWARD_TOKEN] = _route;
     }
 
     function harvest() public nonReentrant override {
@@ -109,7 +102,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
                 IERC20(REWARD_TOKEN).safeApprove(exchange, _balance);
 
                 IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _balance, 1, rewardToWantRoute, address(this), block.timestamp + 60
+                    _balance, expected, rewardToWantRoute[REWARD_TOKEN], address(this), block.timestamp + 60
                 );
             }
         }

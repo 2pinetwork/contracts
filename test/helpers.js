@@ -152,6 +152,17 @@ const createController = async (token, archimedes, stratName) => {
           owner.address
         )
         break
+      case 'ControllerBalancerV2Strat':
+        strategy = await deploy(
+          'ControllerBalancerV2Strat',
+          '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
+          '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012',
+          token.address,
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))

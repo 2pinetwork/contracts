@@ -58,3 +58,15 @@ interface IBalancerV2Vault {
 interface IBalancerPool {
     function getRate() external view returns (uint);
 }
+
+struct BalancerV2Claim {
+    uint distributionId;
+    uint balance;
+    address distributor;
+    uint tokenIndex;
+    bytes32[] merkleProof;
+}
+
+interface IBalancerDistributor {
+    function claimDistributions(address claimer, BalancerV2Claim[] memory claims, IERC20[] memory tokens) external;
+}
