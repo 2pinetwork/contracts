@@ -432,7 +432,7 @@ describe('Archimedes', () => {
       expect(await archimedes.paused(0)).to.be.equal(false)
       expect(await strategy.paused()).to.be.equal(false)
 
-      await strategy.pause()
+      await waitFor(strategy.pause())
 
       expect(await archimedes.paused(0)).to.be.equal(true)
       expect(await strategy.paused()).to.be.equal(true)
