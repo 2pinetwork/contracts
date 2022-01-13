@@ -9,6 +9,7 @@ import "./PiAdmin.sol";
 import "../interfaces/IPiToken.sol";
 import "../interfaces/IController.sol";
 import "../interfaces/IReferral.sol";
+import "../interfaces/IStrategy.sol";
 import "../interfaces/IWNative.sol";
 
 
@@ -469,6 +470,10 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
     function balanceOf(uint _pid, address _user) external view returns (uint) {
         return _controller(_pid).balanceOf(_user);
+    }
+
+    function paused(uint _pid) external view returns (bool) {
+        return IStrategy(_controller(_pid).strategy()).paused();
     }
 
     function piTokenPerBlock() public view returns (uint) {
