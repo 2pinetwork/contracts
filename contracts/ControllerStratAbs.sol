@@ -119,15 +119,15 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         require(_route[0] == _reward, "First route isn't reward");
         require(_route[_route.length - 1] == address(want), "Last route isn't want token");
 
-        bool alreadyAdded = false;
+        bool newReward = true;
         for (uint i = 0; i < rewardTokens.length; i++) {
             if (rewardTokens[i] == _reward) {
-                alreadyAdded = true;
+                newReward = false;
                 break;
             }
         }
 
-        if (!alreadyAdded) { rewardTokens.push(_reward); }
+        if (newReward) { rewardTokens.push(_reward); }
         rewardToWantRoute[_reward] = _route;
     }
 
@@ -167,7 +167,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         want.safeTransfer(controller, _amount);
 
         // Redeposit
-        if (!paused()) { _deposit(); }
+        if (!paused() && wantBalance() > 0) { _deposit(); }
 
         _afterMovement();
 

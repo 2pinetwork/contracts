@@ -31,7 +31,9 @@ abstract contract Swappable is PiAdmin {
 
     function setPriceFeed(address _token, IChainLink _feed) external onlyAdmin {
         require(_token != address(0), "!ZeroAddress");
+        console.log("Por testear:", _token, " Con ", address(_feed));
         (uint80 round, int price,,,) = _feed.latestRoundData();
+        console.log("PASO:", _token, " Con ", address(_feed));
         require(round > 0 && price > 0, "Invalid feed");
 
         oracles[_token] = _feed;
