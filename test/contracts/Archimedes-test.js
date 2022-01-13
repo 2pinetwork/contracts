@@ -579,7 +579,7 @@ describe('Archimedes', () => {
       )
       await mineNTimes(5)
       await network.provider.send('evm_setAutomine', [false]);
-      await network.provider.send('evm_setIntervalMining', [2000]);
+      await network.provider.send('evm_setIntervalMining', [10000]);
 
       await archimedes.connect(bob).harvest(0) // rewardBlock + 2 + 5
 

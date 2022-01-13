@@ -173,16 +173,20 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
 
     fetchNeededTokens()
 
+    let sf
     // Little hack to use deployed SuperFluid contracts
     const superWeb3 = web3
     superWeb3.eth.net.getId = async () => { return hre.network.config.network_id }
 
-    if (hre.network.config.network_id !== 137) {
-      const  errorHandler = async err => { if (err) console.log(err) }
+    if (hre.network.config.network_id === 137) {
+      sf = new Framework({ web3: superWeb3 })
+    } else {
+      const errorHandler = async err => { if (err) console.log(err) }
       await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
+
+      sf = new Framework({ web3: superWeb3, version: 'test' })
     }
 
-    const sf = new Framework({ web3: superWeb3, version: 'test' })
     await sf.initialize()
 
     global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(
