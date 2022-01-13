@@ -171,7 +171,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
     global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
-    await fetchNeededTokens()
+    fetchNeededTokens()
 
     let sf
     // Little hack to use deployed SuperFluid contracts
