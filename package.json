@@ -45,6 +45,7 @@
     "hardhat-preprocessor": "^0.1.4",
     "mocha": "^9.1.1",
     "node-fetch": "^2.6.5",
+    "q": "^1.5.1",
     "sol-merger": "^3.1.0",
     "solidity-coverage": "^0.7.17",
     "web3": "^1.6.1"
