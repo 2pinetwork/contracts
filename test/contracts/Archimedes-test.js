@@ -422,6 +422,23 @@ describe('Archimedes', () => {
     })
   })
 
+  describe('paused', async () => {
+    it('Should be same as strategy paused', async () => {
+      const strategy = await ethers.getContractAt(
+        'ControllerAaveStrat',
+        (await controller.strategy())
+      )
+
+      expect(await archimedes.paused(0)).to.be.equal(false)
+      expect(await strategy.paused()).to.be.equal(false)
+
+      await waitFor(strategy.pause())
+
+      expect(await archimedes.paused(0)).to.be.equal(true)
+      expect(await strategy.paused()).to.be.equal(true)
+    })
+  })
+
   describe('deposit', async () => {
     it('should revert with 0 amount', async () => {
       await expect(
@@ -562,7 +579,7 @@ describe('Archimedes', () => {
       )
       await mineNTimes(5)
       await network.provider.send('evm_setAutomine', [false]);
-      await network.provider.send('evm_setIntervalMining', [2000]);
+      await network.provider.send('evm_setIntervalMining', [10000]);
 
       await archimedes.connect(bob).harvest(0) // rewardBlock + 2 + 5
 

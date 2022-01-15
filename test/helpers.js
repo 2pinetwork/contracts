@@ -269,10 +269,8 @@ if (! process.env.HARDHAT_INTEGRATION_TESTS) {
     global.superFluidDeployer = await ethers.getSigner('0xdD2FD4581271e230360230F9337D5c0430Bf44C0') // penultimate hardhat account
 
     // If PiToken fails change this to wait for SuperFluid
-    await Promise.all([
-      setupSuperFluid(),
-      setupNeededTokens()
-    ])
+    await setupSuperFluid()
+    await setupNeededTokens()
 
     console.log('===============  SETUP DONE  ===============\n\n')
   })

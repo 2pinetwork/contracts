@@ -21,7 +21,7 @@ describe('Controller wrong deployment', () => {
         owner.address,
         '2Pi-0'
       )
-    ).to.be.revertedWith('function call to a non-contract account')
+    ).to.be.revertedWith('function returned an unexpected amount of data')
   })
 
   it('Should not deploy with zero address piToken', async () => {
