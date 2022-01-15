@@ -3,7 +3,6 @@ const {
   createPiToken,
   deploy,
   getBlock,
-  mineNTimes,
   waitFor,
   zeroAddress
 } = require('../helpers')
@@ -61,7 +60,7 @@ describe('Controller BalancerV2 Strat', () => {
       waitFor(strat.setPriceFeed(USDC.address, USDCFeed.address)),
       waitFor(strat.setPriceFeed(QI.address, qiFeed.address)),
       waitFor(strat.setPriceFeed(BAL.address, balFeed.address)),
-      waitFor(strat.setRewardToWantRoute(QI.address, [QI.address, WETH.address, USDC.address])),
+      waitFor(strat.setRewardToWantRoute(QI.address, [QI.address, WMATIC.address, USDC.address])), // ETH route doesn't exist at this moment
       waitFor(strat.setRewardToWantRoute(BAL.address, [BAL.address, WETH.address, USDC.address])),
     ])
   })
@@ -89,22 +88,23 @@ describe('Controller BalancerV2 Strat', () => {
     expect(await BAL.balanceOf(strat.address)).to.be.equal(rewards)
     await setCustomBalanceFor(QI.address, strat.address, rewards)
     expect(await QI.balanceOf(strat.address)).to.be.equal(rewards)
-    await waitFor(strat.setExchange("0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"))
+    await strat.setSwapSlippageRatio(9900)
     await waitFor(strat.harvest())
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
-    // withdraw 95 QI in shares
-    const toWithdraw = (
-      (await controller.totalSupply()).mul(95e6).div(
-        await controller.balance()
-      )
-    )
+    // withdraw 95% in shares
+    const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
+      9500
+    ).div(10000)
+    let expectedOutput = toWithdraw.mul(await archimedes.getPricePerFullShare(0)).div(1e6)
 
-    await strat.setPoolSlippageRatio(100)
+    await strat.setPoolSlippageRatio(150)
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
+
     expect(await USDC.balanceOf(bob.address)).to.within(
-      94.9e6, 95e6 // 95 - 0.1% withdrawFee
+      expectedOutput.mul(98).div(100),
+      expectedOutput
     )
     expect(await USDC.balanceOf(strat.address)).to.equal(0)
     // expect(await BalancerV2RewardsGauge.balanceOf(strat.address)).to.be.within(
@@ -114,8 +114,8 @@ describe('Controller BalancerV2 Strat', () => {
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await USDC.balanceOf(bob.address)).to.within(
-      99.8e6 + '', // between 0.1% and 0.2%
-      99.9e6 + ''
+      expectedOutput,
+      expectedOutput.mul(105).div(100)
     )
   })
 })

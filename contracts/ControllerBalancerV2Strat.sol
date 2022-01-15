@@ -73,25 +73,15 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
 
     function _swapRewards() internal {
         for (uint i = 0; i < rewardTokens.length; i++) {
-            console.log("ControllerBalancerV2Strat.sol:75", i);
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
-
-            console.log('ControllerBalancerV2Strat.sol:80Balance', _balance);
             if (_balance > 0) {
                 uint expected = _expectedForSwap(_balance, rewardToken, address(want));
 
-                console.log('ControllerBalancerV2Strat.sol:84 Expected', expected);
                 // Want price sometimes is too high so it requires a lot of rewards to swap
                 if (expected > 1) {
                     IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                    console.log("Swaping balance ", _balance, "for: ", expected);
-                    console.log("Swaping token ", i, "route 0: ", rewardToWantRoute[rewardToken][0]);
-                    console.log("Swaping token ", i, "route 1: ", rewardToWantRoute[rewardToken][1]);
-                    console.log("Swaping token ", i, "route 2: ", rewardToWantRoute[rewardToken][2]);
-                    console.log("Exchange", exchange);
 
                     IUniswapRouter(exchange).swapExactTokensForTokens(
                         _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 9000000000000
@@ -143,18 +133,13 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
             // We put a little more than the expected amount because of the fees & the pool swaps
             uint expected = (
                 diff * WANT_MISSING_PRECISION * SHARES_PRECISION *
-                (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION /
+                (RATIO_PRECISION + poolSlippageRatio) / RATIO_PRECISION /
                 _pricePerShare()
             );
 
             require(expected > 0, "Insufficient expected amount");
 
             bytes memory userData = abi.encode(BPT_IN_FOR_EXACT_TOKENS_OUT, amounts, expected);
-
-            console.log("Expected out: ", expected);
-            console.log("Balances: ", balanceOfPool());
-            console.log("Balances: ", balanceOfPoolInWant());
-            console.log("Balances: ", balance());
 
             vault.exitPool(
                 poolId,
