@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.11;
 
 import "hardhat/console.sol";
@@ -41,7 +42,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         _setupRole(HARVESTER_ROLE, msg.sender);
     }
 
-    function claimRewards(BalancerV2Claim[] memory _claims, IERC20[] memory _claimTokens) public nonReentrant {
+    function claimRewards(BalancerV2Claim[] memory _claims, IERC20[] memory _claimTokens) external nonReentrant {
         require(hasRole(HARVESTER_ROLE, msg.sender), "Not a harvester");
 
         distributor.claimDistributions(
@@ -84,7 +85,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
                     IERC20(rewardToken).safeApprove(exchange, _balance);
 
                     IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 9000000000000
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
                     );
                 }
             }
@@ -154,7 +155,9 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
             );
         }
 
-        return wantBalance() - _balance;
+        uint withdrawn = wantBalance() - _balance;
+
+        return (withdrawn > _amount) ? _amount : withdrawn;
     }
 
     function _withdrawAll() internal override returns (uint) {
@@ -192,8 +195,11 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         );
 
         // Not sure if the minAmountsOut are respected in this case so re-check
-        require(wantBalance() >= expected, "Less tokens than expected");
-        return wantBalance() - _balance;
+        uint withdrawn = wantBalance() - _balance;
+
+        require(withdrawn >= expected, "Less tokens than expected");
+
+        return withdrawn;
     }
 
     function balanceOfPool() public view override returns (uint) {
