@@ -216,11 +216,7 @@ const main = async function () {
       }
     }
 
-    return [
-      account,
-      claims,
-      claimTokens
-    ]
+    return [ claims, claimTokens ]
   }
 
   const buildClaim = async ({account, index, token, distributor, reportPath, distId}) => {
@@ -250,10 +246,10 @@ const main = async function () {
 
   // This has to be adapted to the contract harvest but at least now it's working =D
   owner = (await ethers.getSigners())[0]
-  abi = JSON.parse(fs.readFileSync('./abi/balancer_distributor.abi', 'utf8'))
-  contract = await ethers.getContractAt(abi, '0x0F3e0c4218b7b0108a3643cFe9D3ec0d4F57c54e')
-  result = await build(account)
-  tx = await (await contract.claimDistributions(...result)).wait()
+  // abi = JSON.parse(fs.readFileSync('./abi/balancer_distributor.abi', 'utf8'))
+  contract = await ethers.getContractAt('ControllerBalancerV2Strat', deploy['strat-balancer'])
+  let [claimProof, tokens] = await build(deploy['strat-balancer'])
+  tx = await (await contract.claimRewards(claimProof, tokens)).wait()
 }
 
 main()
