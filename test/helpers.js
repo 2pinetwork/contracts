@@ -202,7 +202,7 @@ const setupSuperFluid = async () => {
   };
 
   await deployFramework(errorHandler, { web3: web3, from: global.superFluidDeployer.address });
-  const sf = new Framework({ web3: web3, version: 'test' });
+  const sf = new Framework({ web3: web3, version: 'test', resolverAddress: process.env.TEST_RESOLVER_ADDRESS });
   await sf.initialize()
 
   global.superTokenFactory = await sf.contracts.ISuperTokenFactory.at(

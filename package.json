@@ -47,7 +47,7 @@
     "node-fetch": "^2.6.5",
     "q": "^1.5.1",
     "sol-merger": "^3.1.0",
-    "solidity-coverage": "^0.7.17",
+    "solidity-coverage": "git://github.com/sc-forks/solidity-coverage.git#3e30a5377a697247879fa1c327caa4093e3f21cb",
     "web3": "^1.6.1"
   }
 }

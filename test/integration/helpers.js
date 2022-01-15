@@ -184,7 +184,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
       const errorHandler = async err => { if (err) console.log(err) }
       await deployFramework(errorHandler, { web3: superWeb3, from: global.superFluidDeployer.address })
 
-      sf = new Framework({ web3: superWeb3, version: 'test' })
+      sf = new Framework({ web3: superWeb3, version: 'test', resolverAddress: process.env.TEST_RESOLVER_ADDRESS });
     }
 
     await sf.initialize()

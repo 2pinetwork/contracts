@@ -1,11 +1,14 @@
 #!/bin/bash
 
+echo "Tu vieja en tanga..."
+
+rm -Rf coverage.json coverage/ cache/
 if [[ "$1" =~ integration ]]; then
   # HARDHAT INTEGRATION should be set
   echo "Running preprocess"
   npx hardhat preprocess
 fi
-npx hardhat coverage --testfiles $1
+npx hardhat coverage --testfiles "\"{$1}\""
 
 array=$(echo $1 | sed "s/,/\n/g")
 file=(${array[0]})
