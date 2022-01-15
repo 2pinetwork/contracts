@@ -24,6 +24,10 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     // The virtualPrice will ALWAYS be greater than 1.0 (otherwise we're loosing BTC
     // so we only consider the decimal part)
     uint public poolMinVirtualPrice = 30; // 0.3%
+    // Pool reward[s] route for Swap
+    mapping(address => address[]) rewardToWantRoute;
+    // PoolRewards
+    address[] public rewardTokens;
 
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
@@ -111,6 +115,24 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         ratioForFullWithdraw = _ratio;
     }
 
+    function setRewardToWantRoute(address _reward, address[] calldata _route) external onlyAdmin {
+        require(_reward != address(0), "!ZeroAddress");
+        require(_route[0] == _reward, "First route isn't reward");
+        require(_route[_route.length - 1] == address(want), "Last route isn't want token");
+
+        bool newReward = true;
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            if (rewardTokens[i] == _reward) {
+                newReward = false;
+                break;
+            }
+        }
+
+        if (newReward) { rewardTokens.push(_reward); }
+        rewardToWantRoute[_reward] = _route;
+    }
+
+
     function beforeMovement() external onlyController nonReentrant {
         _beforeMovement();
     }
@@ -146,7 +168,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         want.safeTransfer(controller, _amount);
 
         // Redeposit
-        if (!paused()) { _deposit(); }
+        if (!paused() && wantBalance() > 0) { _deposit(); }
 
         _afterMovement();
 

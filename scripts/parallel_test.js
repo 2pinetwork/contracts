@@ -4,7 +4,7 @@ const MAX_PARALLEL = 3
 let spawned = []
 let done = []
 
-const CombineCoverage = require('./scripts/combine_coverages').sync
+const CombineCoverage = require('./combine_coverages').sync
 
 const PWD = process.env.PWD
 
@@ -60,7 +60,7 @@ const runOrWait = async (args) => {
 const main = async () => {
   let cmdsToBeRun = []
 
-  await execSync('docker build --tag 2pi_contracts .')
+  await execSync('docker build --tag 2pi_contracts .', { stdio: 'inherit' })
 
   // Add unit test to cmds
   const filtered = fs.readdirSync('./test/contracts/').filter(f => /-test\.js$/.test(f)).map(f => `test/contracts/${f}`)
@@ -73,13 +73,17 @@ const main = async () => {
     cmdsToBeRun.push(buildArgs(true, `test/integration/${f}`))
   })
 
-  let proms  = []
 
   let groups = inGroupsOf(cmdsToBeRun, MAX_PARALLEL)
   for (let i = 0; i < groups.length; i++) {
+    let proms  = []
     for (let ii = 0; ii < groups[i].length; ii++) {
+      console.log("GRoup:", groups[i][ii])
       proms.push(runOrWait(groups[i][ii]))
     }
+
+    await delay(5000)
+    await Promise.all(proms)
   }
 
   // await delay(60000) // wait at least 10s to start integration tests

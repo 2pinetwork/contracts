@@ -5,7 +5,7 @@ import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
 import 'hardhat/console.sol';
 
 // Manual interface declaration because of the @openzeppelin lib is for solidity 0.8
-interface IERC20Metadata {
+interface IERC20MetadataAlt {
     function decimals() external view returns (uint8);
 }
 
@@ -119,7 +119,7 @@ contract PiOracle {
 
     // Chainlink like method
     function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) {
-        uint secondTokenPrecision = 10 ** uint(IERC20Metadata(firstToken ? lp.token1() : lp.token0()).decimals());
+        uint secondTokenPrecision = 10 ** uint(IERC20MetadataAlt(firstToken ? lp.token1() : lp.token0()).decimals());
 
         require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
 
