@@ -32,7 +32,7 @@ contract TestPiToken is PiAdmin, ERC20 {
     uint internal COMMUNITY_TYPE = 1;
 
 
-    constructor() ERC20('Test-A-2Pi', 'Test-A-2Pi') {
+    constructor() ERC20('Test-P-2Pi', 'Test-P-2Pi') {
         _mint(address(this), 6.28e25); // max pi token supply
     }
 

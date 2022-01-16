@@ -6,15 +6,16 @@ const fs = require('fs');
 const { verify } = require('./verify');
 
 const main = async function () {
+  const chainId = hre.network.config.network_id
+  const deploy = JSON.parse(
+    fs.readFileSync(`utils/pre_data.${chainId}.json`, 'utf8')
+  )
+
   const contract = await (await hre.ethers.getContractFactory('TestPiToken')).deploy()
   await contract.deployed(2);
 
   await verify('TestPiToken', contract.address)
 
-  const chainId = hre.network.config.network_id
-  const deploy = JSON.parse(
-    fs.readFileSync(`utils/pre_data.${chainId}.json`, 'utf8')
-  )
   deploy.PiToken = contract.address
 
   // replace piToken addr
