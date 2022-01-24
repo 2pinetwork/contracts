@@ -11,7 +11,6 @@ contract ArchimedesMock is Archimedes {
         uint _startBlock,
         IWNative _wNative
     ) Archimedes(_piToken, _startBlock, _wNative) { }
-
     function setBlockNumber(uint _n) public {
         mockedBlockNumber = _n;
     }

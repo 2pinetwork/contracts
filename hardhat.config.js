@@ -1,6 +1,4 @@
-require('@nomiclabs/hardhat-waffle')
-require('@tenderly/hardhat-tenderly')
-require('@nomiclabs/hardhat-etherscan')
+require("@nomiclabs/hardhat-waffle");
 require('@nomiclabs/hardhat-web3')
 require('@nomiclabs/hardhat-truffle5')
 require('solidity-coverage')
@@ -12,16 +10,16 @@ const accounts      = JSON.parse(fs.readFileSync('.accounts'))
 const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 
 const hardhatNetwork = () => {
-  if (isIntegration) {
+  if (true) {
     return {
-      network_id: 137,
-      chainId: 137,
+      network_id: 80001,
+      chainId: 80001,
       gasMultiplier: 10,
       forking:    {
-        url:         `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+        url:         `https://polygon-mumbai.g.alchemy.com/v2/U71g_RAfRtfIo5ijht0ichSRpwZ-LHJq`,
         // url:         `http://localhost:8545`,
         gasMultiplier: 10,
-        blockNumber: 19880876
+        blockNumber: 23720235
       }
     }
   }
@@ -79,6 +77,11 @@ module.exports = {
           optimizer: {
             enabled: true,
             runs:    10000
+          },
+          outputSelection: {
+            "*": {
+              "*": ["storageLayout"],
+            },
           }
         },
       },
@@ -88,6 +91,11 @@ module.exports = {
           optimizer: {
             enabled: true,
             runs:    10000
+          },
+          outputSelection: {
+            "*": {
+              "*": ["storageLayout"],
+            },
           }
         },
       }
