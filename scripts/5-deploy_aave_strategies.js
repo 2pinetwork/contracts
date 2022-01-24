@@ -12,9 +12,7 @@ async function main() {
   const pools = deploy.aavePools
 
   let pool
-  const archimedes = await (
-    await hre.ethers.getContractFactory('Archimedes')
-  ).attach(deploy.Archimedes)
+  const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
 
   let args
 
@@ -24,9 +22,9 @@ async function main() {
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
-    ).deploy(...ctrollerArgs);
+    ).deploy(...ctrollerArgs, {type: 0});
 
-    await controller.deployed();
+    await controller.deployed(5);
 
     await verify('Controller', controller.address, ctrollerArgs)
 
@@ -50,17 +48,15 @@ async function main() {
       pool.rate, // rate
       pool.aave_rate_max, // rate max
       pool.depth, // depth
-      pool.min_leverage, // min leverage
+      '' + pool.min_leverage, // min leverage
       controller.address,
       deploy.exchange,  // sushiswap Exchange
       deploy.FeeManager
     ]
 
-    let strategy = await (
-      await hre.ethers.getContractFactory('ControllerAaveStrat')
-    ).deploy(...args);
+    let strategy = await ( await hre.ethers.getContractFactory('ControllerAaveStrat')).deploy(...args, {type: 0});
 
-    await strategy.deployed(2);
+    await strategy.deployed(5);
 
     console.log('Strategy ' + pool.currency + ':')
 
@@ -73,11 +69,11 @@ async function main() {
     let pid = await controller.pid()
     console.log(`Configured ${pool.currency} in ${pid}`)
 
+    await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
     await (await strategy.setPriceFeed(deploy.WNATIVE, deploy.chainlink[deploy.WNATIVE])).wait()
     if (pool.currency != 'AVAX') {
       await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
-      await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
-      await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
+      // await (await strategy.setSwapSlippageRatio(100)).wait() // mumbai LP's are not balanced
     }
 
     deploy[`strat-aave-${pool.currency}`] = {

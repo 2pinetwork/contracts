@@ -4,9 +4,9 @@
 /* eslint no-console: 0 */
 const hre = require('hardhat');
 const fs = require('fs');
-const { Framework } = require('@superfluid-finance/js-sdk');
-const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
-const { verify } = require('./verify');
+// const { Framework } = require('@superfluid-finance/js-sdk');
+// const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework');
+// const { verify } = require('./verify');
 
 const main = async function () {
   const BigNumber = require('bignumber.js')
@@ -243,12 +243,18 @@ const main = async function () {
       proof // merkleProff
     ]
   }
+  const chainId = hre.network.config.network_id
+
+  ddeploy = JSON.parse(
+    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
+  )
+
 
   // This has to be adapted to the contract harvest but at least now it's working =D
   owner = (await ethers.getSigners())[0]
   // abi = JSON.parse(fs.readFileSync('./abi/balancer_distributor.abi', 'utf8'))
-  contract = await ethers.getContractAt('ControllerBalancerV2Strat', deploy['strat-balancer'])
-  let [claimProof, tokens] = await build(deploy['strat-balancer'])
+  contract = await ethers.getContractAt('ControllerBalancerV2Strat', ddeploy['strat-bal-DAI']['strategy'])
+  let [claimProof, tokens] = await build(ddeploy['strat-bal-DAI']['strategy'])
   tx = await (await contract.claimRewards(claimProof, tokens)).wait()
 }
 
