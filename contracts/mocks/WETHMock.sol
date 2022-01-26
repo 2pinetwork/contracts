@@ -19,6 +19,7 @@
 pragma solidity 0.8.11;
 
 // import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 contract WETHMock {
     string public name     = "Wrapped Ether";
@@ -43,7 +44,7 @@ contract WETHMock {
     function withdraw(uint wad) public {
         require(balanceOf[msg.sender] >= wad);
         balanceOf[msg.sender] -= wad;
-        payable(msg.sender).transfer(wad);
+        Address.sendValue(payable(msg.sender), address(this).balance);
         emit Withdrawal(msg.sender, wad);
     }
 

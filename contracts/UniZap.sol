@@ -11,6 +11,7 @@ pragma solidity 0.8.11;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./PiAdmin.sol";
 
@@ -214,7 +215,7 @@ contract UniZap is PiAdmin, ReentrancyGuard {
     // Sweep airdroips / remains
     function sweep(address _token) external onlyAdmin {
         if (_token == address(0)) {
-            payable(msg.sender).transfer(address(this).balance);
+            Address.sendValue(payable(msg.sender), address(this).balance);
         } else {
             uint amount = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransfer(msg.sender, amount);

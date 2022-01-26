@@ -4,6 +4,7 @@ pragma solidity 0.8.11;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./PiAdmin.sol";
 import "../interfaces/IPiToken.sol";
@@ -255,16 +256,16 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         uint withdrawn = _controller(_pid).withdraw(msg.sender, _shares);
         require(withdrawn > 0, "No funds withdrawn");
 
-        uint __wantBalance = _wantBalance(pool.want) - _before;
+        uint _balance = _wantBalance(pool.want) - _before;
 
         // In case we have WNative we unwrap to Native
         if (address(pool.want) == address(WNative)) {
             // Unwrap WNative => Native
-            WNative.withdraw(__wantBalance);
+            WNative.withdraw(_balance);
 
-            payable(msg.sender).transfer(__wantBalance);
+            Address.sendValue(payable(msg.sender), _balance);
         } else {
-            pool.want.safeTransfer(address(msg.sender), __wantBalance);
+            pool.want.safeTransfer(address(msg.sender), _balance);
         }
 
         // This is to "save" like the new amount of shares was paid
