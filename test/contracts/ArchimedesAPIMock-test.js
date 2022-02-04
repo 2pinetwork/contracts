@@ -15,7 +15,7 @@ describe('ArchimedesAPIMock', () => {
 
   beforeEach(async () => {
     [, bob] = await ethers.getSigners()
-    piToken = await createPiToken(true)
+    piToken = await createPiToken({ tokenContract: 'PiTokenMock' })
     rewardsBlock = (await getBlock()) + 30
 
     archimedes = await deploy(

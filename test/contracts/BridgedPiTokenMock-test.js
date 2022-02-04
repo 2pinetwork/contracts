@@ -11,7 +11,7 @@ describe('BridgedPiTokenMock', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(true)
+    piToken = await createPiToken({ tokenContract: 'PiTokenMock' })
     bridgedPiToken = await deploy('BridgedPiTokenMock', piToken.address)
 
 

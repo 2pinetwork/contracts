@@ -11,7 +11,7 @@ describe('PiVault', () => {
     tomorrow = now + 86400
     nextWeek = now + (86400 * 7)
 
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
     piVault = await deploy('PiVault', piToken.address, tomorrow, nextWeek)
   })
 

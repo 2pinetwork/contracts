@@ -33,7 +33,9 @@ contract TestPiToken is PiAdmin, ERC20 {
 
 
     constructor() ERC20('Test-P-2Pi', 'Test-P-2Pi') {
-        _mint(address(this), 6.28e25); // max pi token supply
+        // Shared max supply
+        _mint(msg.sender, 3.14e25);
+        _mint(address(this), 3.14e25);
     }
 
     function initRewardsOn(uint _blockNumber) external onlyAdmin {

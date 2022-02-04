@@ -46,30 +46,35 @@ const deployWithMainDeployer = async (name, ...args) => {
   return contract
 }
 
-const createPiToken = async (mocked, withDeployer) => {
-  const contractName = mocked ? 'PiTokenMock' : 'PiToken'
+const createPiToken = async ({ tokenContract, withDeployer } = {}) => {
   let piToken
+  const contractName = tokenContract || 'TestPiToken'
 
-  if (withDeployer)
-    piToken = await deployWithMainDeployer(contractName);
-  else
+  if (withDeployer) {
+    piToken = await deployWithMainDeployer(contractName)
+  } else {
     piToken = await deploy(contractName)
+  }
 
-  await piToken.deployed();
+  await piToken.deployed()
 
-  await global.superTokenFactory.initializeCustomSuperToken(piToken.address);
-  piToken = await ethers.getContractAt('IPiTokenMocked', piToken.address)
+  if (contractName !== 'TestPiToken') {
+    await global.superTokenFactory.initializeCustomSuperToken(piToken.address)
 
-  if (withDeployer)
-    piToken = piToken.connect(global.deployer)
+    piToken = await ethers.getContractAt('IPiTokenMocked', piToken.address)
 
-  const MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
+    if (withDeployer) {
+      piToken = piToken.connect(global.deployer)
+    }
 
-  expect(await piToken.totalSupply()).to.equal(0)
-  expect(await piToken.balanceOf(owner.address)).to.equal(0)
-  expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
+    const MAX_SUPPLY = parseInt(await piToken.MAX_SUPPLY(), 10)
 
-  await expect(piToken.init()).to.emit(piToken, 'Minted')
+    expect(await piToken.totalSupply()).to.equal(0)
+    expect(await piToken.balanceOf(owner.address)).to.equal(0)
+    expect(await piToken.cap()).to.equal(toNumber(MAX_SUPPLY))
+
+    await expect(piToken.init()).to.emit(piToken, 'Minted')
+  }
 
   return piToken
 }
@@ -234,7 +239,7 @@ const setupNeededTokens = async () => {
 
   // DEPLOY PiToken
   console.log('Deploying PiToken')
-  global.PiToken = await createPiToken(false, true)
+  global.PiToken = await createPiToken({ tokenContract: 'PiToken', withDeployer: true })
   expect(global.PiToken.address).to.be.equal('0x5095d3313C76E8d29163e40a0223A5816a8037D8')
 
   console.log('Deploying BTC')
@@ -244,7 +249,6 @@ const setupNeededTokens = async () => {
   console.log('Deploying CRV')
   global.CRV = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
   expect(global.CRV.address).to.be.equal('0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E')
-
 
   console.log('Deploying Curve Pool & BTC-CRV')
   global.CurvePool = await deployWithMainDeployer('CurvePoolMock')

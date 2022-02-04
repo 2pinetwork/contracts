@@ -15,7 +15,7 @@ describe('BridgedPiToken', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
     bridgedPiToken = await deploy('BridgedPiToken', piToken.address)
 
     expect(await bridgedPiToken.available()).to.equal(0)

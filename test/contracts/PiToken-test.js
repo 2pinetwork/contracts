@@ -16,7 +16,7 @@ describe('PiToken', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
 
     INITIAL_SUPPLY = await piToken.INITIAL_SUPPLY()
 
