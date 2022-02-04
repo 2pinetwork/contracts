@@ -42,6 +42,10 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         _setupRole(HARVESTER_ROLE, msg.sender);
     }
 
+    function identifier() external view returns (string memory) {
+        return string(abi.encodePacked(poolId, "@BalancerV2#1.0.0", poolId));
+    }
+
     function claimRewards(BalancerV2Claim[] memory _claims, IERC20[] memory _claimTokens) external nonReentrant {
         require(hasRole(HARVESTER_ROLE, msg.sender), "Not a harvester");
 

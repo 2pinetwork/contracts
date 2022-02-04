@@ -103,6 +103,12 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         _;
     }
 
+    function identifier() external view returns (string memory) {
+        return string(abi.encodePacked(
+            IERC20Metadata(want).symbol(), "@Aave#1.0.0"
+        ));
+    }
+
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
