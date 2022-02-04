@@ -6,10 +6,12 @@ import "hardhat/console.sol";
 
 import "./ControllerStratAbs.sol";
 import "../interfaces/IBalancer.sol";
+import "../libraries/Bytes32Utils.sol";
 
 contract ControllerBalancerV2Strat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
+    using Bytes32Utils for bytes32;
 
     bytes32 public constant HARVESTER_ROLE = keccak256("HARVESTER_ROLE");
 
@@ -42,8 +44,14 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         _setupRole(HARVESTER_ROLE, msg.sender);
     }
 
+
     function identifier() external view returns (string memory) {
-        return string(abi.encodePacked(poolId, "@BalancerV2#1.0.0", poolId));
+        return string(abi.encodePacked(
+            want.symbol(),
+            "-0x",
+            poolId.toString(),
+            "@BalancerV2#1.0.0"
+        ));
     }
 
     function claimRewards(BalancerV2Claim[] memory _claims, IERC20[] memory _claimTokens) external nonReentrant {

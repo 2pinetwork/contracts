@@ -105,7 +105,7 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(
-            IERC20Metadata(want).symbol(), "@Aave#1.0.0"
+            IERC20Metadata(want).symbol(), "@AaveV2#1.0.0"
         ));
     }
 
