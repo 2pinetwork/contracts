@@ -36,6 +36,10 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         TOKEN_INDEX = int128(uint128(i));
     }
 
+    function identifier() external pure returns (string memory) {
+        return string("3eps@Ellipsis#1.0.0");
+    }
+
     function harvest() public nonReentrant override {
         uint _before = wantBalance();
 

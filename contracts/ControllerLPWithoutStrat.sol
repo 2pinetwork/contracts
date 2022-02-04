@@ -30,6 +30,10 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
         _;
     }
 
+    function identifier() external pure returns (string memory) {
+        return string("any@LP#1.0.0");
+    }
+
     // @dev Just receive LPs from Controller
     function deposit() external whenNotPaused onlyController nonReentrant {
         // This function is ALWAYS called from the Controller and is used just

@@ -102,6 +102,10 @@ describe('Controller Curve Strat', () => {
     it('Initial deployment should have a zero balance', async () => {
       expect(await strat.btcBalance()).to.equal(0)
     })
+
+    it('Right identifier', async () => {
+      expect(await strat.identifier()).to.be.equal('Ren@Curve#1.0.0')
+    })
   })
 
   describe('Set functions', () => {

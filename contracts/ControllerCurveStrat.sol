@@ -69,6 +69,10 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
         _;
     }
 
+    function identifier() external pure returns (string memory) {
+        return string("Ren@Curve#1.0.0");
+    }
+
     function setTreasury(address _treasury) external onlyAdmin nonReentrant {
         require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");

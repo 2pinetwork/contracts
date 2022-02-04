@@ -483,6 +483,14 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         return piToken.communityMintPerBlock() * reserve / COMMISSION_RATE_PRECISION;
     }
 
+    function poolStrategyInfo(uint _pid) external view returns (
+        IStrategy strategy,
+        string memory stratIdentifier
+    ) {
+        strategy = IStrategy(_controller(_pid).strategy());
+        stratIdentifier = strategy.identifier();
+    }
+
     // Only to be mocked
     function _blockNumber() internal view virtual returns (uint) {
         return block.number;

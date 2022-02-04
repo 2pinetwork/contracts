@@ -116,6 +116,10 @@ describe('Controller Aave Strat', () => {
     it('Initial deployment should have a zero balance', async () => {
       expect(await strat.wantBalance()).to.equal(0)
     })
+
+    it('Right identifier', async () => {
+      expect(await strat.identifier()).to.be.equal('2Pi@AaveV2#1.0.0')
+    })
   })
 
   describe('Set functions', () => {

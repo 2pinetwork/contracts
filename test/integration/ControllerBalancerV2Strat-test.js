@@ -7,7 +7,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { resetHardhat, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller BalancerV2 Strat USDC', () => {
   let bob
@@ -51,6 +51,10 @@ describe('Controller BalancerV2 Strat USDC', () => {
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444'), // Doge less than qi
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
+
+    expect(await strat.identifier()).to.be.equal(
+      'USDC-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
+    )
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
@@ -144,7 +148,7 @@ describe('Controller BalancerV2 Strat USDT', () => {
       rewardsBlock,
       WMATIC.address
     )
-    usdt = await ethers.getContractAt('IERC20Metadata', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174')
+    usdt = await ethers.getContractAt('IERC20Metadata', '0xc2132d05d31c914a87c6611c10748aeb04b58e8f')
     qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
     bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
 
@@ -158,6 +162,10 @@ describe('Controller BalancerV2 Strat USDT', () => {
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444'), // Doge less than qi
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
+
+    expect(await strat.identifier()).to.be.equal(
+      'USDT-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
+    )
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
@@ -265,6 +273,10 @@ describe('Controller BalancerV2 Strat DAI', () => {
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444'), // Doge less than qi
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
+
+    expect(await strat.identifier()).to.be.equal(
+      'DAI-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
+    )
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
