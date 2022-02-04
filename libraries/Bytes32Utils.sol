@@ -5,6 +5,7 @@ pragma solidity 0.8.11;
 library Bytes32Utils {
     function toString(bytes32 _bytes32) internal pure returns (string memory) {
         bytes memory bytesArray = new bytes(64);
+
         for (uint8 i = 0; i < bytesArray.length; i++) {
             uint8 _f = uint8(_bytes32[i/2] >> 4);
             uint8 _l = uint8(_bytes32[i/2] & 0x0f);
