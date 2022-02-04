@@ -13,7 +13,7 @@ describe('PiTokenMock', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken(true)
+    piToken = await createPiToken({ tokenContract: 'PiTokenMock' })
 
     INITIAL_SUPPLY = await piToken.INITIAL_SUPPLY()
     MAX_SUPPLY = await piToken.MAX_SUPPLY()

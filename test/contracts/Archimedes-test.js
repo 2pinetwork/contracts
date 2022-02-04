@@ -37,7 +37,7 @@ describe('Archimedes', () => {
   })
 
   beforeEach(async () => {
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
     rewardsBlock = (await getBlock()) + 20
 
     archimedes = await deploy(

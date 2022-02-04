@@ -19,7 +19,7 @@ describe('DistributorMock', () => {
   beforeEach(async () => {
     let now = (await hre.ethers.provider.getBlock()).timestamp
 
-    piToken = await createPiToken(true) // mocked
+    piToken = await createPiToken({ tokenContract: 'PiTokenMock' })
 
     piVault = await deploy('PiVault', piToken.address, now, now)
     deployBlock = (await getBlock()) + 1

@@ -15,7 +15,7 @@ describe('Distributor setup', () => {
   beforeEach(async () => {
     let now = (await hre.ethers.provider.getBlock()).timestamp
 
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
 
     piVault = await deploy('PiVault', piToken.address, now, now)
     distributor = await deploy(
@@ -86,7 +86,7 @@ describe('Distributor', () => {
   beforeEach(async () => {
     let now = (await hre.ethers.provider.getBlock()).timestamp
 
-    piToken = await createPiToken()
+    piToken = await createPiToken({ tokenContract: 'PiToken' })
 
     treasury = owner.address
 

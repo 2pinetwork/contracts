@@ -76,7 +76,7 @@ describe('Controller Aave Strat', () => {
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
-    piToken      = await createPiToken()
+    piToken      = await createPiToken({ tokenContract: 'PiToken' })
     rewardsBlock = (await getBlock()) + 20
     archimedes   = await deploy(
       'Archimedes',
