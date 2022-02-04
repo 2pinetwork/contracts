@@ -13,6 +13,7 @@ library Bytes32Utils {
             bytesArray[i] = toByte(_f);
             bytesArray[++i] = toByte(_l);
         }
+
         return string(bytesArray);
     }
 
