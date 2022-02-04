@@ -98,6 +98,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     function setStrategy(address newStrategy) external onlyAdmin nonReentrant {
         require(newStrategy != strategy, "Same strategy");
         require(newStrategy != address(0), "!ZeroAddress");
+        require(IStrategy(newStrategy).want() == address(want), "Not same want");
         emit NewStrategy(strategy, newStrategy);
 
         if (strategy != address(0)) {

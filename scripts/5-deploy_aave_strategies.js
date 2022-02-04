@@ -22,7 +22,7 @@ async function main() {
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
-    ).deploy(...ctrollerArgs, {type: 0});
+    ).deploy(...ctrollerArgs);
 
     await controller.deployed(5);
 

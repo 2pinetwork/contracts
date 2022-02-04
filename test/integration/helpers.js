@@ -34,7 +34,6 @@ const setWbtcBalanceFor = async (address, amount) => {
 const setCustomBalanceFor = async (token, address, weiAmount, slot) => {
   const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [address, slot || 0])
   const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(weiAmount.toHexString(), 32))
-
   await ethers.provider.send('hardhat_setStorageAt', [token, index.toString(), balance32])
 }
 

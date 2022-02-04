@@ -78,7 +78,7 @@ async function main() {
       await (await strategy.setRewardToWantRoute(token, [token, "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", pool.address])).wait()
     }
     // await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
-    // await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
+    await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
 
     deploy[`strat-bal-${pool.currency}`] = {
       controller: controller.address,

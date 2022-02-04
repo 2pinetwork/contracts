@@ -9,7 +9,7 @@ async function main() {
   const deploy = JSON.parse(
     fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
   )
-  const pools = deploy.aavePools
+  const pools = deploy.balancerPools
 
   let pool
   const archimedes = await (
@@ -21,7 +21,7 @@ async function main() {
   for (pool of pools) {
     if (pool.currency != onlyCurrency) { continue }
 
-    let stratData = deploy[`strat-aave-${pool.currency}`] || deploy[`strat-aave-W${pool.currency}`]
+    let stratData = deploy[`strat-bal-${pool.currency}`] || deploy[`strat-bal-W${pool.currency}`]
     stratData.oldStrat = stratData.strategy
 
     let controller = await (
@@ -65,12 +65,12 @@ async function main() {
     await (await strategy.setPriceFeed(WNATIVE.address, deploy.chainlink[WNATIVE.address])).wait()
     if (pool.currency != 'AVAX' && pool.currency != 'MATIC') {
       await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
-      await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
+      // await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
       await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
     }
 
     stratData.strategy = strategy.address
-    deploy[`strat-aave-${pool.currency}`] = stratData
+    deploy[`strat-bal-${pool.currency}`] = stratData
   }
 
   fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))

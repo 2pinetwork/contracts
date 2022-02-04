@@ -272,6 +272,6 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
-        _deposit();
+        if (wantBalance() > 0) { _deposit(); }
     }
 }

@@ -36,12 +36,6 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         TOKEN_INDEX = int128(uint128(i));
     }
 
-    function setRewardToWantRoute(address[] calldata _route) external onlyAdmin {
-        require(_route[0] == REWARD_TOKEN, "First route isn't REWARD");
-        require(_route[_route.length - 1] == address(want), "Last route isn't want");
-        rewardToWantRoute[REWARD_TOKEN] = _route;
-    }
-
     function harvest() public nonReentrant override {
         uint _before = wantBalance();
 

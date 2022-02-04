@@ -11,4 +11,5 @@ interface IStrategy {
     function retireStrat() external;
     function want() external view returns (address);
     function withdraw(uint) external returns (uint);
+    function identifier() external view returns (string memory);
 }

@@ -53,7 +53,6 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
     }
 
     function harvest() public nonReentrant override {
-        require(hasRole(HARVESTER_ROLE, msg.sender), "Not a harvester");
         uint _before = wantBalance();
 
         _swapRewards();
@@ -100,7 +99,11 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
 
         amounts[_tokenIndex(tokens)] = _balance;
 
-        uint expected = _balance * WANT_MISSING_PRECISION * SHARES_PRECISION / _pricePerShare();
+        uint expected = (
+            _balance * WANT_MISSING_PRECISION * SHARES_PRECISION *
+            (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION /
+            _pricePerShare()
+        );
 
         require(expected > 0, "Insufficient expected amount");
 

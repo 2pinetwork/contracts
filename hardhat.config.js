@@ -35,6 +35,7 @@ const hardhatNetwork = () => {
               url:           `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
               gasMultiplier: 10,
               blockNumber:   19880876
+              // blockNumber:    24479611 // test for balancer
             }
           }
     }
@@ -128,8 +129,8 @@ module.exports = {
       network_id: 137,
     },
     mumbai: {
-      url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
-      // url:        'https://rpc-mumbai.maticvigil.com',
+      // url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
+      url:        'https://rpc-mumbai.maticvigil.com',
       accounts:   accounts,
       network_id: 80001,
     },

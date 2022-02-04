@@ -15,14 +15,14 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address public immutable controller; // immutable to prevent anyone to change it and withdraw
-    address public immutable LP;
+    address public immutable want; // LP
 
     constructor(address _controller, address _lp) {
         require(_controller != address(0), "Controller !ZeroAddress");
-        require(_lp != address(0), "LP !ZeroAddress");
+        require(_lp != address(0), "want !ZeroAddress");
 
         controller = _controller;
-        LP = _lp;
+        want = _lp;
     }
 
     modifier onlyController() {
@@ -45,7 +45,7 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
 
     // @dev Just return LPs to Controller
     function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
-        IERC20(LP).safeTransfer(controller, _amount);
+        IERC20(want).safeTransfer(controller, _amount);
 
         return _amount;
     }
@@ -53,17 +53,17 @@ contract ControllerLPWithoutStrat is PiAdmin, Pausable, ReentrancyGuard {
     // @dev Just to be called from Controller for compatibility
     function beforeMovement() external nonReentrant { }
 
-    function LPBalance() public view returns (uint) {
-        return IERC20(LP).balanceOf(address(this));
+    function wantBalance() public view returns (uint) {
+        return IERC20(want).balanceOf(address(this));
     }
     function balance() public view returns (uint) {
-        return LPBalance();
+        return wantBalance();
     }
     // called as part of strat migration. Sends all the available funds back to the vault.
     function retireStrat() external onlyController {
         _pause();
 
-        IERC20(LP).safeTransfer(controller, LPBalance());
+        IERC20(want).safeTransfer(controller, wantBalance());
     }
 
     function pause() public onlyAdmin {

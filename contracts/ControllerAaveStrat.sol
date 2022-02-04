@@ -475,6 +475,6 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
-        _leverage();
+        if (wantBalance() > 0) { _leverage(); }
     }
 }

@@ -24,6 +24,9 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
     address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
 
+    // COMPATIBILITY
+    address constant public want = BTC;
+
     // Pool settings
     uint public ratioForFullWithdraw = 9000; // 90% [Min % to full withdraw
     uint public poolSlippageRatio = 20; // 0.2% [Slippage % to add/remove liquidity to/from the pool]
@@ -393,6 +396,7 @@ contract ControllerCurveStrat is Swappable, Pausable, ReentrancyGuard {
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
+        // this deposit checks the balances
         _deposit();
     }
 }
