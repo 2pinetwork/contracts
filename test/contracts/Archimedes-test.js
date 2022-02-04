@@ -648,4 +648,13 @@ describe('Archimedes', () => {
       )
     })
   })
+
+  describe('Strat info', async () => {
+    it('should return strategy address and identifier', async () => {
+      const [strat, identifier] = await archimedes.poolStrategyInfo(0)
+
+      expect(strat).to.be.equal(await controller.strategy())
+      expect(identifier).to.be.equal('2Pi@AaveV2#1.0.0')
+    })
+  })
 })
