@@ -54,6 +54,8 @@ describe('Controller Curve Strat', () => {
       waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
       waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+      waitFor(strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, WETH.address, BTC.address])),
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, BTC.address]))
     ])
   })
 
@@ -74,14 +76,13 @@ describe('Controller Curve Strat', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
-    // to ask for rewards (max 100 blocks
+    // to ask for rewards (max 100 blocks)
     for (let i = 0; i < 20; i++) {
       await mineNTimes(5)
-      await waitFor(strat.harvest())
 
-      if (balance < (await strat.balanceOfPool())) {
-        break
-      }
+      expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+      if (balance < (await strat.balanceOfPool())) { break }
       console.log('Mined 6 blocks...')
     }
     console.log(`Claim en el bloque: ${await getBlock()} `)
@@ -109,6 +110,65 @@ describe('Controller Curve Strat', () => {
     expect(await BTC.balanceOf(bob.address)).to.within(
       99.8e8 + '', // between 0.1% and 0.2%
       99.9e8 + ''
+    )
+  })
+
+  it('Deposit and change strategy', async () => {
+    await setWbtcBalanceFor(bob.address, '100')
+    expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(BTC.connect(bob).approve(archimedes.address, '' + 100e8))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e8)
+    expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      99.5e18 + '', // production virtual price is ~1.00367.
+      100e18 + ''
+    )
+
+    const otherStrat = await deploy(
+      'ControllerAaveStrat',
+      BTC.address,
+      4800,
+      5000,
+      8,
+      1e3,
+      controller.address,
+      global.exchange.address,
+      owner.address
+    )
+    await Promise.all([
+      waitFor(otherStrat.setMaxPriceOffset(86400)),
+      waitFor(otherStrat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(otherStrat.setPriceFeed(BTC.address, btcFeed.address)),
+    ])
+
+    expect(await controller.setStrategy(otherStrat.address)).to.emit(controller, 'NewStrategy').withArgs(
+      strat.address, otherStrat.address
+    )
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e8)
+    expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await strat.balance()).to.be.equal(0)
+    expect(await otherStrat.balance()).to.be.within(
+      99e8, 100e8
+    )
+
+    await waitFor(strat.unpause())
+    expect(await controller.setStrategy(strat.address)).to.emit(controller, 'NewStrategy').withArgs(
+      otherStrat.address, strat.address
+    )
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e8)
+    expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await otherStrat.balance()).to.be.equal(0)
+    expect(await strat.balance()).to.be.within(
+      99e8, 100e8
     )
   })
 })
