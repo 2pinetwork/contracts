@@ -18,7 +18,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         owner.address
       )
-    ).to.be.revertedWith("Controller !ZeroAddress")
+    ).to.be.revertedWith('Controller !ZeroAddress')
   })
 
   it('Should not deploy with zero address exchange', async () => {
@@ -29,7 +29,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         zeroAddress,
         owner.address
       )
-    ).to.be.revertedWith("Exchange !ZeroAddress")
+    ).to.be.revertedWith('Exchange !ZeroAddress')
   })
 
   it('Should not deploy with zero address treasury', async () => {
@@ -40,7 +40,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         zeroAddress
       )
-    ).to.be.revertedWith("Treasury !ZeroAddress")
+    ).to.be.revertedWith('Treasury !ZeroAddress')
   })
 })
 
@@ -86,6 +86,8 @@ describe('Controller Curve Strat', () => {
       waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
       waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+      waitFor(strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, piToken.address, BTC.address])),
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, piToken.address, BTC.address]))
     ])
 
 
@@ -100,7 +102,7 @@ describe('Controller Curve Strat', () => {
 
   describe('Deployment', () => {
     it('Initial deployment should have a zero balance', async () => {
-      expect(await strat.btcBalance()).to.equal(0)
+      expect(await strat.wantBalance()).to.equal(0)
     })
 
     it('Right identifier', async () => {
@@ -154,26 +156,26 @@ describe('Controller Curve Strat', () => {
 
     it('Should set wNative swap route', async () => {
       // change to test the function
-      expect(await strat.wNativeToBtcRoute(0)).to.equal(WMATIC.address)
-      expect(await strat.wNativeToBtcRoute(2)).to.equal(BTC.address)
+      expect(await strat.rewardToWantRoute(WMATIC.address, 0)).to.equal(WMATIC.address)
+      expect(await strat.rewardToWantRoute(WMATIC.address, 2)).to.equal(BTC.address)
 
-      await strat.setWNativeSwapRoute([WMATIC.address, piToken.address, BTC.address])
+      await strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, piToken.address, BTC.address])
 
-      expect(await strat.wNativeToBtcRoute(0)).to.equal(WMATIC.address)
-      expect(await strat.wNativeToBtcRoute(1)).to.equal(piToken.address)
-      expect(await strat.wNativeToBtcRoute(2)).to.equal(BTC.address)
+      expect(await strat.rewardToWantRoute(WMATIC.address, 0)).to.equal(WMATIC.address)
+      expect(await strat.rewardToWantRoute(WMATIC.address, 1)).to.equal(piToken.address)
+      expect(await strat.rewardToWantRoute(WMATIC.address, 2)).to.equal(BTC.address)
     })
 
     it('Should set CRV swap route', async () => {
       // change to test the function
-      expect(await strat.crvToBtcRoute(0)).to.equal(CRV.address)
-      expect(await strat.crvToBtcRoute(2)).to.equal(BTC.address)
+      expect(await strat.rewardToWantRoute(CRV.address, 0)).to.equal(CRV.address)
+      expect(await strat.rewardToWantRoute(CRV.address, 2)).to.equal(BTC.address)
 
-      await strat.setCrvSwapRoute([CRV.address, piToken.address, BTC.address])
+      await strat.setRewardToWantRoute(CRV.address, [CRV.address, piToken.address, BTC.address])
 
-      expect(await strat.crvToBtcRoute(0)).to.equal(CRV.address)
-      expect(await strat.crvToBtcRoute(1)).to.equal(piToken.address)
-      expect(await strat.crvToBtcRoute(2)).to.equal(BTC.address)
+      expect(await strat.rewardToWantRoute(CRV.address, 0)).to.equal(CRV.address)
+      expect(await strat.rewardToWantRoute(CRV.address, 1)).to.equal(piToken.address)
+      expect(await strat.rewardToWantRoute(CRV.address, 2)).to.equal(BTC.address)
     })
 
     it('Should harvest without rewards', async () => {
@@ -255,11 +257,15 @@ describe('Controller Curve Strat', () => {
       // Will withdraw 10 from newStrat and 1 from pool
       await waitFor(strat.connect(ctrollerSigner).withdraw(1.1e3))
 
-      expect(await BTC.balanceOf(controller.address)).to.equal(1.1e3)
+      expect(await BTC.balanceOf(controller.address)).to.within(
+        1.09e3, 1.1e3
+      )
       expect(await BTC.balanceOf(strat.address)).to.equal(0)
       // Check it does some deleverage + re-deposit
       // 1e6 - 0.1e3
-      expect(await BTC.balanceOf(pool.address)).to.be.equal(1e6 - 0.1e3)
+      expect(await BTC.balanceOf(pool.address)).to.be.within(
+        1e6 - 0.1e3, 1e6 - 0.09e3
+      )
     })
 
     it('Should withdraw without remove liquidity', async () => {
@@ -481,22 +487,22 @@ describe('Controller Curve Strat', () => {
 
       await waitFor(BTC.transfer(strat.address, 1000))
 
-      // btcBalance
+      // wantBalance
       expect(await strat.balance()).to.be.equal(1000)
-      expect(await strat.btcBalance()).to.be.equal(1000)
-      expect(await strat.balanceOfPoolInBtc()).to.be.equal(0)
+      expect(await strat.wantBalance()).to.be.equal(1000)
+      expect(await strat.balanceOfPoolInWant()).to.be.equal(0)
 
       await waitFor(strat.connect(ctrollerSigner).deposit())
 
       expect(await strat.balance()).to.be.within(990, 1000) // 1% slip
-      expect(await strat.btcBalance()).to.be.equal(0)
-      expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
+      expect(await strat.wantBalance()).to.be.equal(0)
+      expect(await strat.balanceOfPoolInWant()).to.be.within(990, 1000)
 
       await waitFor(BTC.transfer(strat.address, 1000))
 
       expect(await strat.balance()).to.be.within(1990, 2000)
-      expect(await strat.btcBalance()).to.be.equal(1000)
-      expect(await strat.balanceOfPoolInBtc()).to.be.within(990, 1000)
+      expect(await strat.wantBalance()).to.be.equal(1000)
+      expect(await strat.balanceOfPoolInWant()).to.be.within(990, 1000)
     })
 
     it('Should return pool balance', async () => {

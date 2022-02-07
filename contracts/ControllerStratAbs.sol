@@ -25,7 +25,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     // so we only consider the decimal part)
     uint public poolMinVirtualPrice = 30; // 0.3%
     // Pool reward[s] route for Swap
-    mapping(address => address[]) rewardToWantRoute;
+    mapping(address => address[]) public rewardToWantRoute;
     // PoolRewards
     address[] public rewardTokens;
 
@@ -131,7 +131,6 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         if (newReward) { rewardTokens.push(_reward); }
         rewardToWantRoute[_reward] = _route;
     }
-
 
     function beforeMovement() external onlyController nonReentrant {
         _beforeMovement();
