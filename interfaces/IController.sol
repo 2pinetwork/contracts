@@ -10,6 +10,7 @@ interface IController {
     function decimals() external view returns (uint);
     function archimedes() external view returns (address);
     function deposit(address _depositor, uint _amount) external;
+    function depositNative(address _depositor) external payable;
     function withdraw(address _depositor, uint _shares) external returns (uint);
     function setPid(uint pid) external returns (uint);
 }

@@ -12,6 +12,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./Swappable.sol";
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
+import "../interfaces/IWNative.sol";
 
 // Swappable contract has the AccessControl module
 contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
@@ -182,6 +183,13 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     // Update new `lastBalance` for the next charge
     function _afterMovement() internal {
         lastBalance = balance();
+    }
+
+    function depositNative() external payable whenNotPaused onlyController nonReentrant {
+        IWNative(wNative).deposit{value: msg.value}();
+
+        _leverage();
+        _afterMovement();
     }
 
     function deposit() external whenNotPaused onlyController nonReentrant {

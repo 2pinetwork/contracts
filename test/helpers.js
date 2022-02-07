@@ -157,6 +157,19 @@ const createController = async (token, archimedes, stratName) => {
           owner.address
         )
         break
+      case 'ControllerEllipsisLPStrat':
+        strategy = await deploy(
+          'ControllerEllipsisLPStrat',
+          token.address,
+          11, // BNB/BNB-L pool ID
+          0, // BNB token index
+          '0x5781041F9Cf18484533F433Cb2Ea9ad42e117B3a', // BNB pool token
+          '0xc377e2648E5adD3F1CB51a8B77dBEb63Bd52c874', // BNB/BNB-L pool
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
       case 'ControllerBalancerV2Strat':
         strategy = await deploy(
           'ControllerBalancerV2Strat',

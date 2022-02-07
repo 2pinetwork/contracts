@@ -132,7 +132,7 @@ module.exports = {
       // url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
       url:        'https://rpc-mumbai.maticvigil.com',
       accounts:   accounts,
-      network_id: 80001,
+      network_id: 80001
     },
     kovan: {
       url:      process.env.KOVAN_URL || '',

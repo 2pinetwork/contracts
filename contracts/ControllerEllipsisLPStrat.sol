@@ -7,46 +7,49 @@ import "hardhat/console.sol";
 import "./ControllerStratAbs.sol";
 import "../interfaces/IEps.sol";
 
-contract ControllerEllipsisStrat is ControllerStratAbs {
+contract ControllerEllipsisLPStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
     address constant public REWARD_TOKEN = address(0xA7f552078dcC247C2684336020c03648500C6d9F);
-    IEpsPool constant public POOL = IEpsPool(0x160CAed03795365F3A589f10C379FfA7d75d4E76);
-    IERC20 constant public POOL_TOKEN = IERC20(0xaF4dE8E872131AE328Ce21D909C74705d3Aaf452);
+    address immutable public POOL_TOKEN; // = 0x5781041F9Cf18484533F433Cb2Ea9ad42e117B3a; BNB
+    IEpsLPPool immutable public POOL; // = IEpsLPPool(0xc377e2648E5adD3F1CB51a8B77dBEb63Bd52c874); BNB
     IEpsStaker constant public STAKE = IEpsStaker(0xcce949De564fE60e7f96C85e55177F8B9E4CF61b);
     IEpsMultiFeeDistribution constant public FEE_DISTRIBUTION = IEpsMultiFeeDistribution(0x4076CC26EFeE47825917D0feC3A79d0bB9a6bB5c);
 
     int128 private immutable TOKEN_INDEX; // want token index in the pool
-    uint private constant TOKENS_COUNT = 3; // 3Eps pool
-    uint private constant STAKE_POOL_ID = 1; // 3Eps pool
+    uint private constant TOKENS_COUNT = 2; // LP pool
+    uint private immutable STAKE_POOL_ID; // 11 BNB/BNBL (bnbEPS)
 
     constructor(
         IERC20Metadata _want,
+        uint _stakePoolId,
+        int128 _tokenIndex,
+        address _poolToken,
+        address _pool,
         address _controller,
         address _exchange,
         address _treasury
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        uint i = 0;
-
-        for (i; i < TOKENS_COUNT; i++) {
-            if (address(want) == POOL.coins(i)) { break; }
-        }
-
-        TOKEN_INDEX = int128(uint128(i));
+        POOL = IEpsLPPool(_pool);
+        POOL_TOKEN = _poolToken;
+        STAKE_POOL_ID = _stakePoolId;
+        TOKEN_INDEX = _tokenIndex;
     }
 
-    function identifier() external pure returns (string memory) {
-        return string("3eps@Ellipsis#1.0.0");
+    function identifier() external view returns (string memory) {
+        return string(abi.encodePacked(
+            IERC20Metadata(POOL_TOKEN).symbol(), "@Ellipsis#1.0.0"
+        ));
     }
 
     function harvest() public nonReentrant override {
-        uint _before = wantBalance();
+        uint _before = address(this).balance;
 
         _claimRewards();
         _swapRewards();
 
-        uint harvested = wantBalance() - _before;
+        uint harvested = address(this).balance - _before;
 
         // Charge performance fee for earned want + rewards
         _beforeMovement();
@@ -61,7 +64,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     }
 
     function _deposit() internal override {
-        uint wantBal = wantBalance();
+        uint wantBal = address(this).balance;
 
         if (wantBal > 0) {
             uint[TOKENS_COUNT] memory amounts = _amountToAmountsList(wantBal);
@@ -72,10 +75,10 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
             POOL.add_liquidity(amounts, expected);
         }
 
-        uint poolTokenBal = POOL_TOKEN.balanceOf(address(this));
+        uint poolTokenBal = IERC20(POOL_TOKEN).balanceOf(address(this));
 
         if (poolTokenBal > 0) {
-            POOL_TOKEN.safeApprove(address(STAKE), poolTokenBal);
+            IERC20(POOL_TOKEN).safeApprove(address(STAKE), poolTokenBal);
             STAKE.deposit(STAKE_POOL_ID, poolTokenBal);
         }
     }
@@ -117,15 +120,15 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
 
         // remove_liquidity
-        uint _balance = POOL_TOKEN.balanceOf(address(this));
+        uint _balance = IERC20(POOL_TOKEN).balanceOf(address(this));
         uint expected = _poolTokenToWantDoubleCheck(_balance);
 
         require(expected > 0, "remove_liquidity expected = 0");
 
-        uint wantBal = wantBalance();
+        uint wantBal = address(this).balance;
         POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
 
-        return wantBalance() - wantBal;
+        return address(this).balance - wantBal;
     }
 
     function _withdrawAll() internal override returns (uint) {
@@ -134,15 +137,15 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
 
         // remove_liquidity
-        uint _balance = POOL_TOKEN.balanceOf(address(this));
+        uint _balance = IERC20(POOL_TOKEN).balanceOf(address(this));
         uint expected = _poolTokenToWantDoubleCheck(_balance);
 
         require(expected > 0, "remove_liquidity expected = 0");
 
-        uint wantBal = wantBalance();
+        uint wantBal = address(this).balance;
         POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
 
-        return wantBalance() - wantBal;
+        return address(this).balance - wantBal;
     }
 
 

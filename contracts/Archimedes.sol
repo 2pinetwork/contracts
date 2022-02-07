@@ -192,9 +192,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     // Direct native deposit
     function depositNative(uint _pid, address _referrer) external payable nonReentrant {
-        uint _amount = msg.value;
-        require(_amount > 0, "Insufficient deposit");
-        require(address(poolInfo[_pid].want) == address(WNative), "Only Native token pool");
+        require(msg.value > 0, "Insufficient deposit");
 
         // Update pool rewards
         updatePool(_pid);
@@ -205,11 +203,8 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         // Pay rewards
         _calcPendingAndPayRewards(_pid, msg.sender);
 
-        // With that Archimedes already has the wNative
-        WNative.deposit{value: _amount}();
-
         // Deposit in the controller
-        _depositInStrategy(_pid, _amount);
+        _depositNativeInStrategy(_pid);
     }
 
     // Deposit want token to Archimedes for PI allocation.
@@ -357,6 +352,16 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
             referralMgr.recordReferral(msg.sender, _referrer);
         }
+    }
+
+    function _depositNativeInStrategy(uint _pid) internal {
+        // Archimedes => controller transfer & deposit
+        _controller(_pid).depositNative(msg.sender);
+
+        // This is to "save" like the new amount of shares was paid
+        _updateUserPaidRewards(_pid, msg.sender);
+
+        emit Deposit(_pid, msg.sender, msg.value);
     }
 
     function _depositInStrategy(uint _pid, uint _amount) internal {
