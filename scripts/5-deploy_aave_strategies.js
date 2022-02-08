@@ -11,12 +11,13 @@ async function main() {
   )
   const pools = deploy.aavePools
 
-  let pool
+  let originalPool
   const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
 
-  let args
+  let args, pool
 
-  for (pool of pools) {
+  for (originalPool of pools) {
+    pool = {...originalPool}
     let ctrollerArgs = [
       pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${pool.currency}`
     ]
@@ -24,9 +25,11 @@ async function main() {
       await hre.ethers.getContractFactory('Controller')
     ).deploy(...ctrollerArgs);
 
-    await controller.deployed(5);
+    await controller.deployed(10);
 
     await verify('Controller', controller.address, ctrollerArgs)
+
+    pool.controller = controller.address
 
     if (deploy.chainlink[pool.address]) {
       let oracle = await hre.ethers.getContractAt(
@@ -56,40 +59,42 @@ async function main() {
 
     let strategy = await ( await hre.ethers.getContractFactory('ControllerAaveStrat')).deploy(...args, {type: 0});
 
-    await strategy.deployed(5);
+    await strategy.deployed(10);
 
     console.log('Strategy ' + pool.currency + ':')
 
     await verify('ControllerAaveStrat', strategy.address, args)
+
+    pool.strategy = strategy.address
 
     await (await controller.setStrategy(strategy.address)).wait()
 
     await (await archimedes.addNewPool(pool.address, controller.address, 5, false)).wait()
 
     let pid = await controller.pid()
+
+    pool.pid = pid.toBigInt().toString()
+
     console.log(`Configured ${pool.currency} in ${pid}`)
 
     await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
     await (await strategy.setPriceFeed(deploy.WNATIVE, deploy.chainlink[deploy.WNATIVE])).wait()
-    if (pool.currency != 'AVAX') {
+    // only non-[w]native
+    if (pool.address != pool.WNATIVE) {
       await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
-      // await (await strategy.setSwapSlippageRatio(100)).wait() // mumbai LP's are not balanced
     }
 
-    deploy[`strat-aave-${pool.currency}`] = {
-      controller: controller.address,
-      strategy:   strategy.address,
-      pid:        pid.toBigInt().toString(),
-      tokenAddr:  pool.address
-    }
+    deploy[`strat-aave-${pool.currency}`] = pool
+    fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
   }
-
-  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()
   .then(() => process.exit(0))
   .catch(error => {
     console.error(error);
+    if (chainId && deploy) {
+      fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
+    }
     process.exit(1);
   });

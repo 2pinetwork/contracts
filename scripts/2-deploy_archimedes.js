@@ -3,8 +3,7 @@ const hre = require('hardhat');
 const fs = require('fs');
 const { verify } = require('./verify');
 
-async function main() {
-  const owner = (await hre.ethers.getSigners())[0]
+const main = async () => {
   // get Current Block
   let block = await hre.ethers.provider.getBlock()
 
@@ -25,24 +24,17 @@ async function main() {
   ).deploy(...args)
 
   console.log('Archimedes: ')
-  await archimedes.deployed()
+  await archimedes.deployed(2)
   await verify('Archimedes', archimedes.address, args)
-  console.log('2-deploy_archimedes.js:30');
 
   deploy.Archimedes = archimedes.address
-  console.log('2-deploy_archimedes.js:33');
 
   const piToken = await hre.ethers.getContractAt('IPiTokenMocked', deploy.PiToken)
-  console.log('2-deploy_archimedes.js:36');
   await (await piToken.addMinter(archimedes.address)).wait()
-  console.log('2-deploy_archimedes.js:38');
   // await (await piToken.initRewardsOn(deploy.block)).wait()
   // console.log('2-deploy_archimedes.js:40');
 
-  const ref = await (
-    await hre.ethers.getContractFactory('Referral')
-  ).deploy(archimedes.address)
-  console.log('2-deploy_archimedes.js:45');
+  const ref = await (await hre.ethers.getContractFactory('Referral')).deploy(archimedes.address)
 
   await ref.deployed()
   console.log('Referral:')
