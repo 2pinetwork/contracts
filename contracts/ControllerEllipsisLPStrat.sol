@@ -11,7 +11,6 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
     using SafeERC20 for IERC20Metadata;
 
     address public constant WNATIVE = address(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);
-    address constant public REWARD_TOKEN = address(0xA7f552078dcC247C2684336020c03648500C6d9F);
     address immutable public POOL_TOKEN; // 0x5781041F9Cf18484533F433Cb2Ea9ad42e117B3a BNB
     IEpsLPPool immutable public POOL; // 0xc377e2648E5adD3F1CB51a8B77dBEb63Bd52c874 BNB
     IEpsStaker constant public STAKE = IEpsStaker(0xcce949De564fE60e7f96C85e55177F8B9E4CF61b);
@@ -76,9 +75,11 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
 
             if (address(want) == WNATIVE) {
                 IWNative(address(want)).withdraw(wantBal);
+              POOL.add_liquidity{value: wantBal}(amounts, expected);
+            } else {
+              # want.safeApprove(address(POOL), wantBal);
+              # POOL.add_liquidity(amounts, expected);
             }
-
-            POOL.add_liquidity{value: wantBal}(amounts, expected);
         }
 
         uint poolTokenBal = IERC20(POOL_TOKEN).balanceOf(address(this));
