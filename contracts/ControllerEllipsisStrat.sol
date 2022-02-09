@@ -11,7 +11,6 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    address constant public REWARD_TOKEN = address(0xA7f552078dcC247C2684336020c03648500C6d9F);
     IEpsPool constant public POOL = IEpsPool(0x160CAed03795365F3A589f10C379FfA7d75d4E76);
     IERC20 constant public POOL_TOKEN = IERC20(0xaF4dE8E872131AE328Ce21D909C74705d3Aaf452);
     IEpsStaker constant public STAKE = IEpsStaker(0xcce949De564fE60e7f96C85e55177F8B9E4CF61b);
@@ -79,9 +78,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
             STAKE.deposit(STAKE_POOL_ID, poolTokenBal);
         }
     }
-    /**
-     * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
-     */
+
     function _claimRewards() internal {
         uint[] memory pids = new uint[](1);
         pids[0] = STAKE_POOL_ID;
@@ -91,18 +88,21 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     }
 
     function _swapRewards() internal {
-        uint _balance = IERC20(REWARD_TOKEN).balanceOf(address(this));
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address rewardToken = rewardTokens[i];
+            uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
-        if (_balance > 0) {
-            uint expected = _expectedForSwap(_balance, REWARD_TOKEN, address(want));
+            if (_balance > 0) {
+                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
 
-            // Want price sometimes is too high so it requires a lot of rewards to swap
-            if (expected > 1) {
-                IERC20(REWARD_TOKEN).safeApprove(exchange, _balance);
+                // Want price sometimes is too high so it requires a lot of rewards to swap
+                if (expected > 1) {
+                    IERC20(rewardToken).safeApprove(exchange, _balance);
 
-                IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _balance, expected, rewardToWantRoute[REWARD_TOKEN], address(this), block.timestamp + 60
-                );
+                    IUniswapRouter(exchange).swapExactTokensForTokens(
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                    );
+                }
             }
         }
     }
@@ -112,7 +112,22 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         // To know how much we have to un-stake we use the same method to
         // calculate the expected poolToken at deposit
         uint poolTokenAmount = _wantToPoolTokenDoubleCheck(_amount, false);
+        uint wantBal = wantBalance();
 
+        _withdrawFromPool(poolTokenAmount);
+
+        return wantBalance() - wantBal;
+    }
+
+    function _withdrawAll() internal override returns (uint) {
+        uint wantBal = wantBalance();
+
+        _withdrawFromPool(balanceOfPool());
+
+        return wantBalance() - wantBal;
+    }
+
+    function _withdrawFromPool(uint poolTokenAmount) internal {
         // Remove staked from gauge
         STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
 
@@ -122,29 +137,8 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
 
         require(expected > 0, "remove_liquidity expected = 0");
 
-        uint wantBal = wantBalance();
         POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
-
-        return wantBalance() - wantBal;
     }
-
-    function _withdrawAll() internal override returns (uint) {
-        // Remove everything from stake
-        uint poolTokenAmount = balanceOfPool();
-        STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
-
-        // remove_liquidity
-        uint _balance = POOL_TOKEN.balanceOf(address(this));
-        uint expected = _poolTokenToWantDoubleCheck(_balance);
-
-        require(expected > 0, "remove_liquidity expected = 0");
-
-        uint wantBal = wantBalance();
-        POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
-
-        return wantBalance() - wantBal;
-    }
-
 
     function _minWantToPoolToken(uint _amount) internal view returns (uint) {
         // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
@@ -153,11 +147,11 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 poolToken tokens
         return _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
     }
+
     function _minPoolTokenToWant(uint _amount) internal view returns (uint) {
         // Double check for expected value
         // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap poolToken => want
         return _amount * (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) / (RATIO_PRECISION * WANT_MISSING_PRECISION);
-
     }
 
     function _poolTokenToWantDoubleCheck(uint _amount) internal view returns (uint wantAmount) {
@@ -194,6 +188,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
 
     function balanceOfPool() public view override returns (uint) {
         (uint _amount, ) = STAKE.userInfo(STAKE_POOL_ID, address(this));
+
         return _amount;
     }
 
@@ -202,7 +197,7 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
     }
 
     function _amountToAmountsList(uint _amount) internal view returns (uint[TOKENS_COUNT] memory) {
-        uint[TOKENS_COUNT]  memory amounts; // #  = new uint[](TOKENS_COUNT);
+        uint[TOKENS_COUNT] memory amounts; // #  = new uint[](TOKENS_COUNT);
         amounts[uint(uint128(TOKEN_INDEX))] = _amount;
 
         return amounts;
