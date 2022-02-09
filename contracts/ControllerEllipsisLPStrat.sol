@@ -10,6 +10,7 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
+    address public constant WNATIVE = address(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);
     address constant public REWARD_TOKEN = address(0xA7f552078dcC247C2684336020c03648500C6d9F);
     address immutable public POOL_TOKEN; // 0x5781041F9Cf18484533F433Cb2Ea9ad42e117B3a BNB
     IEpsLPPool immutable public POOL; // 0xc377e2648E5adD3F1CB51a8B77dBEb63Bd52c874 BNB
@@ -36,7 +37,7 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
         TOKEN_INDEX = _tokenIndex;
     }
 
-    // Deposit Native
+    // Remove liquidity for native token
     receive() external payable { }
 
     function identifier() external view returns (string memory) {
@@ -73,7 +74,10 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
 
             uint expected = _wantToPoolTokenDoubleCheck(wantBal, true);
 
-            IWNative(address(want)).withdraw(wantBal);
+            if (address(want) == WNATIVE) {
+                IWNative(address(want)).withdraw(wantBal);
+            }
+
             POOL.add_liquidity{value: wantBal}(amounts, expected);
         }
 
@@ -85,9 +89,6 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
         }
     }
 
-    /**
-     * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
-     */
     function _claimRewards() internal {
         uint[] memory pids = new uint[](1);
         pids[0] = STAKE_POOL_ID;
@@ -97,18 +98,21 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
     }
 
     function _swapRewards() internal {
-        uint _balance = IERC20(REWARD_TOKEN).balanceOf(address(this));
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address rewardToken = rewardTokens[i];
+            uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
-        if (_balance > 0) {
-            uint expected = _expectedForSwap(_balance, REWARD_TOKEN, address(want));
+            if (_balance > 0) {
+                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
 
-            // Want price sometimes is too high so it requires a lot of rewards to swap
-            if (expected > 1) {
-                IERC20(REWARD_TOKEN).safeApprove(exchange, _balance);
+                // Want price sometimes is too high so it requires a lot of rewards to swap
+                if (expected > 1) {
+                    IERC20(rewardToken).safeApprove(exchange, _balance);
 
-                IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _balance, expected, rewardToWantRoute[REWARD_TOKEN], address(this), block.timestamp + 60
-                );
+                    IUniswapRouter(exchange).swapExactTokensForTokens(
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                    );
+                }
             }
         }
     }
@@ -118,27 +122,23 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
         // To know how much we have to un-stake we use the same method to
         // calculate the expected poolToken at deposit
         uint poolTokenAmount = _wantToPoolTokenDoubleCheck(_amount, false);
-
-        // Remove staked from gauge
-        STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
-
-        // remove_liquidity
-        uint _balance = IERC20(POOL_TOKEN).balanceOf(address(this));
-        uint expected = _poolTokenToWantDoubleCheck(_balance);
-
-        require(expected > 0, "remove_liquidity expected = 0");
-
         uint wantBal = wantBalance();
 
-        POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
-        IWNative(address(want)).deposit{value: address(this).balance}();
+        _withdrawFromPool(poolTokenAmount);
 
         return wantBalance() - wantBal;
     }
 
     function _withdrawAll() internal override returns (uint) {
-        // Remove everything from stake
-        uint poolTokenAmount = balanceOfPool();
+        uint wantBal = wantBalance();
+
+        _withdrawFromPool(balanceOfPool());
+
+        return wantBalance() - wantBal;
+    }
+
+    function _withdrawFromPool(uint poolTokenAmount) internal {
+         // Remove staked from gauge
         STAKE.withdraw(STAKE_POOL_ID, poolTokenAmount);
 
         // remove_liquidity
@@ -147,13 +147,12 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
 
         require(expected > 0, "remove_liquidity expected = 0");
 
-        uint wantBal = wantBalance();
-
         POOL.remove_liquidity_one_coin(_balance, TOKEN_INDEX,  expected);
-        IWNative(address(want)).deposit{value: address(this).balance}();
 
-        return wantBalance() - wantBal;
-    }
+        if (address(want) == WNATIVE) {
+            IWNative(address(want)).deposit{value: address(this).balance}();
+        }
+     }
 
     function _minWantToPoolToken(uint _amount) internal view returns (uint) {
         // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
