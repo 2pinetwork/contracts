@@ -75,10 +75,10 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
 
             if (address(want) == WNATIVE) {
                 IWNative(address(want)).withdraw(wantBal);
-              POOL.add_liquidity{value: wantBal}(amounts, expected);
+                POOL.add_liquidity{value: wantBal}(amounts, expected);
             } else {
-              # want.safeApprove(address(POOL), wantBal);
-              # POOL.add_liquidity(amounts, expected);
+                // want.safeApprove(address(POOL), wantBal);
+                // POOL.add_liquidity(amounts, expected);
             }
         }
 

@@ -26,7 +26,8 @@ describe('Controller Ellipsis LP Strat', () => {
   let bnbFeed
   let epsFeed
   let WBNB
-  let REWARD_TOKEN
+  let REWARD_TOKEN_EPS
+  let REWARD_TOKEN_LIQR
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -44,28 +45,33 @@ describe('Controller Ellipsis LP Strat', () => {
 
     global.exchange = await ethers.getContractAt(uniswapAbi, '0x10ed43c718714eb63d5aa57b78b54704e256024e')
 
-    WBNB         = await ethers.getContractAt('IERC20Metadata', '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c')
-    REWARD_TOKEN = await ethers.getContractAt('IERC20Metadata', '0xA7f552078dcC247C2684336020c03648500C6d9F')
+    WBNB              = await ethers.getContractAt('IERC20Metadata', '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c')
+    REWARD_TOKEN_EPS  = await ethers.getContractAt('IERC20Metadata', '0xA7f552078dcC247C2684336020c03648500C6d9F')
+    REWARD_TOKEN_LIQR = await ethers.getContractAt('IERC20Metadata', '0x33333ee26a7d02e41c33828b42fb1e0889143477')
 
     controller = await createController(WBNB, archimedes, 'ControllerEllipsisLPStrat')
 
     await waitFor(archimedes.addNewPool(WBNB.address, controller.address, 10, false));
 
-    [strat, bnbFeed, epsFeed] = await Promise.all([
+    [strat, bnbFeed, liqrFeed, epsFeed] = await Promise.all([
       ethers.getContractAt('ControllerEllipsisLPStrat', (await controller.strategy())),
       ethers.getContractAt('IChainLink', '0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE'),
+      ethers.getContractAt('IChainLink', '0x47e01580C537Cd47dA339eA3a4aFb5998CCf037C'), // SPELL has similar price
       ethers.getContractAt('IChainLink', '0x27Cc356A5891A3Fe6f84D0457dE4d108C6078888') // XLM has similar price
     ])
 
     await Promise.all([
       setChainlinkRoundForNow(bnbFeed),
       setChainlinkRoundForNow(epsFeed),
+      setChainlinkRoundForNow(liqrFeed),
       waitFor(strat.setMaxPriceOffset(86400)),
       waitFor(strat.setPoolSlippageRatio(2000)), // 20%
       waitFor(strat.setSwapSlippageRatio(2000)), // 20%
       waitFor(strat.setPriceFeed(WBNB.address, bnbFeed.address)),
-      waitFor(strat.setPriceFeed(REWARD_TOKEN.address, epsFeed.address)),
-      waitFor(strat.setRewardToWantRoute(REWARD_TOKEN.address, [REWARD_TOKEN.address, WBNB.address]))
+      waitFor(strat.setPriceFeed(REWARD_TOKEN_EPS.address, epsFeed.address)),
+      waitFor(strat.setPriceFeed(REWARD_TOKEN_LIQR.address, liqrFeed.address)),
+      waitFor(strat.setRewardToWantRoute(REWARD_TOKEN_EPS.address, [REWARD_TOKEN_EPS.address, WBNB.address])),
+      waitFor(strat.setRewardToWantRoute(REWARD_TOKEN_LIQR.address, [REWARD_TOKEN_LIQR.address, WBNB.address]))
     ])
   })
 
@@ -75,7 +81,8 @@ describe('Controller Ellipsis LP Strat', () => {
     await setCustomBalanceFor(WBNB.address, bob.address, newBalance, 3)
 
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     const reminder  = ethers.utils.parseUnits('1')
     const toDeposit = newBalance.sub(reminder)
@@ -85,7 +92,8 @@ describe('Controller Ellipsis LP Strat', () => {
 
     expect(await WBNB.balanceOf(controller.address)).to.be.equal(0)
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     const balance = await strat.balanceOfPool() // more decimals
 
@@ -118,7 +126,8 @@ describe('Controller Ellipsis LP Strat', () => {
       94.9e18 + '', 95e18 + '' // 95 - 0.1% withdrawFee
     )
     expect(await WBNB.balanceOf(strat.address)).to.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
 
@@ -134,7 +143,8 @@ describe('Controller Ellipsis LP Strat', () => {
     const toDeposit = ethers.utils.parseUnits('2')
 
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(archimedes.connect(bob).depositNative(0, zeroAddress, { value: toDeposit }))
 
@@ -158,7 +168,8 @@ describe('Controller Ellipsis LP Strat', () => {
     await setCustomBalanceFor(WBNB.address, bob.address, newBalance, 3)
 
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     const reminder  = ethers.utils.parseUnits('1')
     const toDeposit = newBalance.sub(reminder)
@@ -169,7 +180,8 @@ describe('Controller Ellipsis LP Strat', () => {
     expect(await controller.balanceOf(bob.address)).to.be.equal(toDeposit)
     expect(await WBNB.balanceOf(controller.address)).to.be.equal(0)
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_LIQR.balanceOf(strat.address)).to.be.equal(0)
 
     const otherStrat = await deploy(
       'ControllerEllipsisLPStrat',
@@ -188,8 +200,8 @@ describe('Controller Ellipsis LP Strat', () => {
       waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
       waitFor(otherStrat.setSwapSlippageRatio(2000)), // 20%
       waitFor(otherStrat.setPriceFeed(WBNB.address, bnbFeed.address)),
-      waitFor(otherStrat.setPriceFeed(REWARD_TOKEN.address, epsFeed.address)),
-      waitFor(otherStrat.setRewardToWantRoute(REWARD_TOKEN.address, [REWARD_TOKEN.address, WBNB.address])) // cake
+      waitFor(otherStrat.setPriceFeed(REWARD_TOKEN_EPS.address, epsFeed.address)),
+      waitFor(otherStrat.setRewardToWantRoute(REWARD_TOKEN_EPS.address, [REWARD_TOKEN_EPS.address, WBNB.address])) // cake
     ])
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
@@ -199,7 +211,7 @@ describe('Controller Ellipsis LP Strat', () => {
     expect(await controller.balanceOf(bob.address)).to.be.equal('' + 99e18)
     expect(await WBNB.balanceOf(controller.address)).to.be.equal(0)
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(strat.unpause())
 
@@ -210,6 +222,6 @@ describe('Controller Ellipsis LP Strat', () => {
     expect(await controller.balanceOf(bob.address)).to.be.equal('' + 99e18)
     expect(await WBNB.balanceOf(controller.address)).to.be.equal(0)
     expect(await WBNB.balanceOf(strat.address)).to.be.equal(0)
-    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN_EPS.balanceOf(strat.address)).to.be.equal(0)
   })
 })
