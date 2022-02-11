@@ -30,13 +30,9 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
         address _exchange,
         address _treasury
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        require(address(_want) != address(0), "want !ZeroAddress");
         require(_poolToken != address(0), "poolToken !ZeroAddress");
         require(_pool != address(0), "pool !ZeroAddress");
-        require(_controller != address(0), "Controller !ZeroAddress");
-        require(_exchange != address(0), "Exchange !ZeroAddress");
-        require(_treasury != address(0), "Treasury !ZeroAddress");
-        require(_tokenIndex < TOKENS_COUNT, "tokenIndex >= TOKENS_COUNT");
+        require(_tokenIndex >= 0 && _tokenIndex < TOKENS_COUNT, "tokenIndex out of range");
 
         POOL = IEpsLPPool(_pool);
         POOL_TOKEN = _poolToken;
