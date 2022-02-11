@@ -17,7 +17,7 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
     IEpsMultiFeeDistribution constant public FEE_DISTRIBUTION = IEpsMultiFeeDistribution(0x4076CC26EFeE47825917D0feC3A79d0bB9a6bB5c);
 
     int128 private immutable TOKEN_INDEX; // want token index in the pool
-    uint private constant TOKENS_COUNT = 2; // LP pool
+    int128 private constant TOKENS_COUNT = 2; // LP pool
     uint private immutable STAKE_POOL_ID; // 11 BNB/BNBL (bnbEPS)
 
     constructor(
@@ -30,6 +30,10 @@ contract ControllerEllipsisLPStrat is ControllerStratAbs {
         address _exchange,
         address _treasury
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
+        require(_poolToken != address(0), "poolToken !ZeroAddress");
+        require(_pool != address(0), "pool !ZeroAddress");
+        require(_tokenIndex >= 0 && _tokenIndex < TOKENS_COUNT, "tokenIndex out of range");
+
         POOL = IEpsLPPool(_pool);
         POOL_TOKEN = _poolToken;
         STAKE_POOL_ID = _stakePoolId;
