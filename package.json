@@ -15,14 +15,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/2pifinance/contracts.git"
+    "url": "git+https://github.com/2pinetwork/contracts.git"
   },
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/2pifinance/contracts/issues"
+    "url": "https://github.com/2pinetwork/contracts/issues"
   },
-  "homepage": "https://github.com/2pifinance/contracts#readme",
+  "homepage": "https://github.com/2pinetwork/contracts#readme",
   "devDependencies": {
     "@2pi-network/js-sdk": "^0.2.0-beta.24",
     "@nomiclabs/hardhat-ethers": "^2.0.4",
@@ -47,7 +47,7 @@
     "node-fetch": "^2.6.5",
     "q": "^1.5.1",
     "sol-merger": "^3.1.0",
-    "solidity-coverage": "git://github.com/sc-forks/solidity-coverage.git#3e30a5377a697247879fa1c327caa4093e3f21cb",
+    "solidity-coverage": "^0.7.20",
     "web3": "^1.6.1"
   }
 }
