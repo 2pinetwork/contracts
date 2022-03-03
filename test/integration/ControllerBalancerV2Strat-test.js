@@ -41,7 +41,9 @@ describe('Controller BalancerV2 Strat USDC', () => {
     qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
     bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
 
-    controller = await createController(usdc, archimedes, 'ControllerBalancerV2Strat')
+    const poolId = '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012'
+
+    controller = await createController(usdc, archimedes, 'ControllerBalancerV2Strat', { poolId })
 
     await waitFor(archimedes.addNewPool(usdc.address, controller.address, 10, false));
 
@@ -52,9 +54,7 @@ describe('Controller BalancerV2 Strat USDC', () => {
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
 
-    expect(await strat.identifier()).to.be.equal(
-      'USDC-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
-    )
+    expect(await strat.identifier()).to.be.equal(`USDC-${poolId}@BalancerV2#1.0.0`)
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
@@ -152,7 +152,9 @@ describe('Controller BalancerV2 Strat USDT', () => {
     qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
     bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
 
-    controller = await createController(usdt, archimedes, 'ControllerBalancerV2Strat')
+    const poolId = '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012'
+
+    controller = await createController(usdt, archimedes, 'ControllerBalancerV2Strat', { poolId })
 
     await waitFor(archimedes.addNewPool(usdt.address, controller.address, 10, false));
 
@@ -163,9 +165,7 @@ describe('Controller BalancerV2 Strat USDT', () => {
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
 
-    expect(await strat.identifier()).to.be.equal(
-      'USDT-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
-    )
+    expect(await strat.identifier()).to.be.equal(`USDT-${poolId}@BalancerV2#1.0.0`)
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
@@ -263,7 +263,9 @@ describe('Controller BalancerV2 Strat DAI', () => {
     qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
     bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
 
-    controller = await createController(dai, archimedes, 'ControllerBalancerV2Strat')
+    const poolId = '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012'
+
+    controller = await createController(dai, archimedes, 'ControllerBalancerV2Strat', { poolId })
 
     await waitFor(archimedes.addNewPool(dai.address, controller.address, 10, false));
 
@@ -274,9 +276,7 @@ describe('Controller BalancerV2 Strat DAI', () => {
       ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66'),
     ])
 
-    expect(await strat.identifier()).to.be.equal(
-      'DAI-0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012@BalancerV2#1.0.0'
-    )
+    expect(await strat.identifier()).to.be.equal(`DAI-${poolId}@BalancerV2#1.0.0`)
 
     await Promise.all([
       waitFor(strat.setMaxPriceOffset(86400)),
@@ -336,6 +336,110 @@ describe('Controller BalancerV2 Strat DAI', () => {
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await dai.balanceOf(bob.address)).to.within(
+      expectedOutput,
+      expectedOutput.mul(130).div(100)
+    )
+  })
+})
+
+describe('Controller BalancerV2 Strat BTC', () => {
+  let bob
+  let piToken
+  let archimedes
+  let controller
+  let strat
+  let rewardsBlock
+  let btc
+  let bal
+  let btcFeed
+  let balFeed
+
+  before(async () => {
+    // await resetHardhat()
+  })
+
+  beforeEach(async () => {
+    [, bob]      = await ethers.getSigners()
+    piToken      = await createPiToken()
+    rewardsBlock = (await getBlock()) + 20
+    archimedes   = await deploy(
+      'Archimedes',
+      piToken.address,
+      rewardsBlock,
+      WMATIC.address
+    )
+
+    btc = await ethers.getContractAt('IERC20Metadata', '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6')
+    bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
+
+    const poolId = '0xfeadd389a5c427952d8fdb8057d6c8ba1156cc5600020000000000000000001e'
+
+    controller = await createController(btc, archimedes, 'ControllerBalancerV2Strat', { poolId })
+
+    await waitFor(archimedes.addNewPool(btc.address, controller.address, 10, false));
+
+    [strat, btcFeed, balFeed] = await Promise.all([
+      ethers.getContractAt('ControllerBalancerV2Strat', (await controller.strategy())),
+      ethers.getContractAt('IChainLink', '0xc907E116054Ad103354f2D350FD2514433D57F6f'),
+      ethers.getContractAt('IChainLink', '0xD106B538F2A868c28Ca1Ec7E298C3325E0251d66')
+    ])
+
+    expect(await strat.identifier()).to.be.equal(`WBTC-${poolId}@BalancerV2#1.0.0`)
+
+    await Promise.all([
+      waitFor(strat.setMaxPriceOffset(86400)),
+      setChainlinkRoundForNow(btcFeed),
+      setChainlinkRoundForNow(balFeed),
+      waitFor(strat.setPriceFeed(btc.address, btcFeed.address)),
+      waitFor(strat.setPriceFeed(bal.address, balFeed.address)),
+      waitFor(strat.setRewardToWantRoute(bal.address, [bal.address, WETH.address, btc.address]))
+    ])
+  })
+
+  // Balancer distribute rewards 1 week after so we can't test the claim part
+  it('Full deposit + harvest strat + withdraw', async () => {
+    const newBalance = ethers.utils.parseUnits('100', 8)
+
+    await setCustomBalanceFor(btc.address, bob.address, newBalance)
+    expect(await btc.balanceOf(strat.address)).to.be.equal(0)
+    expect(await bal.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(btc.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await btc.balanceOf(controller.address)).to.be.equal(0)
+    expect(await btc.balanceOf(strat.address)).to.be.equal(0)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e8)
+
+    const balance = await strat.balanceOfPool() // more decimals
+
+    // Simulate claim rewards
+    const rewards = ethers.utils.parseUnits('100', 18)
+
+    await setCustomBalanceFor(bal.address, strat.address, rewards)
+    expect(await bal.balanceOf(strat.address)).to.be.equal(rewards)
+    await strat.setSwapSlippageRatio(9999)
+    await waitFor(strat.harvest())
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 95% in shares
+    const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
+      8000
+    ).div(10000)
+    const expectedOutput = toWithdraw.mul(await archimedes.getPricePerFullShare(0)).div(1e8)
+
+    await strat.setPoolSlippageRatio(150)
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+
+    expect(await btc.balanceOf(bob.address)).to.within(
+      expectedOutput.mul(98).div(100),
+      expectedOutput
+    )
+    expect(await btc.balanceOf(strat.address)).to.equal(0)
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+    expect(await btc.balanceOf(bob.address)).to.within(
       expectedOutput,
       expectedOutput.mul(130).div(100)
     )
