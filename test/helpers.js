@@ -141,6 +141,15 @@ const createController = async (token, archimedes, stratName) => {
           owner.address
         )
         break
+      case 'ControllerJarvisStrat':
+        strategy = await deploy(
+          'ControllerJarvisStrat',
+          controller.address,
+          '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff', // QuickSwap router
+          '0x546C79662E028B661dFB4767664d0273184E4dD1', // KyberSwap router
+          owner.address
+        )
+        break
       case 'ControllerLPWithoutStrat':
         strategy = await deploy(
           'ControllerLPWithoutStrat',
