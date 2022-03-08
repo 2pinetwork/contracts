@@ -33,7 +33,9 @@ describe('Controller', () => {
     qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
     bal = await ethers.getContractAt('IERC20Metadata', '0x9a71012b13ca4d3d0cdc72a177df3ef03b0e76a3')
 
-    controller = await createController(usdc, archimedes, 'ControllerBalancerV2Strat')
+    controller = await createController(usdc, archimedes, 'ControllerBalancerV2Strat', {
+      poolId: '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012'
+    })
 
     await waitFor(archimedes.addNewPool(usdc.address, controller.address, 10, false));
 

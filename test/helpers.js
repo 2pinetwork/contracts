@@ -79,7 +79,7 @@ const createPiToken = async ({ tokenContract, withDeployer } = {}) => {
   return piToken
 }
 
-const createController = async (token, archimedes, stratName) => {
+const createController = async (token, archimedes, stratName, extraArgs = {}) => {
   let shareName = `2pi-${await token.symbol()}`
   if (stratName == 'ControllerLPWithoutStrat') {
     let pair = await hre.ethers.getContractAt('IUniswapPair', token.address)
@@ -174,7 +174,7 @@ const createController = async (token, archimedes, stratName) => {
         strategy = await deploy(
           'ControllerBalancerV2Strat',
           '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
-          '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012',
+          extraArgs.poolId,
           token.address,
           controller.address,
           global.exchange.address,
