@@ -12,7 +12,7 @@ import "../interfaces/IController.sol";
 import "../interfaces/IReferral.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IWNative.sol";
-
+import "hardhat/console.sol";
 
 contract Archimedes is PiAdmin, ReentrancyGuard {
     // using Address for address;
@@ -243,6 +243,8 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     function withdraw(uint _pid, uint _shares) public nonReentrant {
         require(_shares > 0, "0 shares");
         require(_userShares(_pid) >= _shares, "withdraw: not sufficient founds");
+
+        console.log("Sacando: ", _shares, " shares");
 
         updatePool(_pid);
 

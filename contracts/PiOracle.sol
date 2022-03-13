@@ -2,7 +2,7 @@
 pragma solidity =0.6.6;
 
 import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
-import 'hardhat/console.sol';
+// import 'hardhat/console.sol';
 
 // Manual interface declaration because of the @openzeppelin lib is for solidity 0.8
 interface IERC20MetadataAlt {
@@ -76,6 +76,8 @@ contract PiOracle {
         uint112 reserve1;
         (reserve0, reserve1, blockTimestampLast) = _lp.getReserves();
 
+        // console.log("Reserve0: ", reserve0, "Reserve1", reserve1);
+
         require(reserve0 > 0 && reserve1 > 0, 'NO_RESERVES'); // ensure that there's liquidity in the pair
 
         if (_firstToken) {
@@ -101,6 +103,8 @@ contract PiOracle {
             UniswapV2OracleLibrary.currentCumulativePrices(address(lp));
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
+        // console.log("cumulative0: ", price0Cumulative, "cumulative1", price1Cumulative);
+
         // ensure that at least one full period has passed since the last update
         require(timeElapsed >= PERIOD, 'PERIOD_NOT_ELAPSED');
 
@@ -109,9 +113,13 @@ contract PiOracle {
         if (firstToken) {
             priceAverage = FixedPoint.uq112x112(uint224((price0Cumulative - priceCumulativeLast) / timeElapsed));
             priceCumulativeLast = price0Cumulative;
+            // console.log("priceAverage: ", uint(priceAverage.mul(10 ** 8).decode144()));
+            // console.log("priceAverage 18: ", uint(priceAverage.mul(10 ** 18).decode144()));
         } else {
             priceAverage = FixedPoint.uq112x112(uint224((price1Cumulative - priceCumulativeLast) / timeElapsed));
             priceCumulativeLast = price1Cumulative;
+            // console.log("priceAverage: ", uint(priceAverage.mul(10 ** 8).decode144()));
+            // console.log("priceAverage 18: ", uint(priceAverage.mul(10 ** 18).decode144()));
         }
 
         blockTimestampLast = blockTimestamp;
@@ -119,17 +127,20 @@ contract PiOracle {
 
     // Chainlink like method
     function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) {
+        uint firstTokenPrecision = 10 ** uint(IERC20MetadataAlt(firstToken ? lp.token0() : lp.token1()).decimals());
         uint secondTokenPrecision = 10 ** uint(IERC20MetadataAlt(firstToken ? lp.token1() : lp.token0()).decimals());
 
-        require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+        // require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+        // require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+
 
         // price decimals
-        uint pricePrecision = 10 ** uint(decimals());
+        // uint pricePrecision = 10 ** uint(decimals());
+        // we concat first token precision with the chainlink price precision
+        uint pricePrecision = firstTokenPrecision * (10 ** uint(decimals()));
 
-        // ChainLink representation (8)
+
         uint price = uint(priceAverage.mul(pricePrecision).decode144());
-
-        price *= (10 ** 18); // PiToken decimals
 
         // in case the price is too low
         if (price >= secondTokenPrecision) {

@@ -54,7 +54,7 @@ interface IDMMRouter {
         uint256 amountIn,
         uint256 amountOutMin,
         address[] memory poolsPath,
-        IERC20[] memory path,
+        address[] memory path,
         address to,
         uint256 deadline
     ) external returns (uint256[] memory amounts);

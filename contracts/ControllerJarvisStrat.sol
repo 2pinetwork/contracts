@@ -12,16 +12,12 @@ contract ControllerJarvisStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    mapping(address => address[]) public rewardToWantPoolsPath;
 
-    address public kyberExchange;
-
-    address constant public WNATIVE = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
     address constant public AG_DENARIUS = address(0xbAbC2dE9cE26a5674F8da84381e2f06e1Ee017A1);
     address constant public AGEURCRV = address(0x81212149b983602474fcD0943E202f38b38d7484); // same than CurvePool
-    address constant public CURVE_POOL = address(0x81212149b983602474fcd0943e202f38b38d7484); // agEUR+4eur-f
+    address constant public CURVE_POOL = address(0x81212149b983602474fcD0943E202f38b38d7484); // agEUR+4eur-f
     address constant public REWARDS_STORAGE = address(0x7c22801057be8392a25D5Ad9490959BCF51F18f2); // AerariumSanctius contract
-    address constant public JARVIS_POOL = address(0x1dc366c5ac2f3ac16af20212b46cdc0c92235a20); // ElysianFields contract
+    address constant public JARVIS_POOL = address(0x1Dc366c5aC2f3Ac16af20212B46cDC0c92235A20); // ElysianFields contract
 
     uint constant public JARVIS_POOL_ID = 0; // agDenarius agEUR+4eur-f pool
 
@@ -42,6 +38,9 @@ contract ControllerJarvisStrat is ControllerStratAbs {
     }
 
     function _deposit() internal override {
+        // if pool is ended we shouldn't deposit
+        if (IJarvisPool(JARVIS_POOL).endBlock() <= block.number) { return; }
+
         uint wantBal = wantBalance();
 
         if (wantBal > 0) {
@@ -49,7 +48,7 @@ contract ControllerJarvisStrat is ControllerStratAbs {
             uint agEurCrvAmount = _agEurToAgEurCrvDoubleCheck(wantBal, true);
 
             want.safeApprove(CURVE_POOL, wantBal);
-            ICurvePool(CURVE_POOL).add_liquidity(amounts, agEurCrvAmount, true);
+            ICurvePool(CURVE_POOL).add_liquidity(amounts, agEurCrvAmount);
         }
 
         uint _agEurCRVBalance = agEurCRVBalance();
@@ -99,6 +98,7 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         uint _before = wantBalance();
 
         _claimRewards();
+        _swapRewardsOnKyber(); // should be called before common swap
         _swapRewards();
 
         uint harvested = wantBalance() - _before;
@@ -116,10 +116,57 @@ contract ControllerJarvisStrat is ControllerStratAbs {
     }
 
     function _claimRewards() internal {
-        uint amount = IJarvisPool(JARVIS_POOL).pendingRwd(JARVIS_POOL_ID, address(this));
+        uint pending = IJarvisPool(JARVIS_POOL).pendingRwd(JARVIS_POOL_ID, address(this));
 
-        if (amount > 0) {
-            IJarvisRewards(REWARDS_STORAGE).claim(amount);
+        if (pending > 0) {
+            IJarvisPool(JARVIS_POOL).deposit(JARVIS_POOL_ID, 0);
+        }
+
+        // If the endBlock is reached we burn all the AG_DENARIUS tokens to get rewards
+        if (IJarvisPool(JARVIS_POOL).endBlock() <= block.number) {
+            uint bal = IERC20(AG_DENARIUS).balanceOf(address(this));
+
+            if (bal > 0) {
+                IERC20(AG_DENARIUS).safeApprove(REWARDS_STORAGE, bal);
+                IJarvisRewards(REWARDS_STORAGE).claim(bal);
+            }
+        }
+    }
+
+    // Kyber doesn't solve all the tokens so we only use it when needed
+    // like agDEN => USDC and then the USDC => want is swapped on
+    // a common exchange
+    function _swapRewardsOnKyber() internal {
+        for (uint i = 0; i < kyberRewards.length; i++) {
+            address _rewardToken = kyberRewards[i];
+
+            // just in case
+            if (kyberRewardRoute[_rewardToken][0] != address(0) && kyberRewardPathRoute[_rewardToken][0] != address(0)) {
+                uint _balance = IERC20(_rewardToken).balanceOf(address(this));
+
+                if (_balance > 0) {
+                    address _pseudoWant =                         kyberRewardRoute[_rewardToken][kyberRewardRoute[_rewardToken].length - 1];
+                    uint expected = _expectedForSwap(
+                        _balance, _rewardToken, _pseudoWant
+                    );
+
+                    if (expected > 1) {
+                        IERC20(_rewardToken).safeApprove(kyberExchange, _balance);
+
+                        console.log("Expected: ", expected);
+                        console.log("Balance before: ", IERC20(_pseudoWant).balanceOf(address(this)));
+                        IDMMRouter(kyberExchange).swapExactTokensForTokens(
+                            _balance,
+                            0,
+                            kyberRewardPathRoute[_rewardToken],
+                            kyberRewardRoute[_rewardToken],
+                            address(this),
+                            block.timestamp + 60
+                        );
+                        console.log("Balance after: ", IERC20(_pseudoWant).balanceOf(address(this)));
+                    }
+                }
+            }
         }
     }
 
@@ -129,23 +176,20 @@ contract ControllerJarvisStrat is ControllerStratAbs {
             uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
             if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
+                address _pseudoWant = rewardToWantRoute[rewardToken][rewardToWantRoute[rewardToken].length - 1];
+                uint expected = _expectedForSwap(_balance, rewardToken, _pseudoWant);
                 // Want price sometimes is too high so it requires a lot of rewards to swap
                 if (expected > 1) {
-                    if (rewardToWantPoolsPath[rewardToken][0] == address(0)) {
-                        IERC20(rewardToken).safeApprove(exchange, _balance);
+                    address _rewardExchange = exchange;
 
-                        IUniswapRouter(exchange).swapExactTokensForTokens(
-                            _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                        );
-                    } else {
-                        IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                        IDMMRouter(kyberExchange).swapExactTokensForTokens(
-                            _balance, expected, rewardToWantPoolsPath[rewardToken], rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                        );
+                    if (rewardExchange[rewardToken] != address(0)) {
+                        _rewardExchange = rewardExchange[rewardToken];
                     }
+
+                    IERC20(rewardToken).safeApprove(_rewardExchange, _balance);
+                    IUniswapRouter(_rewardExchange).swapExactTokensForTokens(
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                    );
                 }
             }
         }
@@ -198,10 +242,6 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         }
     }
 
-    function wNativeBalance() public view returns (uint) {
-        return IERC20(WNATIVE).balanceOf(address(this));
-    }
-
     function agEurCRVBalance() public view returns (uint) {
         return IERC20(AGEURCRV).balanceOf(address(this));
     }
@@ -216,17 +256,20 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         return _calc_withdraw_one_coin(balanceOfPool());
     }
 
-    function setKyberExchange(address _kyberExchange) external onlyAdmin nonReentrant {
-        require(_kyberExchange != kyberExchange, "Same address");
-        require(_kyberExchange != address(0), "!ZeroAddress");
+    // Kyber to be extract
+    mapping(address => address[]) public kyberRewardPathRoute;
+    mapping(address => address[]) public kyberRewardRoute;
+    address public kyberExchange;
+    address[] public kyberRewards;
 
-        emit NewExchange(kyberExchange, _kyberExchange);
+    mapping(address => address) public rewardExchange;
 
-        kyberExchange = _kyberExchange;
-    }
 
-    function setRewardToWantPoolPath(address _reward, address[] calldata _route) external onlyAdmin {
+    // This one is a little "hack" to bypass the want validation
+    // from `setRewardToWantRoute`
+    function setRewardToTokenRoute(address _reward, address[] calldata _route) external onlyAdmin nonReentrant {
         require(_reward != address(0), "!ZeroAddress");
+        require(_route[0] == _reward, "First route isn't reward");
 
         bool newReward = true;
         for (uint i = 0; i < rewardTokens.length; i++) {
@@ -237,6 +280,54 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         }
 
         if (newReward) { rewardTokens.push(_reward); }
-        rewardToWantPoolsPath[_reward] = _route;
+        rewardToWantRoute[_reward] = _route;
+    }
+
+    function setRewardExchange(address _reward, address _exchange) external onlyAdmin nonReentrant {
+        require(_exchange != address(0), "!ZeroAddress");
+        require(_reward != address(0), "!ZeroAddress");
+        require(rewardExchange[_reward] != _exchange, "!ZeroAddress");
+
+        rewardExchange[_reward] = _exchange;
+    }
+
+    function setKyberExchange(address _kyberExchange) external onlyAdmin nonReentrant {
+        require(_kyberExchange != kyberExchange, "Same address");
+        require(_kyberExchange != address(0), "!ZeroAddress");
+
+        kyberExchange = _kyberExchange;
+    }
+
+    function setKyberRewardPathRoute(address _reward, address[] calldata _path) external onlyAdmin {
+        require(_reward != address(0), "!ZeroAddress");
+        require(_path[0] != address(0), "!ZeroAddress path");
+
+        bool newReward = true;
+        for (uint i = 0; i < kyberRewards.length; i++) {
+            if (kyberRewards[i] == _reward) {
+                newReward = false;
+                break;
+            }
+        }
+
+        if (newReward) { kyberRewards.push(_reward); }
+        kyberRewardPathRoute[_reward] = _path;
+    }
+
+    function setKyberRewardRoute(address _reward, address[] calldata _route) external onlyAdmin {
+        require(_reward != address(0), "!ZeroAddress");
+        require(_route[0] == _reward, "First route isn't reward");
+        require(_route.length > 1, "Can't have less than 2 tokens");
+
+        bool newReward = true;
+        for (uint i = 0; i < kyberRewards.length; i++) {
+            if (kyberRewards[i] == _reward) {
+                newReward = false;
+                break;
+            }
+        }
+
+        if (newReward) { kyberRewards.push(_reward); }
+        kyberRewardRoute[_reward] = _route;
     }
 }
