@@ -66,8 +66,8 @@ contract ControllerJarvisStrat is ControllerStratAbs {
             _withdrawFromPool(
                 _agEurToAgEurCrvDoubleCheck(_amount - _balance, false)
             );
-
         }
+
         uint withdrawn = wantBalance() - _balance;
 
         return (withdrawn > _amount) ? _amount : withdrawn;
@@ -135,7 +135,7 @@ contract ControllerJarvisStrat is ControllerStratAbs {
 
     // Kyber doesn't solve all the tokens so we only use it when needed
     // like agDEN => USDC and then the USDC => want is swapped on
-    // a common exchange
+    // a regular exchange
     function _swapRewardsOnKyber() internal {
         for (uint i = 0; i < kyberRewards.length; i++) {
             address _rewardToken = kyberRewards[i];

@@ -12,7 +12,6 @@ import "../interfaces/IController.sol";
 import "../interfaces/IReferral.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IWNative.sol";
-import "hardhat/console.sol";
 
 contract Archimedes is PiAdmin, ReentrancyGuard {
     // using Address for address;

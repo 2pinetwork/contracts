@@ -184,7 +184,6 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
             if (_balance < _withdraw) { _withdraw = _balance; }
         }
 
-
         uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
         withdrawn = _withdraw - withdrawalFee;
 

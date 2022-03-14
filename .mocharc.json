@@ -1,5 +1,5 @@
 {
-  "parallel":   false,
+  "parallel":   true,
   "jobs":       2,
   "slow":       "1500",
   "full-trace": true,
