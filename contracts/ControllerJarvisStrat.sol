@@ -153,17 +153,14 @@ contract ControllerJarvisStrat is ControllerStratAbs {
                     if (expected > 1) {
                         IERC20(_rewardToken).safeApprove(kyberExchange, _balance);
 
-                        console.log("Expected: ", expected);
-                        console.log("Balance before: ", IERC20(_pseudoWant).balanceOf(address(this)));
                         IDMMRouter(kyberExchange).swapExactTokensForTokens(
                             _balance,
-                            0,
+                            expected,
                             kyberRewardPathRoute[_rewardToken],
                             kyberRewardRoute[_rewardToken],
                             address(this),
                             block.timestamp + 60
                         );
-                        console.log("Balance after: ", IERC20(_pseudoWant).balanceOf(address(this)));
                     }
                 }
             }

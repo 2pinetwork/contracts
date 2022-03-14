@@ -95,10 +95,9 @@ const createUsdcPairWithPrice = async (token, price, exchangeData = {}) => {
 
   for (let i = 0; i < 10000; i++) {
     try {
-      await setCustomBalanceFor(token.address, owner.address, wantedTokens,i )
-    } catch(e) {}
+      await setCustomBalanceFor(token.address, owner.address, wantedTokens, i)
+    } catch(e) { }
     if (await token.balanceOf(owner.address) > 0) {
-      console.log(`token ${token.address}: ${i}`)
       break
     }
   }

@@ -163,12 +163,8 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         require(_shares > 0, "Insufficient shares");
         IStrategy(strategy).beforeMovement();
 
-        console.log("Llego:", _shares);
-        console.log("Balance:", balance());
-        console.log("totalSupply:", totalSupply());
         // This line has to be calc before burn
         uint _withdraw = (balance() * _shares) / totalSupply();
-        console.log("To withdraw from strategy:", _withdraw);
 
         _burn(_senderUser, _shares);
 
@@ -183,7 +179,6 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
             // positive
             withdrawn = IStrategy(strategy).withdraw(_diff);
             require(withdrawn > 0, "Can't withdraw from strategy...");
-            console.log("Withdrawn from strategy: ", withdrawn);
 
             _balance = wantBalance();
             if (_balance < _withdraw) { _withdraw = _balance; }
@@ -192,9 +187,6 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
 
         uint withdrawalFee = _withdraw * withdrawFee / RATIO_PRECISION;
         withdrawn = _withdraw - withdrawalFee;
-        console.log("Want balance: ", wantBalance(), " withdrawalFee:", withdrawalFee);
-        console.log("Withraw: ", _withdraw);
-        console.log("Withrawn: ", withdrawn);
 
         want.safeTransfer(archimedes, withdrawn);
         want.safeTransfer(treasury, withdrawalFee);

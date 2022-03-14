@@ -244,8 +244,6 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         require(_shares > 0, "0 shares");
         require(_userShares(_pid) >= _shares, "withdraw: not sufficient founds");
 
-        console.log("Sacando: ", _shares, " shares");
-
         updatePool(_pid);
 
         // Pay rewards

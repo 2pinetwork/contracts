@@ -235,7 +235,7 @@ describe('Controller Jarvis Strat', () => {
     expect(await agcrv.balanceOf(strat.address)).to.be.equal(0)
   })
 
-  it.only('Deposit and change strategy', async () => {
+  it('Deposit and change strategy', async () => {
     await setCustomBalanceFor(ageur.address, bob.address, '100', 51)
     expect(await ageur.balanceOf(strat.address)).to.be.equal(0)
 
@@ -257,32 +257,32 @@ describe('Controller Jarvis Strat', () => {
       waitFor(otherStrat.setMaxPriceOffset(86400)),
       waitFor(otherStrat.setPriceFeed(ageur.address, eurFeed.address)),
       waitFor(otherStrat.setPoolSlippageRatio(100)), // price variation
-      waitFor(otherStrat.setSwapSlippageRatio(500)), // price variation
+      waitFor(otherStrat.setSwapSlippageRatio(1000)), // price variation
+      waitFor(strat.setSwapSlippageRatio(1000)), // price variation
     ])
+
+    await mineNTimes(10) // increase the rewards to be swapped
 
     expect(await controller.setStrategy(otherStrat.address)).to.emit(controller, 'NewStrategy').withArgs(
       strat.address, otherStrat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18 + '')
     expect(await ageur.balanceOf(controller.address)).to.be.equal(0)
     expect(await ageur.balanceOf(strat.address)).to.be.equal(0)
     expect(await strat.balance()).to.be.equal(0)
-    expect(await otherStrat.balance()).to.be.within(
-      99e18, 100e18
-    )
+    expect(await otherStrat.balance()).to.be.within(99.9e18 + '', 100e18 + '')
 
+    await mineNTimes(10) // increase the rewards to be swapped
     await waitFor(strat.unpause())
     expect(await controller.setStrategy(strat.address)).to.emit(controller, 'NewStrategy').withArgs(
       otherStrat.address, strat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18 + '')
     expect(await ageur.balanceOf(controller.address)).to.be.equal(0)
     expect(await ageur.balanceOf(strat.address)).to.be.equal(0)
     expect(await otherStrat.balance()).to.be.equal(0)
-    expect(await strat.balance()).to.be.within(
-      99e18, 100e18
-    )
+    expect(await strat.balance()).to.be.within(99.9e18 + '', 100e18 + '')
   })
 })
