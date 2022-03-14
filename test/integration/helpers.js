@@ -31,7 +31,8 @@ const setWbtcBalanceFor = async (address, amount) => {
   await ethers.provider.send('hardhat_setStorageAt', [global.BTC.address, index.toString(), balance32])
 }
 
-const setCustomBalanceFor = async (token, address, weiAmount, slot) => {
+const setCustomBalanceFor = async (token, address, rawAmount, slot) => {
+  const weiAmount = typeof rawAmount === 'string' ? ethers.utils.parseUnits(rawAmount, 18) : rawAmount
   const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [address, slot || 0])
   const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(weiAmount.toHexString(), 32))
   await ethers.provider.send('hardhat_setStorageAt', [token, index.toString(), balance32])
@@ -74,9 +75,56 @@ const setChainlinkRoundForNow = async (feed) => {
   await setChainlinkRound(
     agg,
     roundId,
-    parseInt(((new Date()).getTime() / 1000).toFixed(), 10),
+    (await hre.ethers.provider.getBlock()).timestamp,
     (data.answer / 1e8)
   )
+}
+
+const createUsdcPairWithPrice = async (token, price, exchangeData = {}) => {
+  const factoryAddr = exchangeData.factoryAddr || '0xc35DADB65012eC5796536bD9864eD8773aBc74C4'
+  const exchange = exchangeData.exchange || global.exchange
+  const currentBlock = await hre.ethers.provider.getBlock()
+  const factoryAbi   = require('./abis/uniswap-factory.json')
+  const factory      = await ethers.getContractAt(factoryAbi, factoryAddr)
+  const allowance    = '1' + '0'.repeat(59)
+
+  const wantedTokens = ethers.utils.parseUnits('10000', await token.decimals())
+  const usdcTokens   = ethers.utils.parseUnits((10000 * price).toFixed(6), 6) // USDC 6 decimals
+
+  await setCustomBalanceFor(global.USDC.address, owner.address, usdcTokens, 0)
+
+  for (let i = 0; i < 10000; i++) {
+    try {
+      await setCustomBalanceFor(token.address, owner.address, wantedTokens, i)
+    } catch(e) { }
+    if (await token.balanceOf(owner.address) > 0) {
+      break
+    }
+  }
+
+  await global.USDC.connect(owner).approve(exchange.address, allowance)
+  await token.connect(owner).approve(exchange.address, allowance)
+
+  await (
+    await factory.createPair(global.USDC.address, token.address)
+  ).wait()
+
+  const pair = await factory.getPair(global.USDC.address, token.address)
+
+  await (
+    await exchange.addLiquidity(
+      global.USDC.address,
+      token.address,
+      usdcTokens.toString(),
+      wantedTokens.toString(),
+      1,
+      1,
+      global.owner.address,
+      currentBlock.timestamp + 600
+    )
+  ).wait()
+
+  return pair
 }
 
 const createPiTokenExchangePair = async () => {
@@ -158,6 +206,7 @@ const fetchNeededTokens = async () => {
   ethers.getContractAt(crvAbi, '0x172370d5Cd63279eFa6d502DAB29171933a610AF').then(c => (global.CRV = c))
   ethers.getContractAt(curvePoolAbi, '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67').then(c => (global.CurvePool = c))
   ethers.getContractAt(curveRewardsGaugeAbi, '0xffbACcE0CC7C19d46132f1258FC16CF6871D153c').then(c => (global.CurveRewardsGauge = c))
+  ethers.getContractAt('IERC20Metadata', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174').then(c => (global.USDC = c))
 }
 
 if (process.env.HARDHAT_INTEGRATION_TESTS) {
@@ -190,6 +239,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
 
 module.exports = {
   createPiTokenExchangePair,
+  createUsdcPairWithPrice,
   resetHardhat,
   setWMaticBalanceFor,
   setWbtcBalanceFor,

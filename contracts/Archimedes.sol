@@ -13,7 +13,6 @@ import "../interfaces/IReferral.sol";
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IWNative.sol";
 
-
 contract Archimedes is PiAdmin, ReentrancyGuard {
     // using Address for address;
     using SafeERC20 for IERC20;

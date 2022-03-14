@@ -23,9 +23,15 @@ const exec = (fn, title) => {
   )
 }
 
+const ORACLES = [
+  '0x54a8b731f1ffbf5b588bdc6da9a67ecd4d5de6c0'
+]
+
 exports.handler = async (credentials) => {
   const provider = new DefenderRelayProvider(credentials);
-  const signer = new DefenderRelaySigner(credentials, provider, { speed: 'fast' });
+  const signer = new DefenderRelaySigner(credentials, provider, { speed: 'average' });
 
-  await exec((new ethers.Contract('0x26444Fd5b3a4e7f3eEd3273df3Fd693e81a89b91', OracleABI, signer)).update(), 'PiOracle')
+  for (let addr of ORACLES) {
+    await exec((new ethers.Contract(addr, OracleABI, signer)).update(), `Oracle[${addr}]`)
+  }
 }

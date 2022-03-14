@@ -12,10 +12,18 @@ const toNumber = function (value) {
   return value.toLocaleString('fullwide', { useGrouping: false })
 }
 
+const toHex = (n) => {
+  return ethers.utils.hexlify(n).replace(/^0x0/, '0x')
+}
+
 const mineNTimes = async (n) => {
-  for (let i = 0; i < n; i++) {
-    await network.provider.send('evm_mine')
-  }
+  await network.provider.send('hardhat_mine', [toHex(n)])
+}
+
+const mineUntil = async (block) => {
+  const current = await getBlock()
+
+  await network.provider.send('hardhat_mine', [toHex(block - current)])
 }
 
 const getBlock = async () => {
@@ -138,6 +146,15 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           'ControllerCurveStrat',
           controller.address,
           global.exchange.address,
+          owner.address
+        )
+        break
+      case 'ControllerJarvisStrat':
+        strategy = await deploy(
+          'ControllerJarvisStrat',
+          controller.address,
+          global.exchange.address,
+          '0x546C79662E028B661dFB4767664d0273184E4dD1', // KyberSwap router
           owner.address
         )
         break
@@ -315,8 +332,10 @@ module.exports = {
   getBlock,
   impersonateContract,
   mineNTimes,
+  mineUntil,
   setupSuperFluid,
   sleep,
+  toHex,
   toNumber,
   waitFor,
   zeroAddress,
