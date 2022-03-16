@@ -198,6 +198,16 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           owner.address
         )
         break
+      case 'ControllerQuickSwapMaiLPStrat':
+        strategy = await deploy(
+          'ControllerQuickSwapMaiLPStrat',
+          token.address,
+          controller.address,
+          '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff', // QuickSwap router
+          owner.address,
+          extraArgs.maxWantBalance
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))
