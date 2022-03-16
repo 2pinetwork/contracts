@@ -16,8 +16,10 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     address constant public TOKEN_0 = address(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174); // USDC
     address constant public TOKEN_1 = address(0xa3Fa99A148fA48D14Ed51d610c367C61876997F1); // MIM
 
-    uint constant public POOL_ID = 1;
+    uint public constant POOL_ID = 1;
+    uint public constant LIQUIDITY_PRECISION = 10000; // 100%
     uint public MAX_WANT_BALANCE;
+    uint public LIQUIDITY_TOLERATION = 3000; // 30%
 
     bool private depositMutex = false;
 
@@ -40,9 +42,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     function harvest() public nonReentrant override {
         uint _before = wantBalance();
 
-        // Weird behavior, but this mean "harvest" or "claim".
-        IMasterChef(MAI_FARM).deposit(POOL_ID, 0);
-
+        _claimRewards();
         _swapRewards();
 
         uint _harvested = wantBalance() - _before;
@@ -70,6 +70,19 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         routes[_from][_route[_route.length - 1]] = _route;
     }
 
+    function setMaxWantBalance(uint _maxWantBalance) external onlyAdmin {
+        require(_maxWantBalance != MAX_WANT_BALANCE, "Same want balance");
+
+        MAX_WANT_BALANCE = _maxWantBalance;
+    }
+
+    function setLiquidityToleration(uint _liquidityToleration) external onlyAdmin {
+        require(_liquidityToleration != LIQUIDITY_TOLERATION, "Same toleration");
+        require(_liquidityToleration <= LIQUIDITY_PRECISION, "Toleration too big!");
+
+        LIQUIDITY_TOLERATION = _liquidityToleration;
+    }
+
     function balanceOfPool() public view override returns (uint) {
         (uint _amount,) = IMasterChef(MAI_FARM).userInfo(POOL_ID, address(this));
 
@@ -81,12 +94,9 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     }
 
     function _deposit() internal override {
-        (uint _amount0, uint _amount1) = _swapWantForLP();
+        (uint _amount0, uint _amount1) = _swapWantForLPTokens();
 
         _addLiquidity(_amount0, _amount1);
-
-        // Double check that lp has reserves
-        IUniswapPair(QUICKSWAP_LP).skim(address(this));
 
         if (depositMutex) { depositMutex = false; }
     }
@@ -102,7 +112,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
             uint _liquidity = _estimateLPLiquidity(_amount0, _amount1);
 
             _withdrawFromPool(_liquidity);
-            _swapLPForWant();
+            _swapLPTokensForWant();
         }
 
         uint _withdrawn = wantBalance() - _balance;
@@ -116,10 +126,15 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
 
         if (_liquidity > 0) {
             _withdrawFromPool(_liquidity);
-            _swapLPForWant();
+            _swapLPTokensForWant();
         }
 
         return wantBalance() - _balance;
+    }
+
+    function _claimRewards() internal {
+        // Weird behavior, but this mean "harvest" or "claim".
+        IMasterChef(MAI_FARM).deposit(POOL_ID, 0);
     }
 
     function _addLiquidity(uint _amount0, uint _amount1) internal {
@@ -133,8 +148,8 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
             TOKEN_1,
             _amount0,
             _amount1,
-            0,
-            0,
+            _amount0 * (LIQUIDITY_PRECISION - LIQUIDITY_TOLERATION) / LIQUIDITY_PRECISION,
+            _amount1 * (LIQUIDITY_PRECISION - LIQUIDITY_TOLERATION) / LIQUIDITY_PRECISION,
             address(this),
             block.timestamp + 60
         );
@@ -158,7 +173,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _swapWantForLP() internal returns (uint _amount0, uint _amount1) {
+    function _swapWantForLPTokens() internal returns (uint _amount0, uint _amount1) {
         uint _balance = wantBalance();
         uint _sellAmount = _balance / 2;
 
@@ -177,7 +192,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _swapLPForWant() internal {
+    function _swapLPTokensForWant() internal {
         uint _liquidity = IERC20(QUICKSWAP_LP).balanceOf(address(this));
         (uint _amount0Min, uint _amount1Min) = _estimateMinAmounts(_liquidity);
 
@@ -226,9 +241,9 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         return _max(_expected0 * _lpTotalSupply / _reserve0, _expected1 * _lpTotalSupply / _reserve1);
     }
 
-    function _liquidityInWant(uint _liquidity) public view returns (uint) {
-        if (_liquidity == 0) {
-            return _liquidity;
+    function _liquidityInWant(uint _liquidity) internal view returns (uint) {
+        if (_liquidity <= 0) {
+            return 0;
         } else {
             IUniswapPair _pair = IUniswapPair(QUICKSWAP_LP);
 
@@ -244,7 +259,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _getAmountsOut(address _from, address _to, uint _amount) public view returns (uint) {
+    function _getAmountsOut(address _from, address _to, uint _amount) internal view returns (uint) {
         if (_from == _to) {
             return _amount;
         } else {
@@ -283,7 +298,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _swap(address _from, uint _amount, address _to) private returns (uint) {
+    function _swap(address _from, uint _amount, address _to) internal returns (uint) {
         address[] memory _route = _getRoute(_from, _to);
 
         if (_amount > 0) {

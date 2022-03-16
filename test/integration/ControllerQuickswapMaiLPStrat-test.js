@@ -91,8 +91,8 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
     const balance = await strat.balanceOfPool()
 
     await mineNTimes(1000)
-    await waitFor(strat.harvest())
 
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
     // withdraw 95 USDC in shares
@@ -284,8 +284,8 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     const balance = await strat.balanceOfPool()
 
     await mineNTimes(1000)
-    await waitFor(strat.harvest())
 
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
     // withdraw 95 DAI in shares
