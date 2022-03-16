@@ -19,6 +19,8 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     uint constant public POOL_ID = 1;
     uint public MAX_WANT_BALANCE;
 
+    bool private depositMutex = false;
+
     mapping(address => mapping(address => address[])) public routes;
 
     constructor(
@@ -82,6 +84,11 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         (uint _amount0, uint _amount1) = _swapWantForLP();
 
         _addLiquidity(_amount0, _amount1);
+
+        // Double check that lp has reserves
+        IUniswapPair(QUICKSWAP_LP).skim(address(this));
+
+        if (depositMutex) { depositMutex = false; }
     }
 
     // amount is the want expected to be withdrawn
@@ -93,11 +100,9 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
             uint _amount0 = _getAmountsOut(address(want), TOKEN_0, _sellAmount);
             uint _amount1 = _getAmountsOut(address(want), TOKEN_1, _amount - _sellAmount);
             uint _liquidity = _estimateLPLiquidity(_amount0, _amount1);
-            uint _amount0Min = _amount0 * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
-            uint _amount1Min = _amount1 * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
 
             _withdrawFromPool(_liquidity);
-            _swapLPForWant(_liquidity, _amount0Min, _amount1Min);
+            _swapLPForWant();
         }
 
         uint _withdrawn = wantBalance() - _balance;
@@ -111,7 +116,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
 
         if (_liquidity > 0) {
             _withdrawFromPool(_liquidity);
-            _swapLPForWant(_liquidity, 0, 0);
+            _swapLPForWant();
         }
 
         return wantBalance() - _balance;
@@ -146,7 +151,11 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         _removeAllowance(TOKEN_1);
 
         // Some recursion is needed when swaps required for LP are "not well balanced".
-        if (wantBalance() > MAX_WANT_BALANCE) { _deposit(); }
+        if (wantBalance() > MAX_WANT_BALANCE && !depositMutex) {
+            depositMutex = true;
+
+            _deposit();
+        }
     }
 
     function _swapWantForLP() internal returns (uint _amount0, uint _amount1) {
@@ -157,21 +166,21 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
 
         // If want is one of the LP tokens we need to swap just 1
         if (address(want) == TOKEN_0) {
-            _amount1 = _swap(address(want), _sellAmount, TOKEN_1, address(this));
+            _amount1 = _swap(address(want), _sellAmount, TOKEN_1);
         } else if (address(want) == TOKEN_1) {
             _amount1 = _amount0; // _balance - _sellAmount
-            _amount0 = _swap(address(want), _sellAmount, TOKEN_0, address(this));
+            _amount0 = _swap(address(want), _sellAmount, TOKEN_0);
         } else {
             // If want isn't one of LP tokens we swap half for each one
-            _amount1 = _swap(address(want), _amount0, TOKEN_1, address(this));
-            _amount0 = _swap(address(want), _sellAmount, TOKEN_0, address(this));
+            _amount1 = _swap(address(want), _amount0, TOKEN_1);
+            _amount0 = _swap(address(want), _sellAmount, TOKEN_0);
         }
-
-        // Double check that lp has reserves
-        IUniswapPair(QUICKSWAP_LP).skim(address(this));
     }
 
-    function _swapLPForWant(uint _liquidity, uint _amount0Min, uint _amount1Min) internal {
+    function _swapLPForWant() internal {
+        uint _liquidity = IERC20(QUICKSWAP_LP).balanceOf(address(this));
+        (uint _amount0Min, uint _amount1Min) = _estimateMinAmounts(_liquidity);
+
         IERC20(QUICKSWAP_LP).safeApprove(exchange, _liquidity);
 
         (uint _amount0, uint _amount1) = IUniswapRouter(exchange).removeLiquidity(
@@ -185,12 +194,12 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         );
 
         if (address(want) == TOKEN_0) {
-            _swap(TOKEN_1, _amount1, address(want), address(this));
+            _swap(TOKEN_1, _amount1, address(want));
         } else if (address(want) == TOKEN_1) {
-            _swap(TOKEN_0, _amount0, address(want), address(this));
+            _swap(TOKEN_0, _amount0, address(want));
         } else {
-            _swap(TOKEN_0, _amount0, address(want), address(this));
-            _swap(TOKEN_1, _amount1, address(want), address(this));
+            _swap(TOKEN_0, _amount0, address(want));
+            _swap(TOKEN_1, _amount1, address(want));
         }
     }
 
@@ -198,11 +207,23 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         IMasterChef(MAI_FARM).withdraw(POOL_ID, _liquidity);
     }
 
+    function _estimateMinAmounts(uint _liquidity) internal view returns (uint _amount0Min, uint _amount1Min) {
+        IUniswapPair _pair = IUniswapPair(QUICKSWAP_LP);
+        uint _lpTotalSupply = _pair.totalSupply();
+        (uint112 _reserve0, uint112 _reserve1,) = _pair.getReserves();
+
+        _amount0Min = _liquidity * _reserve0 / _lpTotalSupply;
+        _amount1Min = _liquidity * _reserve1 / _lpTotalSupply;
+    }
+
     function _estimateLPLiquidity(uint _amount0, uint _amount1) internal view returns (uint) {
         (uint112 _reserve0, uint112 _reserve1,) = IUniswapPair(QUICKSWAP_LP).getReserves();
         uint _lpTotalSupply = IUniswapPair(QUICKSWAP_LP).totalSupply();
+        uint _expected0 = _amount0 * (RATIO_PRECISION + poolSlippageRatio) / RATIO_PRECISION;
+        uint _expected1 = _amount1 * (RATIO_PRECISION + poolSlippageRatio) / RATIO_PRECISION;
 
-        return _min(_amount0 * _lpTotalSupply / _reserve0, _amount1 * _lpTotalSupply / _reserve1);
+        // They should be equal, but just in case we strive for maximum liquidity =)
+        return _max(_expected0 * _lpTotalSupply / _reserve0, _expected1 * _lpTotalSupply / _reserve1);
     }
 
     function _liquidityInWant(uint _liquidity) public view returns (uint) {
@@ -262,22 +283,30 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _swap(address _from, uint _amount, address _to, address _receiver) private returns (uint) {
+    function _swap(address _from, uint _amount, address _to) private returns (uint) {
         address[] memory _route = _getRoute(_from, _to);
 
-        _approveToken(_from, _amount);
+        if (_amount > 0) {
+            uint _expected = _expectedForSwap(_amount, _from, _to);
 
-        uint[] memory _amounts = IUniswapRouter(exchange).swapExactTokensForTokens(
-            _amount,
-            0,
-            _route,
-            _receiver,
-            block.timestamp
-        );
+            if (_expected > 1) {
+                _approveToken(_from, _amount);
 
-        _removeAllowance(_from);
+                uint[] memory _amounts = IUniswapRouter(exchange).swapExactTokensForTokens(
+                    _amount,
+                    _expected,
+                    _route,
+                    address(this),
+                    block.timestamp
+                );
 
-        return _amounts[_amounts.length - 1];
+                _removeAllowance(_from);
+
+                return _amounts[_amounts.length - 1];
+            }
+        }
+
+        return 0;
     }
 
     function _approveToken(address _token, uint _amount) internal {
@@ -290,7 +319,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         }
     }
 
-    function _min(uint _x, uint _y) internal pure returns (uint _z) {
-        _z = _x < _y ? _x : _y;
+    function _max(uint _x, uint _y) internal pure returns (uint) {
+        return _x > _y ? _x : _y;
     }
 }

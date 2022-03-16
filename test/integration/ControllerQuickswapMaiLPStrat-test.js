@@ -21,6 +21,8 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
   let qi
   let qiFeed
   let usdcFeed
+  let maiFeed
+  let wmaticFeed
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -42,29 +44,35 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
 
     await waitFor(archimedes.addNewPool(usdc.address, controller.address, 10, false));
 
-    [strat, usdcFeed, qiFeed] = await Promise.all([
+    [strat, usdcFeed, maiFeed, wmaticFeed, qiFeed] = await Promise.all([
       ethers.getContractAt('ControllerQuickSwapMaiLPStrat', (await controller.strategy())),
       ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'),
+      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'), // MIM (MIMATIC is 0xd8d483d813547CfB624b8Dc33a00F2fcbCd2D428)
+      ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'),
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444') // Doge less than qi
     ])
 
-    const MIM_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
     await Promise.all([
       setChainlinkRoundForNow(usdcFeed),
+      setChainlinkRoundForNow(maiFeed),
+      setChainlinkRoundForNow(wmaticFeed),
       setChainlinkRoundForNow(qiFeed),
       waitFor(strat.setMaxPriceOffset(86400)),
-      waitFor(strat.setPoolSlippageRatio(200)), // 2%
-      waitFor(strat.setSwapSlippageRatio(200)), // 2%
+      waitFor(strat.setPoolSlippageRatio(2000)), // 20%
+      waitFor(strat.setSwapSlippageRatio(2000)), // 20%
       waitFor(strat.setPriceFeed(usdc.address, usdcFeed.address)),
       waitFor(strat.setPriceFeed(qi.address, qiFeed.address)),
+      waitFor(strat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
       waitFor(strat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, usdc.address])),
-      waitFor(strat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, usdc.address])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, MIM_ADDRESS]))
+      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
+      waitFor(strat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS]))
     ])
   })
 
-  it('Full deposit + harvest strat + withdraw with USDC', async () => {
+  it('Full deposit + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 6)
 
     await setCustomBalanceFor(usdc.address, bob.address, newBalance)
@@ -101,7 +109,7 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
     let afterBalance = await usdc.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
-      93.05e6 + '', 95e6 + '' // 95 - 2.1% (withdrawFee 0.1% + slippage ratio 2%)
+      94.9e6 + '', 95e6 + '' // 95 - 0.1% withdrawFee
     )
 
     // less than 0.1 because swap is not exact
@@ -114,9 +122,11 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
     afterBalance = await usdc.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
-      9795.0e6 + '', // Since we deposit 10000
-      9990.0e6 + ''  // between 0.1% and ~2.1% (withdraw fee + slippage ratio)
+      9900.0e6 + '', // Since we deposit 10000
+      9990.0e6 + ''  // between 0.1% and ~1% (withdraw fee + swap fees + slippage ratio)
     )
+
+    expect(await strat.balanceOfPool()).to.be.equal(0)
   })
 
   it('Controller.setStrategy works', async () => {
@@ -145,17 +155,19 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
       1e5 + ''
     )
 
-    const MIM_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
     await Promise.all([
       waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPoolSlippageRatio(200)), // 2%
-      waitFor(otherStrat.setSwapSlippageRatio(200)), // 2%
+      waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
+      waitFor(otherStrat.setSwapSlippageRatio(2000)), // 20%
       waitFor(otherStrat.setPriceFeed(usdc.address, usdcFeed.address)),
       waitFor(otherStrat.setPriceFeed(qi.address, qiFeed.address)),
+      waitFor(otherStrat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+      waitFor(otherStrat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
       waitFor(otherStrat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, usdc.address])),
-      waitFor(otherStrat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, usdc.address])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MIM_ADDRESS]))
+      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
+      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS]))
     ])
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
@@ -195,6 +207,8 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
   let qiFeed
   let usdcFeed
   let daiFeed
+  let maiFeed
+  let wmaticFeed
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -217,32 +231,37 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
 
     await waitFor(archimedes.addNewPool(dai.address, controller.address, 10, false));
 
-    [strat, usdcFeed, daiFeed, qiFeed] = await Promise.all([
+    [strat, usdcFeed, maiFeed, daiFeed, wmaticFeed, qiFeed] = await Promise.all([
       ethers.getContractAt('ControllerQuickSwapMaiLPStrat', (await controller.strategy())),
       ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'),
+      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'), // MIM (MIMATIC is 0xd8d483d813547CfB624b8Dc33a00F2fcbCd2D428)
       ethers.getContractAt('IChainLink', '0x4746DeC9e833A82EC7C2C1356372CcF2cfcD2F3D'),
+      ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'),
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444') // Doge less than qi
     ])
 
-    const MIM_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
     await Promise.all([
       setChainlinkRoundForNow(usdcFeed),
       setChainlinkRoundForNow(daiFeed),
+      setChainlinkRoundForNow(maiFeed),
+      setChainlinkRoundForNow(wmaticFeed),
       setChainlinkRoundForNow(qiFeed),
       waitFor(strat.setMaxPriceOffset(86400)),
-      waitFor(strat.setPoolSlippageRatio(200)), // 2%
-      waitFor(strat.setSwapSlippageRatio(200)), // 2%
+      waitFor(strat.setPoolSlippageRatio(2000)), // 20%
+      waitFor(strat.setSwapSlippageRatio(2000)), // 20%
       waitFor(strat.setPriceFeed(usdc.address, usdcFeed.address)),
       waitFor(strat.setPriceFeed(dai.address, daiFeed.address)),
       waitFor(strat.setPriceFeed(qi.address, qiFeed.address)),
+      waitFor(strat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
       waitFor(strat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, dai.address])),
-      waitFor(strat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, usdc.address])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, MIM_ADDRESS])),
-      waitFor(strat.setRoute(dai.address, [dai.address, WMATIC.address, usdc.address])),
-      waitFor(strat.setRoute(dai.address, [dai.address, WMATIC.address, MIM_ADDRESS])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, WMATIC.address, dai.address])),
-      waitFor(strat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, WMATIC.address, dai.address]))
+      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
+      waitFor(strat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS])),
+      waitFor(strat.setRoute(dai.address, [dai.address, usdc.address])),
+      waitFor(strat.setRoute(dai.address, [dai.address, usdc.address, MAI_ADDRESS])),
+      waitFor(strat.setRoute(usdc.address, [usdc.address, dai.address])),
+      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, dai.address]))
     ])
   })
 
@@ -283,7 +302,7 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     let afterBalance = await dai.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
-      93.05e18 + '', // 95 - 2.1% (withdrawFee 0.1% + slippage ratio and/or swap difference 2%)
+      94.9e18 + '', // 95 - 0.1%
       95e18 + ''
     )
 
@@ -297,12 +316,14 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     afterBalance = await dai.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
-      9126.0e17 + '0', // Since we deposit 10000
+      9615.0e17 + '0', // Since we deposit 10000
       9990.0e17 + '0'  // between 0.1% and ~4.1% (withdraw fee + slippage ratio and/or swap difference twice)
     )
+
+    expect(await strat.balanceOfPool()).to.be.equal(0)
   })
 
-  it('Controller.setStrategy works', async () => {
+  it('Controller.setStrategy works DAIRET', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 18)
 
     await setCustomBalanceFor(dai.address, bob.address, newBalance)
@@ -328,22 +349,24 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
       1e17 + ''
     )
 
-    const MIM_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
     await Promise.all([
       waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPoolSlippageRatio(200)), // 2%
-      waitFor(otherStrat.setSwapSlippageRatio(200)), // 2%
+      waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
+      waitFor(otherStrat.setSwapSlippageRatio(3500)), // 35% for this test conditions only, we should fix it.
       waitFor(otherStrat.setPriceFeed(usdc.address, usdcFeed.address)),
       waitFor(otherStrat.setPriceFeed(dai.address, daiFeed.address)),
       waitFor(otherStrat.setPriceFeed(qi.address, qiFeed.address)),
+      waitFor(otherStrat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+      waitFor(otherStrat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
       waitFor(otherStrat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, dai.address])),
-      waitFor(otherStrat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, usdc.address])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MIM_ADDRESS])),
-      waitFor(otherStrat.setRoute(dai.address, [dai.address, WMATIC.address, usdc.address])),
-      waitFor(otherStrat.setRoute(dai.address, [dai.address, WMATIC.address, MIM_ADDRESS])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, WMATIC.address, dai.address])),
-      waitFor(otherStrat.setRoute(MIM_ADDRESS, [MIM_ADDRESS, WMATIC.address, dai.address]))
+      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
+      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS])),
+      waitFor(otherStrat.setRoute(dai.address, [dai.address, usdc.address])),
+      waitFor(otherStrat.setRoute(dai.address, [dai.address, usdc.address, MAI_ADDRESS])),
+      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, dai.address])),
+      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, dai.address]))
     ])
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
