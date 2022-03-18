@@ -163,8 +163,8 @@ describe('Controller', () => {
       expect(await piToken.balanceOf(strat.address)).to.be.equal(0)
       // Should be deposited
       expect(await piToken.balanceOf(otherStrat.address)).to.be.equal(0)
-      expect(await piToken.balanceOf(pool.address)).to.be.equal(97)
-      expect(await piToken.balanceOf(owner.address)).to.be.equal(treasuryBal.add(3))
+      expect(await piToken.balanceOf(pool.address)).to.be.equal(96) // 4.5% fee
+      expect(await piToken.balanceOf(owner.address)).to.be.equal(treasuryBal.add(4))
     })
 
     it('should revert with 0 address', async () => {

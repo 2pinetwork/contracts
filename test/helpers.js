@@ -319,7 +319,7 @@ if (! process.env.HARDHAT_INTEGRATION_TESTS) {
     console.log('===============  SETUP DONE  ===============\n\n')
   })
 
-  afterEach(async () => {
+  beforeEach(async () => {
     await Promise.all([
       (await global.Aave.pool.reset()).wait(),
       (await global.Aave.dataProvider.reset()).wait(),

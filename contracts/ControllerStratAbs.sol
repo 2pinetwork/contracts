@@ -30,8 +30,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     address[] public rewardTokens;
 
     // Fees
-    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
-    uint public performanceFee = 350; // 3.5%
+    uint constant public MAX_PERFORMANCE_FEE = 2000; // 20% max
+    uint public performanceFee = 450; // 4.5%
     uint internal lastBalance;
 
     address public treasury;
