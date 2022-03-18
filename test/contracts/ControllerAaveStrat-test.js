@@ -373,12 +373,12 @@ describe('Controller Aave Strat', () => {
 
       // RATIO => (100 * 1e9 / 20) * 99 / 100 == 4950000000.0
       // 1e6 * RATIO / 1e9 => 4950000.0 (swapped)
-      // 4950000.0 * 0.035 == 173250  (perf fee)
+      // 4950000.0 * 0.045 == 222750  (perf fee)
       await expect(strat.harvest()).to.emit(
         strat, 'Harvested'
       ).withArgs(piToken.address, 4950000)
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.add(173250)
+        balance.add(222750)
       )
 
       // Nothing to harvest
@@ -387,7 +387,7 @@ describe('Controller Aave Strat', () => {
       ).withArgs(piToken.address, 0)
 
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.add(173250)
+        balance.add(222750)
       )
     })
 
@@ -404,12 +404,12 @@ describe('Controller Aave Strat', () => {
 
       // RATIO => (129755407 * 1e18 / 363070990456305) * 9900 / 10000 == 353809189680
       // 1e18 * RATIO / 1e18 => RATIO (swapped)
-      // RATIO * 0.035 == 12383321638  (perf fee)
+      // RATIO * 0.045 == 15921413535  (perf fee)
       expect(await piToken.balanceOf(exchange.address)).to.be.equal(
         exchangeBalance.sub(353809189680)
       )
       expect(await piToken.balanceOf(owner.address)).to.be.equal(
-        balance.add(12383321638)
+        balance.add(15921413535)
       )
     })
 
@@ -627,10 +627,10 @@ describe('Controller Aave Strat', () => {
       // This will happend in one step/tx in a real case
       await waitFor(piToken.transfer(strat.address, 100))
       treasury = await piToken.balanceOf(owner.address)
-      await expect(strat.beforeMovement()).to.emit(strat, 'PerformanceFee').withArgs(3)
+      await expect(strat.beforeMovement()).to.emit(strat, 'PerformanceFee').withArgs(4) // 4.5% fee
       await waitFor(strat.deposit())
 
-      expect(await piToken.balanceOf(owner.address)).to.equal(treasury.add(3))
+      expect(await piToken.balanceOf(owner.address)).to.equal(treasury.add(4))
     })
   })
 })

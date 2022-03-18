@@ -362,9 +362,9 @@ describe('Controller Curve Strat', () => {
 
       // RATIO => (100 * 1e9 / ) * 99 / 100 == 4950000000.0
       // 1e18 * RATIO / 1e19 => 495000000.0 (swapped)
-      // 495000000.0 * 0.035 == 17325000  (perf fee)
+      // 495000000.0 * 0.045 == 22275000  (perf fee)
       expect(await BTC.balanceOf(owner.address)).to.be.equal(
-        balance.add(17325000)
+        balance.add(22275000)
       )
     })
 
@@ -390,9 +390,9 @@ describe('Controller Curve Strat', () => {
 
       // RATIO => (100 * 1e9 / ) * 99 / 100 == 4950000000.0
       // 1e18 * RATIO / 1e19 => 495000000.0 (swapped)
-      // 495000000.0 * 0.035 == 17325000  (perf fee)
+      // 495000000.0 * 0.045 == 22275000  (perf fee)
       expect(await BTC.balanceOf(owner.address)).to.be.equal(
-        balance.add(17325000 * 2) // same ratio crv & wNative
+        balance.add(22275000 * 2) // same ratio crv & wNative
       )
       expect(await WMATIC.balanceOf(CurveRewardsGauge.address)).to.be.equal(0)
       expect(await CRV.balanceOf(CurveRewardsGauge.address)).to.be.equal(0)

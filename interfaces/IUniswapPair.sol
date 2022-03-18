@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 interface IUniswapPair {
     function approve(address, uint) external returns (bool);
@@ -8,4 +8,6 @@ interface IUniswapPair {
     function token0() external view returns (address);
     function token1() external view returns (address);
     function skim(address to) external;
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function totalSupply() external view returns (uint);
 }

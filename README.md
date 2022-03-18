@@ -51,7 +51,7 @@ mkdir -p shares_cov/
 - `yarn ptest` to run only unit tests in parallel (it fails sometimes ?)
 
 ## Contracts
-![Contracts](https://github.com/2pifinance/contracts/blob/master/contracts.jpg?raw=true)
+![Contracts](https://github.com/2pinetwork/contracts/blob/master/contracts.jpg?raw=true)
 
 
 ## We use

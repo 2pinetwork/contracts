@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "hardhat/console.sol";
@@ -49,14 +49,23 @@ abstract contract Swappable is PiAdmin {
         // ratio = 1_507_423_500 ((152265000 * 1e9) / 100000000) * 99 / 100 [with 1.52 USDT/MATIC]
         // _balance = 1e18 (1.0 MATIC)
         // expected = 1507423 (1e18 * 1_507_423_500 / 1e21) [1.507 in USDT decimals]
-        uint tokenDiffPrecision = (
-            (10 ** IERC20Metadata(_fromToken).decimals()) / (10 ** IERC20Metadata(_toToken).decimals())
-        ) * SWAP_PRECISION;
+        // we should keep in mind the order of the token decimals
+
         uint ratio = (
             (_getPriceFor(_fromToken) * SWAP_PRECISION) / _getPriceFor(_toToken)
         ) * (RATIO_PRECISION - swapSlippageRatio) / RATIO_PRECISION;
 
-        return (_amount * ratio / tokenDiffPrecision);
+        if (IERC20Metadata(_fromToken).decimals() >= IERC20Metadata(_toToken).decimals()) {
+            uint tokenDiffPrecision = (10 ** IERC20Metadata(_fromToken).decimals()) / (10 ** IERC20Metadata(_toToken).decimals());
+
+            tokenDiffPrecision *= SWAP_PRECISION;
+
+            return (_amount * ratio / tokenDiffPrecision);
+        } else {
+            uint tokenDiffPrecision = (10 ** IERC20Metadata(_toToken).decimals()) / (10 ** IERC20Metadata(_fromToken).decimals());
+
+            return (_amount * ratio * tokenDiffPrecision / SWAP_PRECISION);
+        }
     }
 
     function _getPriceFor(address _token) internal view returns (uint) {

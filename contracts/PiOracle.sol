@@ -2,7 +2,7 @@
 pragma solidity =0.6.6;
 
 import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
-import 'hardhat/console.sol';
+// import 'hardhat/console.sol';
 
 // Manual interface declaration because of the @openzeppelin lib is for solidity 0.8
 interface IERC20MetadataAlt {
@@ -119,17 +119,19 @@ contract PiOracle {
 
     // Chainlink like method
     function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound) {
+        uint firstTokenPrecision = 10 ** uint(IERC20MetadataAlt(firstToken ? lp.token0() : lp.token1()).decimals());
         uint secondTokenPrecision = 10 ** uint(IERC20MetadataAlt(firstToken ? lp.token1() : lp.token0()).decimals());
 
-        require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+        // require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+        // require(secondTokenPrecision > 0 && secondTokenPrecision <= 1e18, "weird secondary token decimals");
+
 
         // price decimals
-        uint pricePrecision = 10 ** uint(decimals());
+        // uint pricePrecision = 10 ** uint(decimals());
+        // we concat first token precision with the chainlink price precision
+        uint pricePrecision = firstTokenPrecision * (10 ** uint(decimals()));
 
-        // ChainLink representation (8)
         uint price = uint(priceAverage.mul(pricePrecision).decode144());
-
-        price *= (10 ** 18); // PiToken decimals
 
         // in case the price is too low
         if (price >= secondTokenPrecision) {

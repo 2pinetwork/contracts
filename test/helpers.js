@@ -12,10 +12,18 @@ const toNumber = function (value) {
   return value.toLocaleString('fullwide', { useGrouping: false })
 }
 
+const toHex = (n) => {
+  return ethers.utils.hexlify(n).replace(/^0x0/, '0x')
+}
+
 const mineNTimes = async (n) => {
-  for (let i = 0; i < n; i++) {
-    await network.provider.send('evm_mine')
-  }
+  await network.provider.send('hardhat_mine', [toHex(n)])
+}
+
+const mineUntil = async (block) => {
+  const current = await getBlock()
+
+  await network.provider.send('hardhat_mine', [toHex(block - current)])
 }
 
 const getBlock = async () => {
@@ -79,7 +87,7 @@ const createPiToken = async ({ tokenContract, withDeployer } = {}) => {
   return piToken
 }
 
-const createController = async (token, archimedes, stratName) => {
+const createController = async (token, archimedes, stratName, extraArgs = {}) => {
   let shareName = `2pi-${await token.symbol()}`
   if (stratName == 'ControllerLPWithoutStrat') {
     let pair = await hre.ethers.getContractAt('IUniswapPair', token.address)
@@ -141,6 +149,15 @@ const createController = async (token, archimedes, stratName) => {
           owner.address
         )
         break
+      case 'ControllerJarvisStrat':
+        strategy = await deploy(
+          'ControllerJarvisStrat',
+          controller.address,
+          global.exchange.address,
+          '0x546C79662E028B661dFB4767664d0273184E4dD1', // KyberSwap router
+          owner.address
+        )
+        break
       case 'ControllerLPWithoutStrat':
         strategy = await deploy(
           'ControllerLPWithoutStrat',
@@ -183,11 +200,21 @@ const createController = async (token, archimedes, stratName) => {
         strategy = await deploy(
           'ControllerBalancerV2Strat',
           '0xBA12222222228d8Ba445958a75a0704d566BF2C8',
-          '0x06df3b2bbb68adc8b0e302443692037ed9f91b42000000000000000000000012',
+          extraArgs.poolId,
           token.address,
           controller.address,
           global.exchange.address,
           owner.address
+        )
+        break
+      case 'ControllerQuickSwapMaiLPStrat':
+        strategy = await deploy(
+          'ControllerQuickSwapMaiLPStrat',
+          token.address,
+          controller.address,
+          '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff', // QuickSwap router
+          owner.address,
+          extraArgs.maxWantBalance
         )
         break
   }
@@ -301,7 +328,7 @@ if (! process.env.HARDHAT_INTEGRATION_TESTS) {
     console.log('===============  SETUP DONE  ===============\n\n')
   })
 
-  afterEach(async () => {
+  beforeEach(async () => {
     await Promise.all([
       (await global.Aave.pool.reset()).wait(),
       (await global.Aave.dataProvider.reset()).wait(),
@@ -324,8 +351,10 @@ module.exports = {
   getBlock,
   impersonateContract,
   mineNTimes,
+  mineUntil,
   setupSuperFluid,
   sleep,
+  toHex,
   toNumber,
   waitFor,
   zeroAddress,

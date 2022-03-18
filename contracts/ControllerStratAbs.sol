@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
@@ -30,8 +30,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     address[] public rewardTokens;
 
     // Fees
-    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
-    uint public performanceFee = 350; // 3.5%
+    uint constant public MAX_PERFORMANCE_FEE = 2000; // 20% max
+    uint public performanceFee = 450; // 4.5%
     uint internal lastBalance;
 
     address public treasury;

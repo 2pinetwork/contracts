@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -53,8 +53,8 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     uint public constant HF_WITHDRAW_TOLERANCE = 0.05e6;
 
     // Fees
-    uint constant public MAX_PERFORMANCE_FEE = 500; // 5% max
-    uint public performanceFee = 350; // 3.5%
+    uint constant public MAX_PERFORMANCE_FEE = 2000; // 20% max
+    uint public performanceFee = 450; // 4.5%
     uint internal lastBalance;
 
     address public exchange;

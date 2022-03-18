@@ -70,7 +70,7 @@ describe('Controller Aave Strat', () => {
 
       // This will happend in one step/tx in a real case
       await setWbtcBalanceFor(strat.address, '0.00001') // just to round to 35
-      let fee = (await strat.balance()).sub(stratBalance).mul(350).div(10000)
+      let fee = (await strat.balance()).sub(stratBalance).mul(450).div(10000)
       treasury = await BTC.balanceOf(owner.address)
       // This is because of the aave provider lend/borrow will change balance block by block
       await expect(strat.beforeMovement()).to.emit(strat, 'PerformanceFee')
