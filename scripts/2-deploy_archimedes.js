@@ -24,27 +24,27 @@ const main = async () => {
   ).deploy(...args)
 
   console.log('Archimedes: ')
-  await archimedes.deployed(2)
+  await archimedes.deployed(10)
   await verify('Archimedes', archimedes.address, args)
 
   deploy.Archimedes = archimedes.address
 
-  const piToken = await hre.ethers.getContractAt('IPiTokenMocked', deploy.PiToken)
-  await (await piToken.addMinter(archimedes.address)).wait()
+  // const piToken = await hre.ethers.getContractAt('IPiTokenMocked', deploy.PiToken)
+  // await (await piToken.addMinter(archimedes.address)).wait()
   // await (await piToken.initRewardsOn(deploy.block)).wait()
   // console.log('2-deploy_archimedes.js:40');
 
-  const ref = await (await hre.ethers.getContractFactory('Referral')).deploy(archimedes.address)
+  // const ref = await (await hre.ethers.getContractFactory('Referral')).deploy(archimedes.address)
 
-  await ref.deployed()
-  console.log('Referral:')
-  await verify('Referral', ref.address, [archimedes.address])
+  // await ref.deployed(10)
+  // console.log('Referral:')
+  // await verify('Referral', ref.address, [archimedes.address])
 
-  deploy.Referral = ref.address
+  // deploy.Referral = ref.address
 
-  console.log('Set referral address in Archimedes')
-  await (await archimedes.setReferralAddress(ref.address)).wait()
-  console.log('Set Archimedes as minter')
+  // console.log('Set referral address in Archimedes')
+  // await (await archimedes.setReferralAddress(ref.address)).wait()
+  // console.log('Set Archimedes as minter')
 
   fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }

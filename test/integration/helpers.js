@@ -227,7 +227,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     console.log('===============  SETUP DONE  ===============\n\n')
   })
 
-  afterEach(async () => {
+  beforeEach(async () => {
     await Promise.all([
       // Reset hardhat "state"
       network.provider.send('evm_setAutomine', [true]),

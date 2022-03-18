@@ -2,78 +2,93 @@ const fs = require('fs')
 const hre = require('hardhat');
 const { verify } = require('./verify');
 
+const MIN_GAS_PRICE = 32e9
+
 async function main() {
   const owner = (await hre.ethers.getSigners())[0]
-  const onlyCurrency = process.env.CURRENCY
   const chainId = hre.network.config.network_id
   const deploy = JSON.parse(
     fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
   )
-  const pools = deploy.balancerPools
 
-  let pool
-  const archimedes = await (
-    await hre.ethers.getContractFactory('Archimedes')
-  ).attach(deploy.Archimedes)
+  const providers = [
+    {
+      name: 'aave',
+      pools: 'aavePools',
+      contract: 'ControllerAaveStrat',
+      args: ['address', 'rate', 'aave_rate_max', 'depth', 'min_leverage']
+    },
 
-  let args
+    // {
+    //   name: 'curve',
+    //   pools: 'curveBtcPools',
+    //   contract: 'ControllerCurveStrat',
+    //   args: []
+    // }
+  ]
 
-  for (pool of pools) {
-    if (pool.currency != onlyCurrency) { continue }
+  let pool, pools, args
+  const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
 
-    let stratData = deploy[`strat-bal-${pool.currency}`] || deploy[`strat-bal-W${pool.currency}`]
-    stratData.oldStrat = stratData.strategy
+  for (let provider of providers) {
+    for (pool of deploy[provider.pools]) {
+      // if (pool.currency != onlyCurrency) { continue }
 
-    let controller = await (
-      await hre.ethers.getContractFactory('Controller')
-    ).attach(stratData.controller);
+      let stratData = {...(deploy[`strat-${provider.name}-${pool.currency}`] || deploy[`strat-${provider.name}-W${pool.currency}`]) }
+      stratData.oldStrat = stratData.strategy
 
-    let oldStrat = await (
-      await hre.ethers.getContractFactory('ControllerAaveStrat')
-    ).attach(stratData.strategy)
+      let controller = await ( await hre.ethers.getContractFactory('Controller')).attach(stratData.controller);
+      let oldStrat = await ( await hre.ethers.getContractFactory(provider.contract)).attach(stratData.strategy)
 
-    args = [
-      pool.address,
-      pool.rate, // rate
-      pool.aave_rate_max, // rate max
-      pool.depth, // depth
-      pool.min_leverage, // min leverage
-      controller.address,
-      deploy.exchange,  // sushiswap Exchange
-      deploy.FeeManager
-    ]
+      // args = [
+      //   pool.vault, // balancer
+      //   pool.poolId, // balancer
+      //   pool.address,
+      //   // pool.rate, // aave rate
+      //   // pool.aave_rate_max, // aave rate max
+      //   // pool.depth, //aave depth
+      //   // pool.min_leverage, // aave min leverage
+      //   controller.address,
+      //   deploy.exchange,  // sushiswap Exchange
+      //   deploy.FeeManager
+      // ]
+      //
+      args = []
+      for (let k of provider.args) {
+        args.push(pool[k] + '')
+      }
+      args.push(controller.address)
+      args.push(deploy.exchange)
+      args.push(deploy.FeeManager)
 
-    let strategy = await (
-      await hre.ethers.getContractFactory('ControllerAaveStrat')
-    ).deploy(...args);
+      let strategy = await ( await hre.ethers.getContractFactory(provider.contract)).deploy(...args);
 
-    await strategy.deployed();
+      await strategy.deployed(10);
 
-    console.log('Strategy ' + pool.currency + ':')
+      console.log('Strategy ' + pool.currency + ':')
 
-    await verify('ControllerAaveStrat', strategy.address, args)
+      await verify(provider.contract, strategy.address, args)
 
-    let WNATIVE = await hre.ethers.getContractAt('IWNative', deploy.WMATIC || deploy.WNATIVE)
+      console.log('Set strategy...')
+      await (await controller.setStrategy(strategy.address)).wait()
+      console.log('Set maxPriceOffset...')
+      await (await strategy.setMaxPriceOffset(24 * 3600, {gasPrice: MIN_GAS_PRICE})).wait() // mumbai has ~1 hour of delay
+      console.log('Set price feed...')
+      await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address], {gasPrice: MIN_GAS_PRICE})).wait()
+      for (let token of (pool.rewards || [])) {
+        console.log(`Set rewards feed ${token}`)
+        await (await strategy.setPriceFeed(token, deploy.chainlink[token], {gasPrice: MIN_GAS_PRICE})).wait()
+        // Reward => ETH => want
+        console.log(`Set rewards route ${token}`)
+        await (await strategy.setRewardToWantRoute(token, [token, "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", pool.address], {gasPrice: MIN_GAS_PRICE})).wait()
+      }
 
-    if (pool.currency != 'AVAX' && pool.currency != 'MATIC') {
-      await (await WNATIVE.deposit({ value: 0.1e18 + '' })).wait()
-      await (await WNATIVE.transfer(oldStrat.address, 0.1e18 + '')).wait() // rewards swap
+      stratData.strategy = strategy.address
+      deploy[`strat-${provider.name}-${pool.currency}`] = stratData
+
+      fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
     }
-
-    await (await controller.setStrategy(strategy.address, {gasLimit: 20e6})).wait()
-
-    await (await strategy.setPriceFeed(WNATIVE.address, deploy.chainlink[WNATIVE.address])).wait()
-    if (pool.currency != 'AVAX' && pool.currency != 'MATIC') {
-      await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
-      // await (await strategy.setSwapSlippageRatio(9999)).wait() // mumbai LP's are not balanced
-      await (await strategy.setMaxPriceOffset(24 * 3600)).wait() // mumbai has ~1 hour of delay
-    }
-
-    stratData.strategy = strategy.address
-    deploy[`strat-bal-${pool.currency}`] = stratData
   }
-
-  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()
