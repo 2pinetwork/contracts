@@ -8,7 +8,12 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { setCustomBalanceFor, setChainlinkRoundForNow, resetHardhat } = require('./helpers')
+const {
+  createOracles,
+  resetHardhat,
+  setChainlinkRoundForNow,
+  setCustomBalanceFor,
+} = require('./helpers')
 
 describe('Controller mStable Strat', () => {
   let bob
@@ -41,10 +46,13 @@ describe('Controller mStable Strat', () => {
 
     await waitFor(archimedes.addNewPool(USDC.address, controller.address, 10, false));
 
-    [strat, mtaFeed] = await Promise.all([
-      ethers.getContractAt('ControllerMStableStrat', (await controller.strategy())),
-      ethers.getContractAt('IChainLink', '0x2346Ce62bd732c62618944E51cbFa09D985d86D2') // BAT has similar price
-    ])
+    strat = await ethers.getContractAt('ControllerMStableStrat', (await controller.strategy()))
+
+    let tokensData = {
+      [REWARD_TOKEN.address]: { price: 0.425 }
+    }
+
+    await createOracles(tokensData);
 
     stratCallback = async (strategy) => {
       await Promise.all([
@@ -52,28 +60,23 @@ describe('Controller mStable Strat', () => {
         waitFor(strategy.setPoolSlippageRatio(50)), // 0.5%
         waitFor(strategy.setSwapSlippageRatio(150)), // 1.5%
         waitFor(strategy.setPriceFeed(USDC.address, usdcFeed.address)),
-        waitFor(strategy.setPriceFeed(REWARD_TOKEN.address, mtaFeed.address)),
-        waitFor(strategy.setPriceFeed(WMATIC.address, wmaticFeed.address)),
+        waitFor(strategy.setPriceFeed(REWARD_TOKEN.address, tokensData[REWARD_TOKEN.address].oracle.address)),
         waitFor(strategy.setRewardToWantRoute(REWARD_TOKEN.address, [REWARD_TOKEN.address, DAI.address, USDC.address])),
-        waitFor(strategy.setRewardToWantRoute(WMATIC.address, [WMATIC.address, USDC.address]))
       ])
     }
 
     await Promise.all([
       setChainlinkRoundForNow(usdcFeed),
-      setChainlinkRoundForNow(wmaticFeed),
-      setChainlinkRoundForNow(mtaFeed),
       stratCallback(strat),
     ])
   })
 
-  it.only('Full deposit + harvest strat + withdraw', async () => {
+  it('Full deposit + harvest strat + withdraw', async () => {
     const newBalance = ethers.BigNumber.from('' + 100000e6) // 100000 USDC
     await setCustomBalanceFor(USDC.address, bob.address, newBalance)
 
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(USDC.connect(bob).approve(archimedes.address, '' + 100000e6))
     await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
@@ -81,19 +84,11 @@ describe('Controller mStable Strat', () => {
     expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     const balance = await strat.balanceOfPool() // more decimals
 
-    // to ask for rewards (max 100 blocks)
-    // for (let i = 0; i < 20; i++) {
     await mineNTimes(100)
-    await waitFor(strat.harvest())
-
-      // if (balance < (await strat.balanceOfPool())) {
-      //   break
-      // }
-    // }
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
 
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
@@ -111,7 +106,6 @@ describe('Controller mStable Strat', () => {
     )
     expect(await USDC.balanceOf(strat.address)).to.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await USDC.balanceOf(bob.address)).to.within(
@@ -126,7 +120,6 @@ describe('Controller mStable Strat', () => {
 
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(USDC.connect(bob).approve(archimedes.address, '' + 100000e6))
     await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
@@ -135,7 +128,6 @@ describe('Controller mStable Strat', () => {
     expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     const otherStrat = await deploy(
       'ControllerMStableStrat',
@@ -145,18 +137,8 @@ describe('Controller mStable Strat', () => {
       owner.address
     )
 
-    await Promise.all([
-      waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
-      waitFor(otherStrat.setSwapSlippageRatio(2000)), // 20%
-      waitFor(otherStrat.setPriceFeed(USDC.address, usdcFeed.address)),
-      waitFor(otherStrat.setPriceFeed(REWARD_TOKEN.address, mtaFeed.address)),
-      waitFor(otherStrat.setPriceFeed(WMATIC.address, maticFeed.address)),
-      waitFor(otherStrat.setRewardToWantRoute(REWARD_TOKEN.address, [REWARD_TOKEN.address, DAI_ADDRESS, USDC.address])),
-      waitFor(otherStrat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, USDC.address]))
-    ])
+    await stratCallback(otherStrat)
 
-    // We need to mine so WMatic rewards are "enough" to pass the expected swap ratio
     await mineNTimes(5)
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
@@ -167,7 +149,6 @@ describe('Controller mStable Strat', () => {
     expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(strat.unpause())
 
@@ -179,6 +160,5 @@ describe('Controller mStable Strat', () => {
     expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
-    expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
   })
 })

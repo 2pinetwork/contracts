@@ -48,30 +48,24 @@ contract ControllerMStableStrat is ControllerStratAbs {
     function _deposit() internal override {
         uint wantBal = wantBalance();
 
-        console.log("USDC balance: ", wantBal);
         if (wantBal > 0) {
             uint expected = _wantToMusdDoubleCheck(wantBal);
-            console.log("mUSD expected: ", expected);
 
             want.safeApprove(MTOKEN, wantBal);
             IMToken(MTOKEN).mint(address(want), wantBal, expected, address(this));
         }
 
         uint mBalance = IERC20(MTOKEN).balanceOf(address(this));
-        console.log("mUSD balance: ", mBalance);
 
         if (mBalance > 0) {
             uint expected = _musdAmountToImusd(mBalance) * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
-            console.log("imUSD expected: ", expected);
             IERC20(MTOKEN).safeApprove(IMTOKEN, mBalance);
             uint credits = IIMToken(IMTOKEN).depositSavings(mBalance);
 
-            console.log("imUSD balance: ", credits);
             require(credits >= expected, "less credits than expected");
 
             IERC20(IMTOKEN).safeApprove(VAULT, credits);
             IMVault(VAULT).stake(credits);
-            console.log("staked-imUSD balance: ", balanceOfPool());
         }
     }
 
@@ -80,15 +74,12 @@ contract ControllerMStableStrat is ControllerStratAbs {
     }
 
     function _swapRewards() internal {
-        console.log("Rewards: " , rewardTokens.length);
         for (uint i = 0; i < rewardTokens.length; i++) {
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
-            console.log("En swap reward token:", rewardToken, "balance: ", _balance);
             if (_balance > 0) {
                 uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-            console.log("Expected:", expected);
 
                 // Want price sometimes is too high so it requires a lot of rewards to swap
                 if (expected > 1) {
