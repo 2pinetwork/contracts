@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 import "./ControllerStratAbs.sol";
 import "../interfaces/IMStable.sol";
@@ -21,8 +21,8 @@ contract ControllerMStableStrat is ControllerStratAbs {
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
     }
 
-    function identifier() external pure returns (string memory) {
-        return string("mUSD@mStable#1.0.0");
+    function identifier() external view returns (string memory) {
+        return string(abi.encodePacked(want.symbol(), "@mStable#1.0.0"));
     }
 
     function harvest() public nonReentrant override {
@@ -48,20 +48,30 @@ contract ControllerMStableStrat is ControllerStratAbs {
     function _deposit() internal override {
         uint wantBal = wantBalance();
 
+        console.log("USDC balance: ", wantBal);
         if (wantBal > 0) {
-            uint minOut = IMToken(MTOKEN).getMintOutput(address(want), wantBal);
-            uint expected = minOut * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+            uint expected = _wantToMusdDoubleCheck(wantBal);
+            console.log("mUSD expected: ", expected);
 
-            want.safeIncreaseAllowance(MTOKEN, wantBal);
+            want.safeApprove(MTOKEN, wantBal);
+            IMToken(MTOKEN).mint(address(want), wantBal, expected, address(this));
+        }
 
-            uint massetsMinted = IMToken(MTOKEN).mint(address(want), wantBal, expected, address(this));
+        uint mBalance = IERC20(MTOKEN).balanceOf(address(this));
+        console.log("mUSD balance: ", mBalance);
 
-            IERC20(MTOKEN).safeIncreaseAllowance(IMTOKEN, massetsMinted);
+        if (mBalance > 0) {
+            uint expected = _musdAmountToImusd(mBalance) * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
+            console.log("imUSD expected: ", expected);
+            IERC20(MTOKEN).safeApprove(IMTOKEN, mBalance);
+            uint credits = IIMToken(IMTOKEN).depositSavings(mBalance);
 
-            uint credits = IIMToken(IMTOKEN).depositSavings(massetsMinted);
+            console.log("imUSD balance: ", credits);
+            require(credits >= expected, "less credits than expected");
 
-            IERC20(IMTOKEN).safeIncreaseAllowance(VAULT, credits);
+            IERC20(IMTOKEN).safeApprove(VAULT, credits);
             IMVault(VAULT).stake(credits);
+            console.log("staked-imUSD balance: ", balanceOfPool());
         }
     }
 
@@ -70,12 +80,15 @@ contract ControllerMStableStrat is ControllerStratAbs {
     }
 
     function _swapRewards() internal {
+        console.log("Rewards: " , rewardTokens.length);
         for (uint i = 0; i < rewardTokens.length; i++) {
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20(rewardToken).balanceOf(address(this));
 
+            console.log("En swap reward token:", rewardToken, "balance: ", _balance);
             if (_balance > 0) {
                 uint expected = _expectedForSwap(_balance, rewardToken, address(want));
+            console.log("Expected:", expected);
 
                 // Want price sometimes is too high so it requires a lot of rewards to swap
                 if (expected > 1) {
@@ -93,7 +106,9 @@ contract ControllerMStableStrat is ControllerStratAbs {
     function _withdraw(uint _amount) internal override returns (uint) {
         uint wantBal = wantBalance();
 
-        _withdrawFromPool(_amount);
+        _withdrawFromPool(
+            _wantToPoolToken(_amount)
+        );
 
         return wantBalance() - wantBal;
     }
@@ -114,20 +129,23 @@ contract ControllerMStableStrat is ControllerStratAbs {
 
         require(_balance > 0, "redeem balance = 0");
 
-        uint amount = _balance * IIMToken(IMTOKEN).exchangeRate() / 10 ** IIMToken(IMTOKEN).decimals();
-        uint bAmount = amount / WANT_MISSING_PRECISION;
-        uint expected = bAmount * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+        uint _amount = _imusdAmountToMusd(_balance);
+        uint expected = _amount / WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
 
-        IIMToken(IMTOKEN).redeemUnderlying(amount);
-        IMToken(MTOKEN).redeem(address(want), amount, expected, address(this));
+        IIMToken(IMTOKEN).redeemUnderlying(_amount);
+        IMToken(MTOKEN).redeem(address(want), _amount, expected, address(this));
     }
 
-    function _minWantToPoolToken(uint _amount) internal view returns (uint) {
-        // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
-        // the expected amount is represented with 18 decimals as POOL_TOKEN
-        // so we have to add X decimals to the want balance.
-        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 poolToken tokens
-        return _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
+    function _wantToMusdDoubleCheck(uint _amount) internal view returns (uint minOut) {
+        if (_amount <= 0) { return 0; }
+
+        minOut = IMToken(MTOKEN).getMintOutput(address(want), _amount);
+
+        // want <=> mUSD is almost 1:1
+        uint expected = _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
+
+
+        if (expected > minOut) { minOut = expected; }
     }
 
     function balanceOfPool() public view override returns (uint) {
@@ -135,11 +153,30 @@ contract ControllerMStableStrat is ControllerStratAbs {
     }
 
     function balanceOfPoolInWant() public view override returns (uint) {
-        uint vaultBalance = IMVault(VAULT).balanceOf(address(this));
-        uint rate = IIMToken(IMTOKEN).exchangeRate();
-        uint decimals = IIMToken(IMTOKEN).decimals();
+        return _musdAmountToWant(
+            _imusdAmountToMusd(
+                balanceOfPool()
+            )
+        );
+    }
 
-        // Since mUSD is 1:1 with the bAsset
-        return vaultBalance * rate / 10 ** decimals / WANT_MISSING_PRECISION;
+    function _musdAmountToWant(uint _amount) internal view returns (uint) {
+        if (_amount <= 0) { return 0; }
+
+        return IMToken(MTOKEN).getRedeemOutput(address(want), _amount);
+    }
+
+    function _musdAmountToImusd(uint _amount) internal view returns (uint) {
+        return _amount * (10 ** IIMToken(IMTOKEN).decimals()) / IIMToken(IMTOKEN).exchangeRate();
+    }
+
+    function _imusdAmountToMusd(uint _amount) internal view returns (uint) {
+        return _amount * IIMToken(IMTOKEN).exchangeRate() / (10 ** IIMToken(IMTOKEN).decimals());
+    }
+
+    function _wantToPoolToken(uint _amount) internal view returns (uint) {
+        return _musdAmountToImusd(
+            _wantToMusdDoubleCheck(_amount)
+        );
     }
 }

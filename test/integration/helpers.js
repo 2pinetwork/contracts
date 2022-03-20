@@ -2,7 +2,7 @@
 
 const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/deploy-framework')
 const { Framework } = require('@superfluid-finance/js-sdk')
-const { createPiToken, } = require('../helpers')
+const { createPiToken, deploy, } = require('../helpers')
 
 const setWMaticBalanceFor = async (address, amount) => {
   const wmaticSlot = 3
@@ -163,7 +163,34 @@ const createPiTokenExchangePair = async () => {
   return pair
 }
 
-const resetHardhat = async () => {
+const createOracles = async (tokensData) => {
+  for (let token in tokensData) {
+    let pair = await SUSHI_FACTORY.getPair(token, global.USDC.address)
+
+    if (pair == '0x' + '0'.repeat(40)) {
+      await createUsdcPairWithPrice(
+        await ethers.getContractAt('IERC20Metadata', token),
+        tokensData[token].price
+      )
+
+      pair = await SUSHI_FACTORY.getPair(token, global.USDC.address)
+    }
+
+    tokensData[token].oracle = await deploy('PiOracle', pair, token)
+  }
+
+  for (let i = 0; i < 3; i++) {
+    // mine + 1 minute
+    await network.provider.send('hardhat_mine', ['0x2', '0x3f']) // 63 seconds
+    for (let token in tokensData) {
+      await tokensData[token].oracle.update()
+    }
+  }
+
+  await network.provider.send('hardhat_mine', ['0x2', '0x3f'])
+}
+
+const resetHardhat = async (blockNumber) => {
   // Reset network because the rewards are not harvested for somereason
   await network.provider.request({
     method: 'hardhat_reset',
@@ -171,42 +198,87 @@ const resetHardhat = async () => {
       {
         forking: {
           jsonRpcUrl:  hre.network.config.forking.url,
-          blockNumber: hre.network.config.forking.blockNumber
+          blockNumber: (blockNumber || hre.network.config.forking.blockNumber)
         },
       },
     ],
   });
 
   global.PiToken = await createPiToken({ withDeployer: true })
-  if (hre.network.config.network_id !== 56)
+  if (!blockNumber && hre.network.config.network_id !== 56)
     expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 }
 
 const fetchNeededTokens = async () => {
   console.log('Fetching needed tokens...')
   const wmaticAbi = require('./abis/wmatic.json')
-  const wethAbi = require('./abis/weth.json')
   const uniswapAbi = require('./abis/uniswap-router.json')
   const incentivesControllerAbi = require('./abis/incentives-controller.json')
   const dataProviderAbi = require('./abis/data-provider.json')
   const aavePoolAbi = require('./abis/aave-pool.json')
-  const btcAbi = require('./abis/btc.json')
-  const crvAbi = require('./abis/crv.json')
   const curvePoolAbi = require('./abis/curve-pool.json')
   const curveRewardsGaugeAbi = require('./abis/curve-rewards-gauge.json')
+  const uniswapFactoryAbi   = require('./abis/uniswap-factory.json')
 
+  let promises = []
+
+  const ERC20_TOKENS = {
+    WETH: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+    BTC:  '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
+    CRV:  '0x172370d5Cd63279eFa6d502DAB29171933a610AF',
+    USDC: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
+    USDT: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
+    DAI:  '0x8f3cf7ad23cd3cadbd9735aff958023239c6a063',
+    MUSD: '0xe840b73e5287865eec17d250bfb1536704b43b21',
+  }
+
+  for (let symbol in ERC20_TOKENS) {
+    promises.push(
+      ethers.getContractAt('IERC20Metadata', ERC20_TOKENS[symbol]).then(c => (global[symbol] = c))
+    )
+  }
+
+  const CHAINLINK_ORACLES = {
+    usdcFeed:   '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7',
+    wmaticFeed: '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0',
+  }
+
+  for (let key in CHAINLINK_ORACLES) {
+    promises.push(
+      ethers.getContractAt('IChainLink', CHAINLINK_ORACLES[key]).then(c => (global[key] = c))
+    )
+  }
+
+
+  promises.push(
+    ethers.getContractAt(wmaticAbi, '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270').then(c => (global.WMATIC = c))
+  )
+  promises.push(
+    ethers.getContractAt(uniswapAbi, '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506').then(c => (global.exchange = c))
+  )
+  promises.push(
+    ethers.getContractAt(curvePoolAbi, '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67').then(c => (global.CurvePool = c))
+  )
+  promises.push(
+    ethers.getContractAt(curveRewardsGaugeAbi, '0xffbACcE0CC7C19d46132f1258FC16CF6871D153c').then(c => (global.CurveRewardsGauge = c))
+  )
+  promises.push(
+    ethers.getContractAt(uniswapFactoryAbi, '0xc35DADB65012eC5796536bD9864eD8773aBc74C4').then(c => (global.SUSHI_FACTORY = c))
+  )
+
+  // Aave contracts
   global.Aave = {}
-  ethers.getContractAt(wmaticAbi, '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270').then(c => (global.WMATIC = c))
-  ethers.getContractAt(wethAbi, '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619').then(c => (global.WETH = c))
-  ethers.getContractAt(uniswapAbi, '0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506').then(c => (global.exchange = c))
-  ethers.getContractAt(incentivesControllerAbi, '0x357D51124f59836DeD84c8a1730D72B749d8BC23').then(c => (global.Aave.incentivesController = c))
-  ethers.getContractAt(dataProviderAbi, '0x7551b5D2763519d4e37e8B81929D336De671d46d').then(c => (global.Aave.dataProvider = c))
-  ethers.getContractAt(aavePoolAbi, '0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf').then(c => (global.Aave.pool = c))
-  ethers.getContractAt(btcAbi, '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6').then(c => (global.BTC = c))
-  ethers.getContractAt(crvAbi, '0x172370d5Cd63279eFa6d502DAB29171933a610AF').then(c => (global.CRV = c))
-  ethers.getContractAt(curvePoolAbi, '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67').then(c => (global.CurvePool = c))
-  ethers.getContractAt(curveRewardsGaugeAbi, '0xffbACcE0CC7C19d46132f1258FC16CF6871D153c').then(c => (global.CurveRewardsGauge = c))
-  ethers.getContractAt('IERC20Metadata', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174').then(c => (global.USDC = c))
+  promises.push(
+    ethers.getContractAt(incentivesControllerAbi, '0x357D51124f59836DeD84c8a1730D72B749d8BC23').then(c => (global.Aave.incentivesController = c))
+  )
+  promises.push(
+    ethers.getContractAt(dataProviderAbi, '0x7551b5D2763519d4e37e8B81929D336De671d46d').then(c => (global.Aave.dataProvider = c))
+  )
+  promises.push(
+    ethers.getContractAt(aavePoolAbi, '0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf').then(c => (global.Aave.pool = c))
+  )
+
+  await Promise.all(promises)
 }
 
 if (process.env.HARDHAT_INTEGRATION_TESTS) {
@@ -218,11 +290,12 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
     global.owner = await ethers.getSigner('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') // first hardhat account
     global.deployer = await ethers.getSigner('0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199') // last hardhat account
 
-    fetchNeededTokens()
+    const prom = fetchNeededTokens()
 
     // DEPLOY PiToken
     console.log('Deploying PiToken')
     global.PiToken = await createPiToken({ tokenContract: 'TestPiToken', withDeployer: true })
+    await prom
 
     console.log('===============  SETUP DONE  ===============\n\n')
   })
@@ -240,6 +313,7 @@ if (process.env.HARDHAT_INTEGRATION_TESTS) {
 module.exports = {
   createPiTokenExchangePair,
   createUsdcPairWithPrice,
+  createOracles,
   resetHardhat,
   setWMaticBalanceFor,
   setWbtcBalanceFor,
