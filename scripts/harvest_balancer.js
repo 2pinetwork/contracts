@@ -119,7 +119,7 @@ const main = async function () {
     for (let str in deploy) {
       if (!str.startsWith('strat-bal-')) { continue }
 
-   contract = await ethers.getContractAt('ControllerBalancerV2Strat', deploy[str]['strategy'])
+      contract = await ethers.getContractAt('ControllerBalancerV2Strat', deploy[str]['strategy'])
       // account should be with checksum
       let [claimProof, tokens] = await build(ethers.utils.getAddress(contract.address))
       console.log(`${chainId}-${str} proff: `, claimProof)
@@ -127,12 +127,32 @@ const main = async function () {
         if (claimProof.length > 0 ) {
           await (await contract.claimRewards(claimProof, tokens)).wait()
           console.log(`Claimed rewards for ${chainId}-${str}`)
+        }
+      } catch(e) {
+        await notify(`Exception for ${chainId}-${str}: ${e}` )
+        console.log(`Error ${e}`)
+      }
+
+      let harvest = false
+
+      for (let reward in distributors) {
+        console.log(`Checkeando ${reward} para ${contract.address}`)
+        console.log(await (await ethers.getContractAt('IERC20', reward)).balanceOf(contract.address))
+        if ( (await (await ethers.getContractAt('IERC20', reward)).balanceOf(contract.address)) > 0) {
+          console.log(`Should harvest ${chainId}-${str} for ${reward}`)
+          harvest = true
+        }
+      }
+
+      try {
+        if (harvest) {
           await (await contract.harvest()).wait()
           console.log(`${chainId}-${str} harvested`)
         }
       } catch(e) {
         await notify(`Exception for ${chainId}-${str}: ${e}` )
         console.log(`Error ${e}`)
+
       }
     }
   }

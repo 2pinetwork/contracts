@@ -1,6 +1,7 @@
 const fetch = require("node-fetch");
 
 exports.notify = async function(msg) {
+  if (process.env.SKIP_NOTIFICATIONS) { return }
   const url = [
     'https://api.telegram.org/',
     process.env.TELEGRAM_BOT,
