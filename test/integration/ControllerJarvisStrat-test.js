@@ -9,7 +9,13 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { createUsdcPairWithPrice, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const {
+  createOracles,
+  createUsdcPairWithPrice,
+  resetHardhat,
+  setChainlinkRoundForNow,
+  setCustomBalanceFor,
+} = require('./helpers')
 
 describe('Controller Jarvis Strat', () => {
   let bob
@@ -27,20 +33,7 @@ describe('Controller Jarvis Strat', () => {
   let updatePrices
 
   beforeEach(async () => {
-    await network.provider.request({
-      method: 'hardhat_reset',
-      params: [
-        {
-          forking: {
-            jsonRpcUrl:  hre.network.config.forking.url,
-            blockNumber: 25774000 // 2022-03-09 06: UTC
-          },
-        },
-      ],
-    });
-
-    // global.PiToken = await createPiToken({ withDeployer: true })
-    // expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
+    await resetHardhat(25774000); // 2022-03-09 06: UTC
 
     [, bob]      = await ethers.getSigners()
     piToken      = await createPiToken()
@@ -69,35 +62,7 @@ describe('Controller Jarvis Strat', () => {
       ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'), // WMATIC
     ])
 
-    const factoryAbi   = require('./abis/uniswap-factory.json')
-    const sushiFactory = await ethers.getContractAt(factoryAbi, '0xc35DADB65012eC5796536bD9864eD8773aBc74C4')
 
-    const createOracles = async (tokenData) => {
-      for (let token in tokenData) {
-        let pair = await sushiFactory.getPair(token, global.USDC.address)
-
-        if (pair == '0x' + '0'.repeat(40)) {
-          await createUsdcPairWithPrice(
-            await ethers.getContractAt('IERC20Metadata', token),
-            tokenData[token].price
-          )
-
-          pair = await sushiFactory.getPair(token, global.USDC.address)
-        }
-
-        tokenData[token].oracle = await deploy('PiOracle', pair, token)
-      }
-
-      for (let i = 0; i < 3; i++) {
-        // mine + 1 minute
-        await network.provider.send('hardhat_mine', ['0x2', '0x3f']) // 63 seconds
-        for (let token in tokenData) {
-          await tokenData[token].oracle.update()
-        }
-      }
-
-      await network.provider.send('hardhat_mine', ['0x2', '0x3f'])
-    }
 
     const JRT = '0x596ebe76e2db4470966ea395b0d063ac6197a8c5' // JRT
     const UMA = '0x3066818837c5e6ed6601bd5a91b0762877a6b731' // UMA
