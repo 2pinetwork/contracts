@@ -26,35 +26,13 @@ const main = async function () {
     distAbi = [
       {
         "inputs":[
-          {
-            "internalType":"contract IERC20",
-            "name":"token",
-            "type":"address"
-          },
-          {
-            "internalType":"address",
-            "name":"distributor",
-            "type":"address"
-          },
-          {
-            "internalType":"uint256",
-            "name":"distributionId",
-            "type":"uint256"
-          },
-          {
-            "internalType":"address",
-            "name":"claimer",
-            "type":"address"
-          }
+          { "internalType":"contract IERC20", "name":"token", "type":"address" },
+          { "internalType":"address", "name":"distributor", "type":"address" },
+          { "internalType":"uint256", "name":"distributionId", "type":"uint256" },
+          { "internalType":"address", "name":"claimer", "type":"address" }
         ],
         "name":"isClaimed",
-        "outputs":[
-          {
-            "internalType":"bool",
-            "name":"",
-            "type":"bool"
-          }
-        ],
+        "outputs":[{ "internalType":"bool", "name":"", "type":"bool" }],
         "stateMutability":"view",
         "type":"function"
       }
@@ -68,7 +46,11 @@ const main = async function () {
       repReq = await fetch(`https://github.com/balancer-labs/bal-mining-scripts/raw/master/reports/${file}`)
       polygonReports = await repReq.json()
       distributions = Object.keys(polygonReports)
-      distributionId = distributions[distributions.length - 1]
+      for (let i = 1; i < 10; i++) {
+
+      distributionId = distributions[distributions.length - i]
+
+        if (!distributionId) { continue }
 
       claimed = await dist.isClaimed(token, distributors[token], distributionId, account)
 
@@ -100,6 +82,7 @@ const main = async function () {
           index += 1
         }
       }
+      }
     }
 
     return [claims, claimTokens]
@@ -115,6 +98,7 @@ const main = async function () {
 
 
   for (let chainId of ['xcapit', '137']) {
+  // for (let chainId of ['xcapit']) {
     let deploy = JSON.parse( fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8'))
     for (let str in deploy) {
       if (!str.startsWith('strat-bal-')) { continue }
@@ -125,6 +109,8 @@ const main = async function () {
       console.log(`${chainId}-${str} proff: `, claimProof)
       try {
         if (claimProof.length > 0 ) {
+          console.log(`Should claim rewards for ${chainId}-${str}`)
+          // await (await contract.claimRewards(claimProof, tokens, {gasPrice: 32e9, gasLimit: 1e6})).wait()
           await (await contract.claimRewards(claimProof, tokens)).wait()
           console.log(`Claimed rewards for ${chainId}-${str}`)
         }

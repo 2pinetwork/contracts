@@ -239,6 +239,7 @@ const fetchNeededTokens = async () => {
   }
 
   const CHAINLINK_ORACLES = {
+    daiFeed:    '0x4746DeC9e833A82EC7C2C1356372CcF2cfcD2F3D',
     usdcFeed:   '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7',
     wmaticFeed: '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0',
   }
@@ -248,7 +249,6 @@ const fetchNeededTokens = async () => {
       ethers.getContractAt('IChainLink', CHAINLINK_ORACLES[key]).then(c => (global[key] = c))
     )
   }
-
 
   promises.push(
     ethers.getContractAt(wmaticAbi, '0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270').then(c => (global.WMATIC = c))

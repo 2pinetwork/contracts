@@ -17,12 +17,12 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
   let controller
   let strat
   let rewardsBlock
-  let usdc
   let qi
   let qiFeed
-  let usdcFeed
   let maiFeed
-  let wmaticFeed
+  let swapper
+  let setupStrat
+
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -35,57 +35,67 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
       WMATIC.address
     )
 
-    usdc = await ethers.getContractAt('IERC20Metadata', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174')
-    qi   = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
+    qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
 
-    controller = await createController(usdc, archimedes, 'ControllerQuickSwapMaiLPStrat', {
+    controller = await createController(USDC, archimedes, 'ControllerQuickSwapMaiLPStrat', {
       maxWantBalance: 1e5 + ''
     })
 
-    await waitFor(archimedes.addNewPool(usdc.address, controller.address, 10, false));
+    await waitFor(archimedes.addNewPool(USDC.address, controller.address, 10, false));
 
-    [strat, usdcFeed, maiFeed, wmaticFeed, qiFeed] = await Promise.all([
+    [strat, maiFeed, qiFeed] = await Promise.all([
       ethers.getContractAt('ControllerQuickSwapMaiLPStrat', (await controller.strategy())),
-      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'),
-      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'), // MIM (MIMATIC is 0xd8d483d813547CfB624b8Dc33a00F2fcbCd2D428)
-      ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'),
+      ethers.getContractAt('IChainLink', usdcFeed.address),
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444') // Doge less than qi
     ])
 
-    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    setupStrat = async (strategy) => {
+      const LP = await ethers.getContractAt('IERC20Metadata', '0x160532D2536175d65C03B97b0630A9802c274daD')
+
+      swapper = await deploy('SwapperWithCompensation', USDC.address, LP.address, strategy.address)
+
+      const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+
+      await Promise.all([
+        waitFor(strategy.setMaxPriceOffset(86400)),
+        waitFor(strategy.setPoolSlippageRatio(200)), // 2%
+        waitFor(strategy.setSwapSlippageRatio(200)), // 2%
+        waitFor(strategy.setPriceFeed(USDC.address, usdcFeed.address)),
+        waitFor(strategy.setPriceFeed(qi.address, qiFeed.address)),
+        waitFor(strategy.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+        waitFor(strategy.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, USDC.address])),
+        waitFor(strategy.setSwapper(swapper.address)),
+        waitFor(swapper.setMaxPriceOffset(86400)),
+        waitFor(swapper.setSwapSlippageRatio(200)), // 2%
+        waitFor(swapper.setPriceFeed(USDC.address, usdcFeed.address)),
+        waitFor(swapper.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+        waitFor(swapper.setRoute(MAI_ADDRESS, [MAI_ADDRESS, USDC.address])),
+        waitFor(swapper.setRoute(USDC.address, [USDC.address, MAI_ADDRESS]))
+      ])
+    }
 
     await Promise.all([
       setChainlinkRoundForNow(usdcFeed),
       setChainlinkRoundForNow(maiFeed),
-      setChainlinkRoundForNow(wmaticFeed),
       setChainlinkRoundForNow(qiFeed),
-      waitFor(strat.setMaxPriceOffset(86400)),
-      waitFor(strat.setPoolSlippageRatio(2000)), // 20%
-      waitFor(strat.setSwapSlippageRatio(2000)), // 20%
-      waitFor(strat.setPriceFeed(usdc.address, usdcFeed.address)),
-      waitFor(strat.setPriceFeed(qi.address, qiFeed.address)),
-      waitFor(strat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
-      waitFor(strat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
-      waitFor(strat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, usdc.address])),
-      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS]))
+      setupStrat(strat)
     ])
   })
 
   it('Full deposit + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 6)
 
-    await setCustomBalanceFor(usdc.address, bob.address, newBalance)
+    await setCustomBalanceFor(USDC.address, bob.address, newBalance)
 
-    expect(await usdc.balanceOf(strat.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(usdc.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(USDC.connect(bob).approve(archimedes.address, newBalance))
     await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
 
-    expect(await usdc.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await usdc.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     const balance = await strat.balanceOfPool()
@@ -102,24 +112,82 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
       )
     )
 
-    const initialBalance = await usdc.balanceOf(bob.address)
+    const initialBalance = await USDC.balanceOf(bob.address)
 
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
-    let afterBalance = await usdc.balanceOf(bob.address)
+    let afterBalance = await USDC.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
-      94.9e6 + '', 95e6 + '' // 95 - 0.1% withdrawFee
+      94.6e6 + '', 95e6 + '' // 95 - 0.1% withdrawFee - 0.3% swap
     )
 
     // less than 0.1 because swap is not exact
-    expect((await usdc.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
     // less than 0.001
     expect((await qi.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e15)
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
 
-    afterBalance = await usdc.balanceOf(bob.address)
+    afterBalance = await USDC.balanceOf(bob.address)
+
+    expect(afterBalance.sub(initialBalance)).to.within(
+      9900.0e6 + '', // Since we deposit 10000
+      9990.0e6 + ''  // between 0.1% and ~1% (withdraw fee + swap fees + slippage ratio)
+    )
+
+    expect(await strat.balanceOfPool()).to.be.equal(0)
+  })
+
+  it('Full deposit with compensation + harvest strat + withdraw', async () => {
+    const newBalance = ethers.utils.parseUnits('10000', 6)
+
+    await setCustomBalanceFor(USDC.address, bob.address, newBalance)
+    await setCustomBalanceFor(USDC.address, swapper.address, newBalance)
+
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await qi.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(USDC.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
+
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    // less than 0.1 because swap is not exact
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect(await qi.balanceOf(strat.address)).to.be.equal(0)
+
+    const balance = await strat.balanceOfPool()
+
+    await mineNTimes(1000)
+
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 95 USDC in shares
+    const toWithdraw = (
+      (await controller.totalSupply()).mul(95e6 + '').div(
+        await controller.balance()
+      )
+    )
+
+    const initialBalance = await USDC.balanceOf(bob.address)
+
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+    let afterBalance = await USDC.balanceOf(bob.address)
+
+    expect(afterBalance.sub(initialBalance)).to.within(
+      94.6e6 + '', 95e6 + '' // 95 - 0.1% withdrawFee - 0.3% swap
+    )
+
+    // less than 0.1 because swap is not exact
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    // less than 0.001
+    expect((await qi.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e15)
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+
+    afterBalance = await USDC.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
       9900.0e6 + '', // Since we deposit 10000
@@ -132,52 +200,39 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
   it('Controller.setStrategy works', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 6)
 
-    await setCustomBalanceFor(usdc.address, bob.address, newBalance)
+    await setCustomBalanceFor(USDC.address, bob.address, newBalance)
 
-    expect(await usdc.balanceOf(strat.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(usdc.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(USDC.connect(bob).approve(archimedes.address, newBalance))
     await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
 
     expect(await controller.balanceOf(bob.address)).to.be.equal(newBalance)
-    expect(await usdc.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await usdc.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     const otherStrat = await deploy(
       'ControllerQuickSwapMaiLPStrat',
-      usdc.address,
+      USDC.address,
       controller.address,
       global.exchange.address,
       owner.address,
       1e5 + ''
     )
 
-    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
-
-    await Promise.all([
-      waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
-      waitFor(otherStrat.setSwapSlippageRatio(2000)), // 20%
-      waitFor(otherStrat.setPriceFeed(usdc.address, usdcFeed.address)),
-      waitFor(otherStrat.setPriceFeed(qi.address, qiFeed.address)),
-      waitFor(otherStrat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
-      waitFor(otherStrat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
-      waitFor(otherStrat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, usdc.address])),
-      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS]))
-    ])
+    await setupStrat(otherStrat)
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
       controller, 'NewStrategy'
     ).withArgs(strat.address, otherStrat.address)
 
     expect(await controller.balanceOf(bob.address)).to.be.equal('' + 10000e6)
-    expect(await usdc.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await usdc.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(strat.unpause())
@@ -187,9 +242,9 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
     ).withArgs(otherStrat.address, strat.address)
 
     expect(await controller.balanceOf(bob.address)).to.be.equal('' + 10000e6)
-    expect(await usdc.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await usdc.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
+    expect((await USDC.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e5)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
   })
 })
@@ -201,14 +256,10 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
   let controller
   let strat
   let rewardsBlock
-  let usdc
-  let dai
   let qi
   let qiFeed
-  let usdcFeed
-  let daiFeed
   let maiFeed
-  let wmaticFeed
+  let swapper
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -221,64 +272,75 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
       WMATIC.address
     )
 
-    usdc = await ethers.getContractAt('IERC20Metadata', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174')
-    dai  = await ethers.getContractAt('IERC20Metadata', '0x8f3cf7ad23cd3cadbd9735aff958023239c6a063')
-    qi   = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
+    qi = await ethers.getContractAt('IERC20Metadata', '0x580a84c73811e1839f75d86d75d88cca0c241ff4')
 
-    controller = await createController(dai, archimedes, 'ControllerQuickSwapMaiLPStrat', {
+    controller = await createController(DAI, archimedes, 'ControllerQuickSwapMaiLPStrat', {
       maxWantBalance: 1e17 + ''
     })
 
-    await waitFor(archimedes.addNewPool(dai.address, controller.address, 10, false));
+    await waitFor(archimedes.addNewPool(DAI.address, controller.address, 10, false));
 
-    [strat, usdcFeed, maiFeed, daiFeed, wmaticFeed, qiFeed] = await Promise.all([
+    [strat, maiFeed, qiFeed] = await Promise.all([
       ethers.getContractAt('ControllerQuickSwapMaiLPStrat', (await controller.strategy())),
-      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'),
-      ethers.getContractAt('IChainLink', '0xfE4A8cc5b5B2366C1B58Bea3858e81843581b2F7'), // MIM (MIMATIC is 0xd8d483d813547CfB624b8Dc33a00F2fcbCd2D428)
-      ethers.getContractAt('IChainLink', '0x4746DeC9e833A82EC7C2C1356372CcF2cfcD2F3D'),
-      ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'),
+      ethers.getContractAt('IChainLink', usdcFeed.address),
       ethers.getContractAt('IChainLink', '0xbaf9327b6564454F4a3364C33eFeEf032b4b4444') // Doge less than qi
     ])
 
-    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+    setupStrat = async (strategy) => {
+      const LP = await ethers.getContractAt('IERC20Metadata', '0x160532D2536175d65C03B97b0630A9802c274daD')
+
+      swapper = await deploy('SwapperWithCompensation', DAI.address, LP.address, strategy.address)
+
+      const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
+
+      await Promise.all([
+        waitFor(strategy.setMaxPriceOffset(86400)),
+        waitFor(strategy.setPoolSlippageRatio(200)), // 2%
+        waitFor(strategy.setSwapSlippageRatio(200)), // 2%
+        waitFor(strategy.setPriceFeed(DAI.address, daiFeed.address)),
+        waitFor(strategy.setPriceFeed(USDC.address, usdcFeed.address)),
+        waitFor(strategy.setPriceFeed(qi.address, qiFeed.address)),
+        waitFor(strategy.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+        waitFor(strategy.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, DAI.address])),
+        waitFor(strategy.setSwapper(swapper.address)),
+        waitFor(swapper.setMaxPriceOffset(86400)),
+        waitFor(swapper.setSwapSlippageRatio(200)), // 2%
+        waitFor(swapper.setPriceFeed(DAI.address, daiFeed.address)),
+        waitFor(swapper.setPriceFeed(USDC.address, usdcFeed.address)),
+        waitFor(swapper.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
+        // want is DAI so DAI => [USDC, MAI] && [USDC, MAI] => DAI
+        waitFor(swapper.setRoute(MAI_ADDRESS, [MAI_ADDRESS, DAI.address])),
+        waitFor(swapper.setRoute(USDC.address, [USDC.address, DAI.address])),
+        waitFor(swapper.setRoute(DAI.address, [DAI.address, USDC.address])),
+        waitFor(swapper.setRoute(DAI.address, [DAI.address, MAI_ADDRESS])),
+        waitFor(swapper.setReserveSwapRatio(80)), // 0.3 twice + a little more
+        waitFor(swapper.setReserveSwapRatio(110)), // 0.3 twice + 0.5 deposit fee
+      ])
+    }
 
     await Promise.all([
       setChainlinkRoundForNow(usdcFeed),
       setChainlinkRoundForNow(daiFeed),
       setChainlinkRoundForNow(maiFeed),
-      setChainlinkRoundForNow(wmaticFeed),
       setChainlinkRoundForNow(qiFeed),
-      waitFor(strat.setMaxPriceOffset(86400)),
-      waitFor(strat.setPoolSlippageRatio(2000)), // 20%
-      waitFor(strat.setSwapSlippageRatio(2000)), // 20%
-      waitFor(strat.setPriceFeed(usdc.address, usdcFeed.address)),
-      waitFor(strat.setPriceFeed(dai.address, daiFeed.address)),
-      waitFor(strat.setPriceFeed(qi.address, qiFeed.address)),
-      waitFor(strat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
-      waitFor(strat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, dai.address])),
-      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS])),
-      waitFor(strat.setRoute(dai.address, [dai.address, usdc.address])),
-      waitFor(strat.setRoute(dai.address, [dai.address, usdc.address, MAI_ADDRESS])),
-      waitFor(strat.setRoute(usdc.address, [usdc.address, dai.address])),
-      waitFor(strat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, dai.address]))
+      setupStrat(strat),
     ])
   })
 
   it('Full deposit + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 18)
 
-    await setCustomBalanceFor(dai.address, bob.address, newBalance)
+    await setCustomBalanceFor(DAI.address, bob.address, newBalance)
 
-    expect(await dai.balanceOf(strat.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(dai.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(DAI.connect(bob).approve(archimedes.address, newBalance))
     await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
 
-    expect(await dai.balanceOf(controller.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await dai.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     const balance = await strat.balanceOfPool()
@@ -295,11 +357,11 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
       )
     )
 
-    const initialBalance = await dai.balanceOf(bob.address)
+    const initialBalance = await DAI.balanceOf(bob.address)
 
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
-    let afterBalance = await dai.balanceOf(bob.address)
+    let afterBalance = await DAI.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
       94.9e18 + '', // 95 - 0.1%
@@ -307,13 +369,13 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     )
 
     // less than 0.1 because swap is not exact
-    expect((await dai.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
     // less than 0.001
     expect((await qi.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e15)
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
 
-    afterBalance = await dai.balanceOf(bob.address)
+    afterBalance = await DAI.balanceOf(bob.address)
 
     expect(afterBalance.sub(initialBalance)).to.within(
       9615.0e17 + '0', // Since we deposit 10000
@@ -323,60 +385,101 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     expect(await strat.balanceOfPool()).to.be.equal(0)
   })
 
-  it('Controller.setStrategy works DAIRET', async () => {
+  it('Full deposit with compensate + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 18)
 
-    await setCustomBalanceFor(dai.address, bob.address, newBalance)
+    await setCustomBalanceFor(DAI.address, bob.address, newBalance)
+    await setCustomBalanceFor(DAI.address, swapper.address, newBalance)
 
-    expect(await dai.balanceOf(strat.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(dai.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(DAI.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
+
+    expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
+    // less than 0.1 because swap is not exact
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect(await qi.balanceOf(strat.address)).to.be.equal(0)
+
+    const balance = await strat.balanceOfPool()
+
+    await mineNTimes(1000)
+
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 95 DAI in shares
+    const toWithdraw = (
+      (await controller.totalSupply()).mul(95e18 + '').div(
+        await controller.balance()
+      )
+    )
+
+    const initialBalance = await DAI.balanceOf(bob.address)
+
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+    let afterBalance = await DAI.balanceOf(bob.address)
+
+    expect(afterBalance.sub(initialBalance)).to.within(
+      94.9e18 + '', // 95 - 0.1%
+      95e18 + ''
+    )
+
+    // less than 0.1 because swap is not exact
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    // less than 0.001
+    expect((await qi.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e15)
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+
+    afterBalance = await DAI.balanceOf(bob.address)
+
+    expect(afterBalance.sub(initialBalance)).to.within(
+      9615.0e17 + '0', // Since we deposit 10000
+      9990.0e17 + '0'  // between 0.1% and ~4.1% (withdraw fee + slippage ratio and/or swap difference twice)
+    )
+
+    expect(await strat.balanceOfPool()).to.be.equal(0)
+  })
+
+  it('Controller.setStrategy works DAI', async () => {
+    const newBalance = ethers.utils.parseUnits('10000', 18)
+
+    await setCustomBalanceFor(DAI.address, bob.address, newBalance)
+
+    expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
+    expect(await qi.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(DAI.connect(bob).approve(archimedes.address, newBalance))
     await waitFor(archimedes.connect(bob).deposit(0, newBalance, zeroAddress))
 
     expect(await controller.balanceOf(bob.address)).to.be.equal(newBalance)
-    expect(await dai.balanceOf(controller.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await dai.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     const otherStrat = await deploy(
       'ControllerQuickSwapMaiLPStrat',
-      dai.address,
+      DAI.address,
       controller.address,
       global.exchange.address,
       owner.address,
       1e17 + ''
     )
 
-    const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
-
-    await Promise.all([
-      waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPoolSlippageRatio(2000)), // 20%
-      waitFor(otherStrat.setSwapSlippageRatio(3500)), // 35% for this test conditions only, we should fix it.
-      waitFor(otherStrat.setPriceFeed(usdc.address, usdcFeed.address)),
-      waitFor(otherStrat.setPriceFeed(dai.address, daiFeed.address)),
-      waitFor(otherStrat.setPriceFeed(qi.address, qiFeed.address)),
-      waitFor(otherStrat.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
-      waitFor(otherStrat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
-      waitFor(otherStrat.setRewardToWantRoute(qi.address, [qi.address, WMATIC.address, dai.address])),
-      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, usdc.address])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, MAI_ADDRESS])),
-      waitFor(otherStrat.setRoute(dai.address, [dai.address, usdc.address])),
-      waitFor(otherStrat.setRoute(dai.address, [dai.address, usdc.address, MAI_ADDRESS])),
-      waitFor(otherStrat.setRoute(usdc.address, [usdc.address, dai.address])),
-      waitFor(otherStrat.setRoute(MAI_ADDRESS, [MAI_ADDRESS, dai.address]))
-    ])
+    await setupStrat(otherStrat)
 
     await expect(controller.setStrategy(otherStrat.address)).to.emit(
       controller, 'NewStrategy'
     ).withArgs(strat.address, otherStrat.address)
 
     expect(await controller.balanceOf(bob.address)).to.be.equal(10000e16 + '00')
-    expect(await dai.balanceOf(controller.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await dai.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(strat.unpause())
@@ -386,9 +489,9 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     ).withArgs(otherStrat.address, strat.address)
 
     expect(await controller.balanceOf(bob.address)).to.be.equal(10000e16 + '00')
-    expect(await dai.balanceOf(controller.address)).to.be.equal(0)
+    expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     // less than 0.1 because swap is not exact
-    expect((await dai.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
+    expect((await DAI.balanceOf(strat.address)).toNumber()).to.be.lessThan(1e17)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)
   })
 })
