@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -25,6 +25,11 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
     uint public compensateRatio = 80; // 0.8% (0.3% of swap fee + 0.5% of staking deposit fee
 
     constructor(IERC20Metadata _want, IUniswapPair _lp, address _strategy) {
+        // Check that want is at least an ERC20
+        _want.symbol();
+        require(_want.balanceOf(address(this)) == 0, "Invalid ERC20");
+        require(_want.allowance(msg.sender, address(this)) == 0, "Invalid ERC20");
+
         want = _want;
         lp = _lp;
         token0 = IERC20Metadata(lp.token0());

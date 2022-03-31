@@ -39,9 +39,9 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         address _controller,
         address _exchange,
         address _treasury,
-        uint _maxWantBalance
+        uint _minWantToRedeposit
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        minWantToRedeposit = _maxWantBalance;
+        minWantToRedeposit = _minWantToRedeposit;
     }
 
     function identifier() external view returns (string memory) {
