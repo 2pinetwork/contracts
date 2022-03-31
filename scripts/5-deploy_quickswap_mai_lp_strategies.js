@@ -5,20 +5,17 @@ const { verify } = require('./verify')
 async function main() {
   const owner   = (await hre.ethers.getSigners())[0]
   const chainId = hre.network.config.network_id
-  const deploy  = JSON.parse(
-    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
-  )
+  const deploy  = JSON.parse( fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8'))
 
-  const archimedes = await (
-    await hre.ethers.getContractFactory('Archimedes')
-  ).attach(deploy.Archimedes)
+  const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
 
   const pools = deploy.quickswapLpMaiPools
 
   let pool
   let args
 
-  for (pool of pools) {
+  for (let originalPool of pools) {
+    pool = {...originalPool}
     let ctrollerArgs = [
       pool.address,
       deploy.Archimedes,
@@ -26,9 +23,7 @@ async function main() {
       `2pi-QSM-${pool.currency}`
     ]
 
-    let controller = await (
-      await hre.ethers.getContractFactory('Controller')
-    ).deploy(...ctrollerArgs);
+    let controller = await ( await hre.ethers.getContractFactory('Controller')).deploy(...ctrollerArgs);
 
     await controller.deployed();
 
@@ -53,14 +48,12 @@ async function main() {
       controller.address,
       pool.exchange,  // QuickSwap Exchange
       deploy.FeeManager,
-      pool.maxWantBalance
+      pool.minWantRedeposit
     ]
 
-    let strategy = await (
-      await hre.ethers.getContractFactory('ControllerQuickSwapMaiLPStrat')
-    ).deploy(...args);
+    let strategy = await ( await hre.ethers.getContractFactory('ControllerQuickSwapMaiLPStrat')).deploy(...args);
 
-    await strategy.deployed(2);
+    await strategy.deployed(10);
 
     console.log('Strategy ' + pool.currency + ':')
 
@@ -71,33 +64,48 @@ async function main() {
     await (await archimedes.addNewPool(pool.address, controller.address, 5, false)).wait()
 
     let pid = await controller.pid()
+    pool.pid = Number(pid.toBigInt())
 
     console.log(`Configured ${pool.currency} in ${pid}`)
 
+    let swapperArgs = [pool.address, pool.LP, strategy.address]
+    let swapper = await ( await hre.ethers.getContractFactory('SwapperWithCompensation')).deploy(...swapperArgs)
+
+    await swapper.deployed(10)
+    console.log('Swapper ' + pool.currency + ' deployed:')
+    pool.swapper = swapper.address
+
+    await verify('SwapperWithCompensation', swapper.address, swapperArgs)
+
+    await (await strategy.setSwapper(swapper.address)).wait()
+
+
     for (route of pool.routes) {
-      await (await strategy.setRoute(route.from, route.path)).wait()
+      await (await swapper.setRoute(route.from, route.path)).wait()
     }
 
     for (reward of pool.rewards) {
       await (await strategy.setPriceFeed(reward, deploy.chainlink[reward])).wait()
+      await (await strategy.setRewardToWantRoute(reward, [reward, pool.address])).wait()
     }
 
     for (feed of pool.feeds) {
       await (await strategy.setPriceFeed(feed, deploy.chainlink[feed])).wait()
+      await (await swapper.setPriceFeed(feed, deploy.chainlink[feed])).wait()
     }
 
     await (await strategy.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
+    await (await swapper.setPriceFeed(pool.address, deploy.chainlink[pool.address])).wait()
     await (await strategy.setMaxPriceOffset(24 * 3600)).wait()
+    await (await swapper.setMaxPriceOffset(24 * 3600)).wait()
 
     deploy[`strat-quickswap-mai-lp-${pool.currency}`] = {
       controller: controller.address,
       strategy:   strategy.address,
-      pid:        pid.toBigInt().toString(),
-      tokenAddr:  pool.address
+      ...pool
     }
+    fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
   }
-
-  fs.writeFileSync(`utils/deploy.${chainId}.json`, JSON.stringify(deploy, undefined, 2))
 }
 
 main()
