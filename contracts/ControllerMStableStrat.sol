@@ -13,12 +13,17 @@ contract ControllerMStableStrat is ControllerStratAbs {
     address constant public IMTOKEN = address(0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af); // imUSD
     address constant public VAULT = address(0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29); // imUSD Vault
 
+
+    address public compensator;
+    uint public compensateRatio = 1; // 0.01%
+
     constructor(
         IERC20Metadata _want,
         address _controller,
         address _exchange,
         address _treasury
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
+        compensator = msg.sender;
     }
 
     function identifier() external view returns (string memory) {
@@ -46,7 +51,7 @@ contract ControllerMStableStrat is ControllerStratAbs {
     }
 
     function _deposit() internal override {
-        uint wantBal = wantBalance();
+        uint wantBal = _compensateDeposit(wantBalance());
 
         if (wantBal > 0) {
             uint expected = _wantToMusdDoubleCheck(wantBal);
@@ -135,7 +140,6 @@ contract ControllerMStableStrat is ControllerStratAbs {
         // want <=> mUSD is almost 1:1
         uint expected = _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
 
-
         if (expected > minOut) { minOut = expected; }
     }
 
@@ -169,5 +173,36 @@ contract ControllerMStableStrat is ControllerStratAbs {
         return _musdAmountToImusd(
             _wantToMusdDoubleCheck(_amount)
         );
+    }
+
+    // Compensation
+    function setCompensateRatio(uint newRatio) external onlyAdmin {
+        require(newRatio != compensateRatio, "same ratio");
+        require(newRatio <= RATIO_PRECISION, "greater than 100%");
+        require(newRatio >= 0, "less than 0%?");
+
+        compensateRatio = newRatio;
+    }
+
+    function setCompensator(address _compensator) external onlyAdmin {
+        require(_compensator != address(0), "!ZeroAddress");
+        require(_compensator != compensator, "same address");
+
+        compensator = _compensator;
+    }
+
+    function _compensateDeposit(uint _amount) internal returns (uint) {
+        uint _comp = _amount * compensateRatio / RATIO_PRECISION;
+
+        // Compensate only if we can...
+        if (
+            want.allowance(compensator, address(this)) >= _comp &&
+            want.balanceOf(compensator) >= _comp
+        ) {
+            want.safeTransferFrom(compensator, address(this), _comp);
+            _amount += _comp;
+        }
+
+        return _amount;
     }
 }

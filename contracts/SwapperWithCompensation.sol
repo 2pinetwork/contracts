@@ -52,12 +52,18 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         routes[_from][_route[_route.length - 1]] = _route;
     }
 
-
     function setReserveSwapRatio(uint newRatio) external onlyAdmin {
         require(newRatio != reserveSwapRatio, "same ratio");
         require(newRatio <= RATIO_PRECISION, "greater than 100%");
 
         reserveSwapRatio = newRatio;
+    }
+
+    function setCompensateRatio(uint newRatio) external onlyAdmin {
+        require(newRatio != compensateRatio, "same ratio");
+        require(newRatio <= RATIO_PRECISION, "greater than 100%");
+
+        compensateRatio = newRatio;
     }
 
     function swapLpTokensForWant(uint _amount0, uint _amount1) external onlyStrat returns (uint _amount) {
@@ -80,6 +86,7 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         // Ensure the strategy has the _balance
         want.safeTransferFrom(msg.sender, address(this), _balance);
 
+        // Compensate swap
         uint _amount = _balance * (RATIO_PRECISION + compensateRatio) / RATIO_PRECISION;
 
         if (_amount > wantBalance()) { _amount = wantBalance(); }

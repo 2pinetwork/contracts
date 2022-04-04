@@ -46,7 +46,7 @@ const main = async function () {
       repReq = await fetch(`https://github.com/balancer-labs/bal-mining-scripts/raw/master/reports/${file}`)
       polygonReports = await repReq.json()
       distributions = Object.keys(polygonReports)
-      for (let i = 1; i < 10; i++) {
+      for (let i = 1; i < 5; i++) {
 
       distributionId = distributions[distributions.length - i]
 
