@@ -211,6 +211,7 @@ describe('Controller mStable Strat', () => {
   it('claimManualRewards should revert for unknown user', async () => {
     const claimer = (await ethers.getSigners())[8]
     await expect(strat.connect(claimer).claimManualRewards(1e6)).to.be.revertedWith('Not a claimer')
+    expect(await strat.lastManualBoost()).to.be.equal(0)
   })
 
   it('Deposit with compensation + manual reward', async () => {
@@ -240,6 +241,7 @@ describe('Controller mStable Strat', () => {
 
     await waitFor(USDC.connect(claimer).approve(strat.address, newBalance))
     await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    expect(await strat.lastManualBoost()).to.be.equal(1e6)
     // treasury shouldn't change
     expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
     expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
@@ -258,6 +260,7 @@ describe('Controller mStable Strat', () => {
     await waitFor(strat.setCompensator(compensator.address))
 
     await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    expect(await strat.lastManualBoost()).to.be.equal(1e6)
     expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
     expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
     expect(await strat.balance()).to.be.within(

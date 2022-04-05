@@ -15,9 +15,12 @@ contract ControllerMStableStrat is ControllerStratAbs {
     address constant public IMTOKEN = address(0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af); // imUSD
     address constant public VAULT = address(0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29); // imUSD Vault
 
-
+    // Deposit compensation
     address public compensator;
     uint public compensateRatio = 1; // 0.01%
+
+    // manual boosts
+    uint public lastManualBoost;
 
     constructor(
         IERC20Metadata _want,
@@ -40,7 +43,10 @@ contract ControllerMStableStrat is ControllerStratAbs {
         _beforeMovement();
 
         // transfer reward from caller
-        want.safeTransferFrom(msg.sender, address(this), _amount);
+        if (_amount > 0) { want.safeTransferFrom(msg.sender, address(this), _amount); }
+
+        // Keep track of how much is added to calc boost APY
+        lastManualBoost = _amount;
 
         // Deposit transfered amount
         _deposit();
