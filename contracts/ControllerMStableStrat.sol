@@ -9,6 +9,8 @@ contract ControllerMStableStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
+    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER_ROLE");
+
     address constant public MTOKEN = address(0xE840B73E5287865EEc17d250bFb1536704B43B21); // mUSD
     address constant public IMTOKEN = address(0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af); // imUSD
     address constant public VAULT = address(0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29); // imUSD Vault
@@ -28,6 +30,23 @@ contract ControllerMStableStrat is ControllerStratAbs {
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(want.symbol(), "@mStable#1.0.0"));
+    }
+
+    // This function is called to "boost" the strategy.
+    function claimManualRewards(uint _amount) external {
+        require(hasRole(CLAIMER_ROLE, msg.sender), "Not a claimer");
+
+        // Charge performance fee for earned want
+        _beforeMovement();
+
+        // transfer reward from caller
+        want.safeTransferFrom(msg.sender, address(this), _amount);
+
+        // Deposit transfered amount
+        _deposit();
+
+        // update last_balance to exclude the manual reward from perfFee
+        _afterMovement();
     }
 
     function harvest() public nonReentrant override {

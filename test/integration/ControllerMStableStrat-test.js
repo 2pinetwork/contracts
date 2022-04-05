@@ -207,6 +207,63 @@ describe('Controller mStable Strat', () => {
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
   })
+
+  it('claimManualRewards should revert for unknown user', async () => {
+    const claimer = (await ethers.getSigners())[8]
+    await expect(strat.connect(claimer).claimManualRewards(1e6)).to.be.revertedWith('Not a claimer')
+  })
+
+  it('Deposit with compensation + manual reward', async () => {
+    // give claimer permissions
+    const claimer = (await ethers.getSigners())[8]
+    const compensator = (await ethers.getSigners())[9]
+    await waitFor(strat.grantRole(await strat.CLAIMER_ROLE(), claimer.address))
+
+    const newBalance = ethers.BigNumber.from('' + 100000e6) // 100000 USDC
+    await setCustomBalanceFor(USDC.address, bob.address, newBalance)
+    await setCustomBalanceFor(USDC.address, compensator.address, newBalance)
+    await setCustomBalanceFor(USDC.address, claimer.address, newBalance)
+
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(USDC.connect(bob).approve(archimedes.address, newBalance))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+
+    let balance = await strat.balance()
+    let treasuryBalance = await USDC.balanceOf(owner.address)
+    let claimerBalance = await USDC.balanceOf(claimer.address)
+
+    await waitFor(USDC.connect(claimer).approve(strat.address, newBalance))
+    await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    // treasury shouldn't change
+    expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
+    expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
+
+    expect(await strat.balance()).to.be.within(
+      balance.add(1.0e6), balance.add(1.01e6)
+    )
+
+    balance = await strat.balance()
+    treasuryBalance = await USDC.balanceOf(owner.address)
+    claimerBalance = await USDC.balanceOf(claimer.address)
+
+    // compensate
+    await waitFor(USDC.connect(owner).approve(strat.address, newBalance))
+    await waitFor(USDC.connect(compensator).approve(strat.address, newBalance))
+    await waitFor(strat.setCompensator(compensator.address))
+
+    await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
+    expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
+    expect(await strat.balance()).to.be.within(
+      balance.add(1.0001e6), balance.add(1.01e6)
+    )
+  })
 })
 
 describe('Controller mStable Strat with DAI', () => {
