@@ -9,15 +9,18 @@ contract ControllerMStableStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER_ROLE");
+    bytes32 public constant BOOSTER_ROLE = keccak256("BOOSTER_ROLE");
 
     address constant public MTOKEN = address(0xE840B73E5287865EEc17d250bFb1536704B43B21); // mUSD
     address constant public IMTOKEN = address(0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af); // imUSD
     address constant public VAULT = address(0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29); // imUSD Vault
 
-
+    // Deposit compensation
     address public compensator;
     uint public compensateRatio = 1; // 0.01%
+
+    // manual boosts
+    uint public lastExternalBoost;
 
     constructor(
         IERC20Metadata _want,
@@ -33,14 +36,17 @@ contract ControllerMStableStrat is ControllerStratAbs {
     }
 
     // This function is called to "boost" the strategy.
-    function claimManualRewards(uint _amount) external {
-        require(hasRole(CLAIMER_ROLE, msg.sender), "Not a claimer");
+    function boost(uint _amount) external {
+        require(hasRole(BOOSTER_ROLE, msg.sender), "Not a booster");
 
         // Charge performance fee for earned want
         _beforeMovement();
 
         // transfer reward from caller
-        want.safeTransferFrom(msg.sender, address(this), _amount);
+        if (_amount > 0) { want.safeTransferFrom(msg.sender, address(this), _amount); }
+
+        // Keep track of how much is added to calc boost APY
+        lastExternalBoost = _amount;
 
         // Deposit transfered amount
         _deposit();

@@ -208,21 +208,22 @@ describe('Controller mStable Strat', () => {
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
   })
 
-  it('claimManualRewards should revert for unknown user', async () => {
-    const claimer = (await ethers.getSigners())[8]
-    await expect(strat.connect(claimer).claimManualRewards(1e6)).to.be.revertedWith('Not a claimer')
+  it('boost should revert for unknown user', async () => {
+    const booster = (await ethers.getSigners())[8]
+    await expect(strat.connect(booster).boost(1e6)).to.be.revertedWith('Not a booster')
+    expect(await strat.lastExternalBoost()).to.be.equal(0)
   })
 
   it('Deposit with compensation + manual reward', async () => {
-    // give claimer permissions
-    const claimer = (await ethers.getSigners())[8]
+    // give booster permissions
+    const booster = (await ethers.getSigners())[8]
     const compensator = (await ethers.getSigners())[9]
-    await waitFor(strat.grantRole(await strat.CLAIMER_ROLE(), claimer.address))
+    await waitFor(strat.grantRole(await strat.BOOSTER_ROLE(), booster.address))
 
     const newBalance = ethers.BigNumber.from('' + 100000e6) // 100000 USDC
     await setCustomBalanceFor(USDC.address, bob.address, newBalance)
     await setCustomBalanceFor(USDC.address, compensator.address, newBalance)
-    await setCustomBalanceFor(USDC.address, claimer.address, newBalance)
+    await setCustomBalanceFor(USDC.address, booster.address, newBalance)
 
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
@@ -236,13 +237,14 @@ describe('Controller mStable Strat', () => {
 
     let balance = await strat.balance()
     let treasuryBalance = await USDC.balanceOf(owner.address)
-    let claimerBalance = await USDC.balanceOf(claimer.address)
+    let boosterBalance = await USDC.balanceOf(booster.address)
 
-    await waitFor(USDC.connect(claimer).approve(strat.address, newBalance))
-    await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    await waitFor(USDC.connect(booster).approve(strat.address, newBalance))
+    await waitFor(strat.connect(booster).boost(1e6))
+    expect(await strat.lastExternalBoost()).to.be.equal(1e6)
     // treasury shouldn't change
     expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
-    expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
+    expect(await USDC.balanceOf(booster.address)).to.be.equal(boosterBalance.sub(1e6))
 
     expect(await strat.balance()).to.be.within(
       balance.add(1.0e6), balance.add(1.01e6)
@@ -250,16 +252,17 @@ describe('Controller mStable Strat', () => {
 
     balance = await strat.balance()
     treasuryBalance = await USDC.balanceOf(owner.address)
-    claimerBalance = await USDC.balanceOf(claimer.address)
+    boosterBalance = await USDC.balanceOf(booster.address)
 
     // compensate
     await waitFor(USDC.connect(owner).approve(strat.address, newBalance))
     await waitFor(USDC.connect(compensator).approve(strat.address, newBalance))
     await waitFor(strat.setCompensator(compensator.address))
 
-    await waitFor(strat.connect(claimer).claimManualRewards(1e6))
+    await waitFor(strat.connect(booster).boost(1e6))
+    expect(await strat.lastExternalBoost()).to.be.equal(1e6)
     expect(await USDC.balanceOf(owner.address)).to.be.equal(treasuryBalance)
-    expect(await USDC.balanceOf(claimer.address)).to.be.equal(claimerBalance.sub(1e6))
+    expect(await USDC.balanceOf(booster.address)).to.be.equal(boosterBalance.sub(1e6))
     expect(await strat.balance()).to.be.within(
       balance.add(1.0001e6), balance.add(1.01e6)
     )
