@@ -40,7 +40,7 @@ const setCustomBalanceFor = async (token, address, rawAmount, slot) => {
 
 const setChainlinkRound = async (address, roundId, timestamp, price) => {
   // 0x00000000615c9b11000000000000000000000000000000000000000007bf4a9c
-  const slot       = 43  // most of pricess are 43 slot
+  const slot       = address == "0x336584C8E6Dc19637A5b36206B1c79923111b405" ? 44 : 43  // most of pricess are 43 slot
   const timestampL = 16
   const priceL     = 48
   const timestampHex = timestamp.toString(16)
@@ -52,13 +52,22 @@ const setChainlinkRound = async (address, roundId, timestamp, price) => {
     '0'.repeat(priceL - priceHex.length),
     priceHex
   ].join('')
-  let index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, slot])
+  let index = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, slot])
+
+
+  // for (let i = 43; i < 48; i++) {
+    // console.log(`Probando para ${address} con ${i}`)
+
+    // let result = await ethers.provider.getStorageAt(address, index)
+    // if (result !== '0x' + '0'.repeat(64)) {
+    //   break;
+    // }
+  // }
 
   // CRV uses slot 44
-  let result = await ethers.provider.getStorageAt(address, index)
-  if (result === '0x' + '0'.repeat(64)) {
-    index = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, 44])
-  }
+    // index = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [roundId, 44])
+  // console.log("Reescrito?", index.toString())
+  // }
 
   await ethers.provider.send('hardhat_setStorageAt', [address, index.toString(), newValue])
 }
@@ -205,8 +214,8 @@ const resetHardhat = async (blockNumber) => {
   });
 
   global.PiToken = await createPiToken({ withDeployer: true })
-  if (!blockNumber && hre.network.config.network_id !== 56)
-    expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
+  // if (!blockNumber && hre.network.config.network_id !== 56)
+  //   expect(global.PiToken.address).to.be.equal('0x0315358E4EfB6Fb3830a21baBDb28f6482c15aCa')
 }
 
 const fetchNeededTokens = async () => {
@@ -283,6 +292,11 @@ const fetchNeededTokens = async () => {
 
 if (process.env.HARDHAT_INTEGRATION_TESTS) {
   before(async () => {
+    // re-reset before each test-file
+    if (hre.network.config.forking.blockNumber != (await hre.ethers.provider.getBlock()).number) {
+      console.log(hre.network.config.forking.blockNumber, (await hre.ethers.provider.getBlock()).number)
+      await resetHardhat()
+    }
     // Not change signer because if the deployer/nonce changes
     // the deployed address will change too
     // All signers have 10k ETH

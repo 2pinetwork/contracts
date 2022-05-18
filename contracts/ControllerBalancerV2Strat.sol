@@ -8,6 +8,13 @@ import "./ControllerStratAbs.sol";
 import "../interfaces/IBalancer.sol";
 import "../libraries/Bytes32Utils.sol";
 
+interface IGauge {
+    function deposit(uint amount) external;
+    function withdraw(uint amount) external;
+    function claim_rewards() external;
+    function claimable_reward(address, address) view external returns (uint);
+}
+
 contract ControllerBalancerV2Strat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
@@ -26,6 +33,8 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
     uint public constant BPT_IN_FOR_EXACT_TOKENS_OUT = 2;
     uint public constant SHARES_PRECISION = 1e18; // same as BPT token
     IBalancerDistributor public immutable distributor = IBalancerDistributor(0x0F3e0c4218b7b0108a3643cFe9D3ec0d4F57c54e);
+
+    address public constant GAUGE = address(0x72843281394E68dE5d55BCF7072BB9B2eBc24150);
 
     constructor(
         IBalancerV2Vault _vault,
@@ -54,19 +63,11 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         ));
     }
 
-    function claimRewards(BalancerV2Claim[] memory _claims, IERC20[] memory _claimTokens) external nonReentrant {
-        require(hasRole(HARVESTER_ROLE, msg.sender), "Not a harvester");
-
-        distributor.claimDistributions(
-            address(this),
-            _claims,
-            _claimTokens
-        );
-    }
 
     function harvest() public nonReentrant override {
         uint _before = wantBalance();
 
+        _claimRewards();
         _swapRewards();
 
         uint harvested = wantBalance() - _before;
@@ -81,6 +82,20 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         _afterMovement();
 
         emit Harvested(address(want), harvested);
+    }
+
+    function _claimRewards() internal {
+        bool _claim = false;
+
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address reward = rewardTokens[i];
+            if (IGauge(GAUGE).claimable_reward(address(this), reward) > 0) {
+                _claim = true;
+                break;
+            }
+        }
+
+        if (_claim) { IGauge(GAUGE).claim_rewards(); }
     }
 
     function _swapRewards() internal {
@@ -134,6 +149,15 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
                 fromInternalBalance: false
             })
         );
+        // https://polygonscan.com/tx/0xbfb6ef1efc21bf69cbe4085e22873eec97ad2573b4d616201b6697fe7279f1bd
+        // https://polygonscan.com/tx/0x89a8937d84b28452e3359ec4201514c637647cc7eb56f71fc1830d5493b54e66
+        // https://polygonscan.com/tx/0xc13df3457752f9ecf938ada01436d6a8dbb805674ced1dbee3fc213ad2c1e3d6
+        // https://polygonscan.com/tx/0x2d5e3c5486ad0c0cc23a14046204e19b835160144367e77a2f22a7a70eea98b3
+
+        // Stake
+        uint _amount =  balanceOfVaultPool();
+        IERC20(pool()).safeApprove(GAUGE, _amount);
+        IGauge(GAUGE).deposit(_amount);
     }
 
     // amount is the want expected to be withdrawn
@@ -154,6 +178,14 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
             );
 
             require(expected > 0, "Insufficient expected amount");
+
+            // In case that the calc gives a little more than the balance
+            uint _balanceOfPool = balanceOfPool();
+            if (expected > _balanceOfPool) { expected = _balanceOfPool; }
+
+            //Unstake
+            IGauge(GAUGE).withdraw(expected);
+            require(balanceOfVaultPool() >= expected, "Gauge gave less than expected");
 
             bytes memory userData = abi.encode(BPT_IN_FOR_EXACT_TOKENS_OUT, amounts, expected);
 
@@ -180,8 +212,14 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         uint[] memory amounts = new uint[](tokens.length);
 
         uint _balance = wantBalance();
-        uint bpt_balance = balanceOfPool();
+
+        //Unstake
+        uint staked_balance = balanceOfPool();
+        IGauge(GAUGE).withdraw(staked_balance);
+        require(balanceOfVaultPool() >= staked_balance, "Gauge gave less than expected");
+
         uint index = 0;
+        uint bpt_balance = balanceOfVaultPool();
 
         uint expected = (
             bpt_balance * _pricePerShare() *
@@ -190,6 +228,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         );
 
         require(expected > 0, "Insufficient expected amount");
+
 
         index = _tokenIndex(tokens);
         amounts[index] = expected;
@@ -217,18 +256,24 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         return withdrawn;
     }
 
-    function balanceOfPool() public view override returns (uint) {
-        (address pool,) = vault.getPool(poolId);
-        return IERC20(pool).balanceOf(address(this));
+    function pool() public view returns (address _pool) {
+        (_pool,) = vault.getPool(poolId);
     }
+
+    function balanceOfVaultPool() public view returns (uint) {
+        return IERC20(pool()).balanceOf(address(this));
+    }
+
+    function balanceOfPool() public view override returns (uint) {
+        return IERC20(GAUGE).balanceOf(address(this));
+    }
+
     function balanceOfPoolInWant() public view override returns (uint) {
         return balanceOfPool() * _pricePerShare() / WANT_MISSING_PRECISION / SHARES_PRECISION;
     }
 
     function _pricePerShare() internal view returns (uint) {
-        (address pool,) = vault.getPool(poolId);
-
-        uint rate = IBalancerPool(pool).getRate();
+        uint rate = IBalancerPool(pool()).getRate();
 
         require(rate > 1e18, "Under 1");
 

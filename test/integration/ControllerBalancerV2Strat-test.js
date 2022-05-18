@@ -4,10 +4,11 @@ const {
   deploy,
   getBlock,
   waitFor,
+  mineNTimes,
   zeroAddress
 } = require('../helpers')
 
-const { setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller BalancerV2 Strat USDC', () => {
   let bob
@@ -24,7 +25,8 @@ describe('Controller BalancerV2 Strat USDC', () => {
   let balFeed
 
   before(async () => {
-    // await resetHardhat()
+    await resetHardhat(28401104)
+    await mineNTimes(20)
   })
 
   beforeEach(async () => {
@@ -98,11 +100,11 @@ describe('Controller BalancerV2 Strat USDC', () => {
 
     // withdraw 95% in shares
     const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
-      8000
+      8500
     ).div(10000)
     let expectedOutput = toWithdraw.mul(await archimedes.getPricePerFullShare(0)).div(1e6)
 
-    await strat.setPoolSlippageRatio(150)
+    // await strat.setPoolSlippageRatio(50)
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
 
