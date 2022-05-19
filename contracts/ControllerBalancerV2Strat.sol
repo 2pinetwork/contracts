@@ -63,28 +63,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         ));
     }
 
-
-    function harvest() public nonReentrant override {
-        uint _before = wantBalance();
-
-        _claimRewards();
-        _swapRewards();
-
-        uint harvested = wantBalance() - _before;
-
-        // Charge performance fee for earned want + rewards
-        _beforeMovement();
-
-        // re-deposit
-        if (!paused() && wantBalance() > 0) { _deposit(); }
-
-        // Update lastBalance for the next movement
-        _afterMovement();
-
-        emit Harvested(address(want), harvested);
-    }
-
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         bool _claim = false;
 
         for (uint i = 0; i < rewardTokens.length; i++) {
@@ -96,26 +75,6 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         }
 
         if (_claim) { IGauge(GAUGE).claim_rewards(); }
-    }
-
-    function _swapRewards() internal {
-        for (uint i = 0; i < rewardTokens.length; i++) {
-            address rewardToken = rewardTokens[i];
-            uint _balance = IERC20(rewardToken).balanceOf(address(this));
-
-            if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
-                // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (expected > 1) {
-                    IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                    IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                    );
-                }
-            }
-        }
     }
 
     function _deposit() internal override {

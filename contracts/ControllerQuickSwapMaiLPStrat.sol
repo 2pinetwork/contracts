@@ -147,7 +147,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         return wantBalance() - _balance;
     }
 
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         // Weird behavior, but this mean "harvest" or "claim".
         IMasterChef(MAI_FARM).deposit(POOL_ID, 0);
     }
@@ -226,27 +226,6 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
 
         return swapper.lpInWant(_liquidity);
     }
-
-    function _swapRewards() internal {
-        for (uint i = 0; i < rewardTokens.length; i++) {
-            address _rewardToken = rewardTokens[i];
-            uint _balance = IERC20(_rewardToken).balanceOf(address(this));
-
-            if (_balance > 0) {
-                uint _expected = _expectedForSwap(_balance, _rewardToken, address(want));
-
-                // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (_expected > 1) {
-                    IERC20(_rewardToken).safeApprove(exchange, _balance);
-
-                    IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, _expected, rewardToWantRoute[_rewardToken], address(this), block.timestamp + 60
-                    );
-                }
-            }
-        }
-    }
-
 
     function _approveToken(address _token, address _dst, uint _amount) internal {
         IERC20(_token).safeApprove(_dst, _amount);

@@ -86,34 +86,14 @@ contract ControllerCurveStrat is ControllerStratAbs {
         ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
     }
 
-    function harvest() public nonReentrant override {
-        uint _before = wantBalance();
-
-        _claimRewards();
-        _swapRewards();
-
-        uint harvested = wantBalance() - _before;
-
-        // Charge performance fee for earned want + rewards
-        _beforeMovement();
-
-        // re-deposit
-        if (!paused() && wantBalance() > 0) { _deposit(); }
-
-        // Update lastBalance for the next movement
-        _afterMovement();
-
-        emit Harvested(address(want), harvested);
-    }
-
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
 
-    function _swapRewards() internal {
+    function _swapRewards() internal override {
         for (uint i = 0; i < rewardTokens.length; i++) {
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20(rewardToken).balanceOf(address(this));
