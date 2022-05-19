@@ -98,6 +98,10 @@ describe('Controller BalancerV2 Strat USDC', () => {
     await waitFor(strat.harvest())
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
+    await waitFor(strat.panic())
+    await waitFor(strat.unpause())
+
+
     // withdraw 95% in shares
     const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
       8500
@@ -209,6 +213,8 @@ describe('Controller BalancerV2 Strat USDT', () => {
     await waitFor(strat.harvest())
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
+    await waitFor(strat.panic())
+    await waitFor(strat.unpause())
     // withdraw 95% in shares
     const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
       8000
@@ -320,6 +326,8 @@ describe('Controller BalancerV2 Strat DAI', () => {
     await waitFor(strat.harvest())
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
+    await waitFor(strat.panic())
+    await waitFor(strat.unpause())
     // withdraw 95% in shares
     const toWithdraw = (await archimedes.balanceOf(0, bob.address)).mul(
       8000
@@ -399,7 +407,7 @@ describe('Controller BalancerV2 Strat BTC', () => {
   })
 
   // Balancer distribute rewards 1 week after so we can't test the claim part
-  it('Full deposit + harvest strat + withdraw', async () => {
+  it.skip('Full deposit + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('100', 8)
 
     await setCustomBalanceFor(btc.address, bob.address, newBalance)

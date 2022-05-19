@@ -149,10 +149,6 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
                 fromInternalBalance: false
             })
         );
-        // https://polygonscan.com/tx/0xbfb6ef1efc21bf69cbe4085e22873eec97ad2573b4d616201b6697fe7279f1bd
-        // https://polygonscan.com/tx/0x89a8937d84b28452e3359ec4201514c637647cc7eb56f71fc1830d5493b54e66
-        // https://polygonscan.com/tx/0xc13df3457752f9ecf938ada01436d6a8dbb805674ced1dbee3fc213ad2c1e3d6
-        // https://polygonscan.com/tx/0x2d5e3c5486ad0c0cc23a14046204e19b835160144367e77a2f22a7a70eea98b3
 
         // Stake
         uint _amount =  balanceOfVaultPool();
