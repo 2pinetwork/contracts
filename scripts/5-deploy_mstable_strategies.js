@@ -2,7 +2,7 @@ const fs = require('fs')
 const hre = require('hardhat');
 const { verify } = require('./verify');
 
-const MIN_GAS_PRICE = 31e9
+const MIN_GAS_PRICE = 32e9
 
 async function main() {
   const owner = (await hre.ethers.getSigners())[0]
@@ -19,7 +19,7 @@ async function main() {
   for (let originalPool of pools) {
     pool = {...originalPool}
     let ctrollerArgs = [
-      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-MS-${pool.currency}`
+      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${chainId}-${pool.currency}`
     ]
     let controller = await (
       await hre.ethers.getContractFactory('Controller')

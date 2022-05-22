@@ -171,6 +171,13 @@ module.exports = {
       url:        'http://localhost:8545',
       network_id: 137,
       accounts:   accounts
+    },
+    [process.env.NETWORK]: {
+      // url:        'https://polygon-rpc.com',
+      url:        `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts:   accounts,
+      network_id: process.env.NETWORK,
+      chainId:       137,
     }
   },
   gasReporter: {
