@@ -1,11 +1,13 @@
 const { waitFor, deploy } = require('../helpers')
 
-const { setWbtcBalanceFor } = require('./helpers')
+const { resetHardhat, setWbtcBalanceFor } = require('./helpers')
 
 describe('UniZap', () => {
   let zap
 
   before(async () => {
+    await resetHardhat()
+
     zap = await deploy('UniZap')
   })
 

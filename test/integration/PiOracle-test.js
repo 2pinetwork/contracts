@@ -14,7 +14,7 @@ describe('PiOracle', () => {
   let PERIOD
 
   before(async () => {
-    await resetHardhat();
+    await resetHardhat()
 
     pair = await createPiTokenExchangePair()
     oracle = await deploy('PiOracle', pair, PiToken.address)

@@ -62,8 +62,6 @@ describe('Controller Jarvis Strat', () => {
       ethers.getContractAt('IChainLink', '0xAB594600376Ec9fD91F8e885dADF0CE036862dE0'), // WMATIC
     ])
 
-
-
     const JRT = '0x596ebe76e2db4470966ea395b0d063ac6197a8c5' // JRT
     const UMA = '0x3066818837c5e6ed6601bd5a91b0762877a6b731' // UMA
     const ANGLE = '0x900F717EA076E1E7a484ad9DD2dB81CEEc60eBF1' // ANGLE
@@ -101,10 +99,10 @@ describe('Controller Jarvis Strat', () => {
     }
 
     await Promise.all([
+      updatePrices(),
       waitFor(strat.setMaxPriceOffset(86400)), // Time
       waitFor(strat.setPoolSlippageRatio(100)), // price variation
       waitFor(strat.setSwapSlippageRatio(500)), // price variation
-      updatePrices(),
       waitFor(strat.setPriceFeed(WMATIC.address, wmaticFeed.address)),
       waitFor(strat.setPriceFeed(ageur.address, eurFeed.address)),
       waitFor(strat.setPriceFeed(UMA, umaFeed.address)),

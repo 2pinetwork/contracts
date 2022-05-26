@@ -79,32 +79,12 @@ contract ControllerEllipsisStrat is ControllerStratAbs {
         }
     }
 
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         uint[] memory pids = new uint[](1);
         pids[0] = STAKE_POOL_ID;
 
         STAKE.claim(pids);
         FEE_DISTRIBUTION.exit();
-    }
-
-    function _swapRewards() internal {
-        for (uint i = 0; i < rewardTokens.length; i++) {
-            address rewardToken = rewardTokens[i];
-            uint _balance = IERC20(rewardToken).balanceOf(address(this));
-
-            if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
-                // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (expected > 1) {
-                    IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                    IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                    );
-                }
-            }
-        }
     }
 
     // amount is the `want` expected to be withdrawn

@@ -86,53 +86,12 @@ contract ControllerCurveStrat is ControllerStratAbs {
         ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
     }
 
-    function harvest() public nonReentrant override {
-        uint _before = wantBalance();
-
-        _claimRewards();
-        _swapRewards();
-
-        uint harvested = wantBalance() - _before;
-
-        // Charge performance fee for earned want + rewards
-        _beforeMovement();
-
-        // re-deposit
-        if (!paused() && wantBalance() > 0) { _deposit(); }
-
-        // Update lastBalance for the next movement
-        _afterMovement();
-
-        emit Harvested(address(want), harvested);
-    }
-
     /**
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
     }
-
-    function _swapRewards() internal {
-        for (uint i = 0; i < rewardTokens.length; i++) {
-            address rewardToken = rewardTokens[i];
-            uint _balance = IERC20(rewardToken).balanceOf(address(this));
-
-            if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
-                // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (expected > 1) {
-                    IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                    IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                    );
-                }
-            }
-        }
-    }
-
 
     function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
         // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio

@@ -12,6 +12,8 @@ import "./Swappable.sol";
 abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
 
+    bytes32 public constant BOOSTER_ROLE = keccak256("BOOSTER_ROLE");
+
     // Want
     IERC20Metadata immutable public want;
     // want "missing" decimals precision
@@ -38,6 +40,13 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     address public exchange;
     address public immutable controller; // immutable to prevent anyone to change it and withdraw
 
+    // Deposit compensation
+    address public compensator;
+    uint public compensateRatio = 0; // 0.00%
+
+    // manual boosts
+    uint public lastExternalBoost;
+
     // Migrate to a library or something
     function _checkIERC20(IERC20Metadata token) internal view {
         require(address(token) != address(0), "Want !ZeroAddress");
@@ -58,6 +67,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         treasury = _treasury;
 
         WANT_MISSING_PRECISION = (10 ** (18 - _want.decimals()));
+
+        compensator = msg.sender;
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -65,6 +76,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     event NewPerformanceFee(uint oldFee, uint newFee);
     event Harvested(address _want, uint _amount);
     event PerformanceFee(uint _amount);
+    event Boosted(address indexed booster, uint amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -132,6 +144,22 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         rewardToWantRoute[_reward] = _route;
     }
 
+    // Compensation
+    function setCompensateRatio(uint newRatio) external onlyAdmin {
+        require(newRatio != compensateRatio, "same ratio");
+        require(newRatio <= RATIO_PRECISION, "greater than 100%");
+        require(newRatio >= 0, "less than 0%?");
+
+        compensateRatio = newRatio;
+    }
+
+    function setCompensator(address _compensator) external onlyAdmin {
+        require(_compensator != address(0), "!ZeroAddress");
+        require(_compensator != compensator, "same address");
+
+        compensator = _compensator;
+    }
+
     function beforeMovement() external onlyController nonReentrant {
         _beforeMovement();
     }
@@ -167,16 +195,53 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         want.safeTransfer(controller, _amount);
 
         // Redeposit
-        if (!paused() && wantBalance() > 0) { _deposit(); }
+        if (!paused()) { _deposit(); }
 
         _afterMovement();
 
         return _amount;
-
     }
 
     function harvest() public nonReentrant virtual {
-        // should be implemented
+        uint _before = wantBalance();
+
+        _claimRewards();
+        _swapRewards();
+
+        uint harvested = wantBalance() - _before;
+
+        // Charge performance fee for earned want + rewards
+        _beforeMovement();
+
+        // re-deposit
+        if (!paused()) { _deposit(); }
+
+        // Update lastBalance for the next movement
+        _afterMovement();
+
+        emit Harvested(address(want), harvested);
+    }
+
+    // This function is called to "boost" the strategy.
+    function boost(uint _amount) external {
+        require(hasRole(BOOSTER_ROLE, msg.sender), "Not a booster");
+
+        // Charge performance fee for earned want
+        _beforeMovement();
+
+        // transfer reward from caller
+        if (_amount > 0) { want.safeTransferFrom(msg.sender, address(this), _amount); }
+
+        // Keep track of how much is added to calc boost APY
+        lastExternalBoost = _amount;
+
+        // Deposit transfered amount
+        _deposit();
+
+        // update last_balance to exclude the manual reward from perfFee
+        _afterMovement();
+
+        emit Boosted(msg.sender, _amount);
     }
 
     function _beforeMovement() internal {
@@ -218,6 +283,31 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         // should be implemented
     }
 
+    function _claimRewards() internal virtual {
+        // should be implemented
+    }
+
+    function _swapRewards() internal virtual {
+        // should be implemented
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address rewardToken = rewardTokens[i];
+            uint _balance = IERC20Metadata(rewardToken).balanceOf(address(this));
+
+            if (_balance > 0) {
+                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
+
+                // Want price sometimes is too high so it requires a lot of rewards to swap
+                if (expected > 1) {
+                    IERC20Metadata(rewardToken).safeApprove(exchange, _balance);
+
+                    IUniswapRouter(exchange).swapExactTokensForTokens(
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                    );
+                }
+            }
+        }
+    }
+
     /**
      * @dev Takes out performance fee.
      */
@@ -226,6 +316,23 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
 
         // Pay to treasury a percentage of the total reward claimed
         if (fee > 0) { want.safeTransfer(treasury, fee); }
+    }
+
+    function _compensateDeposit(uint _amount) internal returns (uint) {
+        if (compensateRatio <= 0) { return _amount; }
+
+        uint _comp = _amount * compensateRatio / RATIO_PRECISION;
+
+        // Compensate only if we can...
+        if (
+            want.allowance(compensator, address(this)) >= _comp &&
+            want.balanceOf(compensator) >= _comp
+        ) {
+            want.safeTransferFrom(compensator, address(this), _comp);
+            _amount += _comp;
+        }
+
+        return _amount;
     }
 
     function wantBalance() public view returns (uint) {
@@ -271,6 +378,6 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     function unpause() external onlyAdmin nonReentrant {
         _unpause();
 
-        if (wantBalance() > 0) { _deposit(); }
+        _deposit();
     }
 }
