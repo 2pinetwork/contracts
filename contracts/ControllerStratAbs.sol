@@ -41,8 +41,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     address public immutable controller; // immutable to prevent anyone to change it and withdraw
 
     // Deposit compensation
-    address public compensator;
-    uint public compensateRatio = 0; // 0.00%
+    address public equalizer;
+    uint public offsetRatio = 0; // 0.00%
 
     // manual boosts
     uint public lastExternalBoost;
@@ -68,7 +68,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
 
         WANT_MISSING_PRECISION = (10 ** (18 - _want.decimals()));
 
-        compensator = msg.sender;
+        equalizer = msg.sender;
     }
 
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -145,19 +145,19 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     }
 
     // Compensation
-    function setCompensateRatio(uint newRatio) external onlyAdmin {
-        require(newRatio != compensateRatio, "same ratio");
+    function setOffsetRatio(uint newRatio) external onlyAdmin {
+        require(newRatio != offsetRatio, "same ratio");
         require(newRatio <= RATIO_PRECISION, "greater than 100%");
         require(newRatio >= 0, "less than 0%?");
 
-        compensateRatio = newRatio;
+        offsetRatio = newRatio;
     }
 
-    function setCompensator(address _compensator) external onlyAdmin {
-        require(_compensator != address(0), "!ZeroAddress");
-        require(_compensator != compensator, "same address");
+    function setEqualizer(address _equalizer) external onlyAdmin {
+        require(_equalizer != address(0), "!ZeroAddress");
+        require(_equalizer != equalizer, "same address");
 
-        compensator = _compensator;
+        equalizer = _equalizer;
     }
 
     function beforeMovement() external onlyController nonReentrant {
@@ -319,16 +319,16 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     }
 
     function _compensateDeposit(uint _amount) internal returns (uint) {
-        if (compensateRatio <= 0) { return _amount; }
+        if (offsetRatio <= 0) { return _amount; }
 
-        uint _comp = _amount * compensateRatio / RATIO_PRECISION;
+        uint _comp = _amount * offsetRatio / RATIO_PRECISION;
 
         // Compensate only if we can...
         if (
-            want.allowance(compensator, address(this)) >= _comp &&
-            want.balanceOf(compensator) >= _comp
+            want.allowance(equalizer, address(this)) >= _comp &&
+            want.balanceOf(equalizer) >= _comp
         ) {
-            want.safeTransferFrom(compensator, address(this), _comp);
+            want.safeTransferFrom(equalizer, address(this), _comp);
             _amount += _comp;
         }
 

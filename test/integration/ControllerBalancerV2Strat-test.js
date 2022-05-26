@@ -108,7 +108,6 @@ describe('Controller BalancerV2 Strat USDC', () => {
     ).div(10000)
     let expectedOutput = toWithdraw.mul(await archimedes.getPricePerFullShare(0)).div(1e6)
 
-    // await strat.setPoolSlippageRatio(50)
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
 

@@ -61,6 +61,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
 
         for (uint i = 0; i < rewardTokens.length; i++) {
             address reward = rewardTokens[i];
+
             if (IBalancerGauge(GAUGE).claimable_reward(address(this), reward) > 0) {
                 _claim = true;
                 break;
@@ -167,15 +168,15 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         uint _balance = wantBalance();
 
         //Unstake
-        uint staked_balance = balanceOfPool();
-        IBalancerGauge(GAUGE).withdraw(staked_balance);
-        require(balanceOfVaultPool() >= staked_balance, "Gauge gave less than expected");
+        uint stakedBalance = balanceOfPool();
+        IBalancerGauge(GAUGE).withdraw(stakedBalance);
+        require(balanceOfVaultPool() >= stakedBalance, "Gauge gave less than expected");
 
         uint index = 0;
-        uint bpt_balance = balanceOfVaultPool();
+        uint bptBalance = balanceOfVaultPool();
 
         uint expected = (
-            bpt_balance * _pricePerShare() *
+            bptBalance * _pricePerShare() *
             (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION /
             WANT_MISSING_PRECISION / SHARES_PRECISION
         );
@@ -186,7 +187,7 @@ contract ControllerBalancerV2Strat is ControllerStratAbs {
         amounts[index] = expected;
 
         // Withdraw all the BPT directly
-        bytes memory userData = abi.encode(EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, bpt_balance, index);
+        bytes memory userData = abi.encode(EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, bptBalance, index);
 
         vault.exitPool(
             poolId,
