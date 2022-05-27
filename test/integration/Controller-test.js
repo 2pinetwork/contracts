@@ -6,7 +6,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller', () => {
   let bob
@@ -20,6 +20,10 @@ describe('Controller', () => {
   let qiFeed
   let balFeed
   let wNativeFeed
+
+  before(async () => {
+    await resetHardhat(28401104)
+  })
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()

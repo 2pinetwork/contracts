@@ -115,7 +115,7 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         emit Harvested(address(want), harvested);
     }
 
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         uint pending = IJarvisPool(JARVIS_POOL).pendingRwd(JARVIS_POOL_ID, address(this));
 
         if (pending > 0) {
@@ -167,7 +167,7 @@ contract ControllerJarvisStrat is ControllerStratAbs {
         }
     }
 
-    function _swapRewards() internal {
+    function _swapRewards() internal override {
         for (uint i = 0; i < rewardTokens.length; i++) {
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20(rewardToken).balanceOf(address(this));

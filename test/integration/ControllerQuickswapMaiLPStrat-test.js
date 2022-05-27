@@ -8,7 +8,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 describe('Controller QuickSwap MAI LP Strat on USDC', () => {
   let bob
@@ -23,6 +23,9 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
   let swapper
   let setupStrat
 
+  before(async () => {
+    await resetHardhat()
+  })
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()

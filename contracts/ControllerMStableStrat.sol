@@ -9,50 +9,19 @@ contract ControllerMStableStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    bytes32 public constant BOOSTER_ROLE = keccak256("BOOSTER_ROLE");
-
     address constant public MTOKEN = address(0xE840B73E5287865EEc17d250bFb1536704B43B21); // mUSD
     address constant public IMTOKEN = address(0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af); // imUSD
     address constant public VAULT = address(0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29); // imUSD Vault
-
-    // Deposit compensation
-    address public compensator;
-    uint public compensateRatio = 1; // 0.01%
-
-    // manual boosts
-    uint public lastExternalBoost;
 
     constructor(
         IERC20Metadata _want,
         address _controller,
         address _exchange,
         address _treasury
-    ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        compensator = msg.sender;
-    }
+    ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {}
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(want.symbol(), "@mStable#1.0.0"));
-    }
-
-    // This function is called to "boost" the strategy.
-    function boost(uint _amount) external {
-        require(hasRole(BOOSTER_ROLE, msg.sender), "Not a booster");
-
-        // Charge performance fee for earned want
-        _beforeMovement();
-
-        // transfer reward from caller
-        if (_amount > 0) { want.safeTransferFrom(msg.sender, address(this), _amount); }
-
-        // Keep track of how much is added to calc boost APY
-        lastExternalBoost = _amount;
-
-        // Deposit transfered amount
-        _deposit();
-
-        // update last_balance to exclude the manual reward from perfFee
-        _afterMovement();
     }
 
     function harvest() public nonReentrant override {
@@ -99,28 +68,8 @@ contract ControllerMStableStrat is ControllerStratAbs {
         }
     }
 
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         IMVault(VAULT).claimReward();
-    }
-
-    function _swapRewards() internal {
-        for (uint i = 0; i < rewardTokens.length; i++) {
-            address rewardToken = rewardTokens[i];
-            uint _balance = IERC20(rewardToken).balanceOf(address(this));
-
-            if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
-                // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (expected > 1) {
-                    IERC20(rewardToken).safeApprove(exchange, _balance);
-
-                    IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
-                    );
-                }
-            }
-        }
     }
 
     // amount is the `want` expected to be withdrawn
@@ -198,36 +147,5 @@ contract ControllerMStableStrat is ControllerStratAbs {
         return _musdAmountToImusd(
             _wantToMusdDoubleCheck(_amount)
         );
-    }
-
-    // Compensation
-    function setCompensateRatio(uint newRatio) external onlyAdmin {
-        require(newRatio != compensateRatio, "same ratio");
-        require(newRatio <= RATIO_PRECISION, "greater than 100%");
-        require(newRatio >= 0, "less than 0%?");
-
-        compensateRatio = newRatio;
-    }
-
-    function setCompensator(address _compensator) external onlyAdmin {
-        require(_compensator != address(0), "!ZeroAddress");
-        require(_compensator != compensator, "same address");
-
-        compensator = _compensator;
-    }
-
-    function _compensateDeposit(uint _amount) internal returns (uint) {
-        uint _comp = _amount * compensateRatio / RATIO_PRECISION;
-
-        // Compensate only if we can...
-        if (
-            want.allowance(compensator, address(this)) >= _comp &&
-            want.balanceOf(compensator) >= _comp
-        ) {
-            want.safeTransferFrom(compensator, address(this), _comp);
-            _amount += _comp;
-        }
-
-        return _amount;
     }
 }
