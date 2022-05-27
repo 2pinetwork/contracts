@@ -258,7 +258,7 @@ const fetchNeededTokens = async () => {
     ethers.getContractAt(curvePoolAbi, '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67').then(c => (global.CurvePool = c))
   )
   promises.push(
-    ethers.getContractAt(curveRewardsGaugeAbi, '0xffbACcE0CC7C19d46132f1258FC16CF6871D153c').then(c => (global.CurveRewardsGauge = c))
+    ethers.getContractAt(curveRewardsGaugeAbi, '0x8D9649e50A0d1da8E939f800fB926cdE8f18B47D').then(c => (global.CurveRewardsGauge = c))
   )
   promises.push(
     ethers.getContractAt(uniswapFactoryAbi, '0xc35DADB65012eC5796536bD9864eD8773aBc74C4').then(c => (global.SUSHI_FACTORY = c))

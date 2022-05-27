@@ -3,7 +3,7 @@
 pragma solidity 0.8.13;
 
 import "./ControllerStratAbs.sol";
-import "../interfaces/ICurvePool.sol";
+import "../interfaces/ICurve.sol";
 import "../interfaces/IJarvisPool.sol";
 import "../interfaces/IUniswapRouter.sol";
 import "../interfaces/IDMMRouter.sol";

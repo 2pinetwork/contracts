@@ -376,7 +376,7 @@ describe('Controller mStable Strat with DAI', () => {
     await setCustomBalanceFor(DAI.address, owner.address, newBalance)
 
     await waitFor(DAI.connect(owner).approve(strat.address, newBalance))
-    await waitFor(strat.setCompensateRatio(2))
+    await waitFor(strat.setOffsetRatio(2))
 
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)

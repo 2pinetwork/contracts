@@ -5,8 +5,7 @@ pragma solidity 0.8.13;
 import "hardhat/console.sol";
 
 import "./ControllerStratAbs.sol";
-import "../interfaces/ICurvePool.sol";
-import "../interfaces/IRewardsGauge.sol";
+import "../interfaces/ICurve.sol";
 
 contract ControllerCurveStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
@@ -18,7 +17,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
     address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wNative
     address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
     address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
-    address constant public REWARDS_GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
+    address constant public GAUGE = address(0x8D9649e50A0d1da8E939f800fB926cdE8f18B47D);
+    address constant public GAUGE_FACTORY = address(0xabC000d88f23Bb45525E447528DBF656A9D55bf5);
 
     constructor(address _controller, address _exchange, address _treasury)
         ControllerStratAbs(
@@ -46,8 +46,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
         uint _btcCRVBalance = btcCRVBalance();
 
         if (_btcCRVBalance > 0) {
-            IERC20(BTCCRV).safeApprove(REWARDS_GAUGE, _btcCRVBalance);
-            IRewardsGauge(REWARDS_GAUGE).deposit(_btcCRVBalance);
+            IERC20(BTCCRV).safeApprove(GAUGE, _btcCRVBalance);
+            ICurveGauge(GAUGE).deposit(_btcCRVBalance);
         }
     }
 
@@ -75,7 +75,7 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
     function _withdrawFromPool(uint btcCrvAmount) internal {
         // Remove staked from gauge
-        IRewardsGauge(REWARDS_GAUGE).withdraw(btcCrvAmount);
+        ICurveGauge(GAUGE).withdraw(btcCrvAmount);
 
         // remove_liquidity
         uint _balance = btcCRVBalance();
@@ -90,7 +90,24 @@ contract ControllerCurveStrat is ControllerStratAbs {
      * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
      */
     function _claimRewards() internal override {
-        IRewardsGauge(REWARDS_GAUGE).claim_rewards(address(this));
+        // CRV tokens
+        if (ICurveGauge(GAUGE).claimable_tokens(address(this)) > 0) {
+            ICurveGaugeFactory(GAUGE_FACTORY).mint(GAUGE);
+        }
+
+        // no-CRV rewards
+        bool _claim = false;
+
+        for (uint i = 0; i < ICurveGauge(GAUGE).reward_count(); i++) {
+            address _reward = ICurveGauge(GAUGE).reward_tokens(i);
+
+            if (ICurveGauge(GAUGE).claimable_reward(address(this), _reward) > 0) {
+                _claim = true;
+                break;
+            }
+        }
+
+        if (_claim) { ICurveGauge(GAUGE).claim_rewards(); }
     }
 
     function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
@@ -150,7 +167,7 @@ contract ControllerCurveStrat is ControllerStratAbs {
         return IERC20(BTCCRV).balanceOf(address(this));
     }
     function balanceOfPool() public view override returns (uint) {
-        return IRewardsGauge(REWARDS_GAUGE).balanceOf(address(this));
+        return ICurveGauge(GAUGE).balanceOf(address(this));
     }
     function balanceOfPoolInWant() public view override returns (uint) {
         return _calc_withdraw_one_coin(balanceOfPool());
