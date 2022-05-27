@@ -217,12 +217,12 @@ describe('Controller mStable Strat', () => {
   it('Deposit with compensation + manual reward', async () => {
     // give booster permissions
     const booster = (await ethers.getSigners())[8]
-    const compensator = (await ethers.getSigners())[9]
+    const equalizer = (await ethers.getSigners())[9]
     await waitFor(strat.grantRole(await strat.BOOSTER_ROLE(), booster.address))
 
     const newBalance = ethers.BigNumber.from('' + 100000e6) // 100000 USDC
     await setCustomBalanceFor(USDC.address, bob.address, newBalance)
-    await setCustomBalanceFor(USDC.address, compensator.address, newBalance)
+    await setCustomBalanceFor(USDC.address, equalizer.address, newBalance)
     await setCustomBalanceFor(USDC.address, booster.address, newBalance)
 
     expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
@@ -256,8 +256,8 @@ describe('Controller mStable Strat', () => {
 
     // compensate
     await waitFor(USDC.connect(owner).approve(strat.address, newBalance))
-    await waitFor(USDC.connect(compensator).approve(strat.address, newBalance))
-    await waitFor(strat.setCompensator(compensator.address))
+    await waitFor(USDC.connect(equalizer).approve(strat.address, newBalance))
+    await waitFor(strat.setEqualizer(equalizer.address))
 
     await waitFor(strat.connect(booster).boost(1e6))
     expect(await strat.lastExternalBoost()).to.be.equal(1e6)

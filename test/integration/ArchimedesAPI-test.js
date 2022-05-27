@@ -61,7 +61,7 @@ describe('ArchimedesAPI', () => {
   before(async () => {
     await resetHardhat();
 
-    [, bob, alice] = await ethers.getSigners()
+    [, bob, alice] = await ethers.getSigners();
   })
 
   beforeEach(async () => {

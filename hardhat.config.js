@@ -28,13 +28,21 @@ const hardhatNetwork = () => {
 
         default:
           return {
+            chains: {
+              137: {
+                hardforkHistory: {
+                  london: 23850000
+                }
+              }
+            },
             network_id:    137,
             chainId:       137,
             gasMultiplier: 10,
             forking:       {
               url:           `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
               gasMultiplier: 10,
-              blockNumber:   19880876
+              blockNumber:   (+process.env.BLOCK || 19880876)
+              // blockNumber:   28401104
               // blockNumber:    24479611 // test for balancer
             }
           }

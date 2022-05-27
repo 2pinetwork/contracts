@@ -71,3 +71,10 @@ struct BalancerV2Claim {
 interface IBalancerDistributor {
     function claimDistributions(address claimer, BalancerV2Claim[] memory claims, IERC20[] memory tokens) external;
 }
+
+interface IBalancerGauge {
+    function deposit(uint amount) external;
+    function withdraw(uint amount) external;
+    function claim_rewards() external;
+    function claimable_reward(address, address) view external returns (uint);
+}

@@ -22,7 +22,7 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
     mapping(address => mapping(address => address[])) public routes;
 
     uint public reserveSwapRatio = 50; // 0.5% (0.3% of swap fee + a little more to get the more LP as possible
-    uint public compensateRatio = 80; // 0.8% (0.3% of swap fee + 0.5% of staking deposit fee
+    uint public offsetRatio = 80; // 0.8% (0.3% of swap fee + 0.5% of staking deposit fee
 
     constructor(IERC20Metadata _want, IUniswapPair _lp, address _strategy) {
         // Check that want is at least an ERC20
@@ -59,11 +59,11 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         reserveSwapRatio = newRatio;
     }
 
-    function setCompensateRatio(uint newRatio) external onlyAdmin {
-        require(newRatio != compensateRatio, "same ratio");
+    function setOffsetRatio(uint newRatio) external onlyAdmin {
+        require(newRatio != offsetRatio, "same ratio");
         require(newRatio <= RATIO_PRECISION, "greater than 100%");
 
-        compensateRatio = newRatio;
+        offsetRatio = newRatio;
     }
 
     function swapLpTokensForWant(uint _amount0, uint _amount1) external onlyStrat returns (uint _amount) {
@@ -87,7 +87,7 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         want.safeTransferFrom(msg.sender, address(this), _balance);
 
         // Compensate swap
-        uint _amount = _balance * (RATIO_PRECISION + compensateRatio) / RATIO_PRECISION;
+        uint _amount = _balance * (RATIO_PRECISION + offsetRatio) / RATIO_PRECISION;
 
         if (_amount > wantBalance()) { _amount = wantBalance(); }
 

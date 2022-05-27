@@ -42,7 +42,7 @@ describe('Archimedes', () => {
   before(async () => {
     await resetHardhat();
 
-    [, bob, alice] = await ethers.getSigners()
+    [, bob, alice] = await ethers.getSigners();
   })
 
   beforeEach(async () => {
@@ -151,7 +151,8 @@ describe('Archimedes', () => {
     })
   })
 
-  describe('deposit', async () => {
+  // LPWithoutStrat is not used
+  describe.skip('deposit', async () => {
     it('should work with LP', async () => {
       const pair = await hre.ethers.getContractAt(
         '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol:IERC20Metadata',
