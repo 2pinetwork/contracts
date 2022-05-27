@@ -22,7 +22,7 @@ describe('Controller Curve Strat', () => {
   let crvFeed
 
   before(async () => {
-    await resetHardhat()
+    await resetHardhat(28261950) // gauge rewards init date
   })
 
   beforeEach(async () => {
@@ -54,6 +54,8 @@ describe('Controller Curve Strat', () => {
       waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
       waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+      waitFor(strat.setPoolSlippageRatio(100)),
+      waitFor(strat.setSwapSlippageRatio(200)),
       waitFor(strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, WETH.address, BTC.address])),
       waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, BTC.address]))
     ])
@@ -70,7 +72,7 @@ describe('Controller Curve Strat', () => {
     expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
     expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
-      99.6e18 + '', // production virtual price is ~1.00367.
+      99e18 + '', // production virtual price is ~1.0093.
       100e18 + ''
     )
 
@@ -125,7 +127,7 @@ describe('Controller Curve Strat', () => {
     expect(await BTC.balanceOf(controller.address)).to.be.equal(0)
     expect(await BTC.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
-      99.5e18 + '', // production virtual price is ~1.00367.
+      98.9e18 + '', // production virtual price is ~1.0093.
       100e18 + ''
     )
 
