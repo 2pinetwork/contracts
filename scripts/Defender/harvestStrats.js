@@ -6,26 +6,28 @@ let secrets = {}
 let promises = []
 
 const notify = async function(msg) {
+  let err_msg = msg.slice(0, 500)
+
   const url = [
     'https://api.telegram.org/',
     secrets.TELEGRAM_BOT,
     '/sendMessage?chat_id=',
     secrets.TELEGRAM_CHANNEL,
     '&text=',
-    encodeURIComponent(msg)
+    encodeURIComponent(err_msg)
   ].join('');
 
   await Promise.all([
     axios.post(
       `https://discord.com/api/webhooks/${secrets.DISCORD_WEBHOOK_ID}/${secrets.DISCORD_WEBHOOK_TOKEN}`,
-      { content: msg }
+      { content: err_msg }
     ),
     axios.get(url)
-  ])
+  ]).catch(reason => console.log(reason))
 }
 
 const exec = (fn, title) => {
-  return fn.then(
+  let prom = fn.then(
     t => t.wait().then(
       _ => console.log(`${title} executed: ${t.hash}`)
     ).catch(
@@ -34,6 +36,15 @@ const exec = (fn, title) => {
   ).catch(
     e => promises.push(notify(`${title} error: ${e}`))
   )
+
+  promises.push(prom)
+
+  return prom
+}
+
+const delay = (ms) => {
+  console.log(`Waiting ${ms / 1000}s`)
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 const StratABI = [
@@ -69,16 +80,26 @@ const strats = {
 
 exports.handler = async (credentials) => {
   const provider = new DefenderRelayProvider(credentials);
-  const signer = new DefenderRelaySigner(credentials, provider, { gasPrice: 31e9 });
+  const signer = new DefenderRelaySigner(credentials, provider, { });
 
   secrets = {TELEGRAM_BOT, TELEGRAM_CHANNEL, DISCORD_WEBHOOK_ID, DISCORD_WEBHOOK_TOKEN} = credentials.secrets
 
   for (let s in strats) {
     let strategy = (new ethers.Contract(strats[s], StratABI, signer))
 
+    try {
+      await strategy.estimateGas.harvest()
+    } catch(e) {
+      notify(`Can't harvest ${s} 3h-Strategy`)
+      continue
+    }
+
     if (await strategy.balance() > 0)
-      await exec(strategy.harvest({gasLimit: 1.5e6}), `Strategy ${s}`)
+      exec(strategy.harvest({gasLimit: 1.5e6}), `Strategy ${s}`)
   }
 
+  await delay(2000 * Object.keys(strats).length); // wait for 2 seconds per strat
+
+  await Promise.all(promises)
   await Promise.all(promises)
 }

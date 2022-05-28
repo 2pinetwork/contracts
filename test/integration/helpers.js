@@ -40,6 +40,7 @@ const setCustomBalanceFor = async (token, address, rawAmount, slot) => {
 
 const setChainlinkRound = async (address, roundId, timestamp, price) => {
   const slot = [
+    '0x89C991cbC41Af1a0294f79947aD71A028bf164b7', // CRV-agg
     '0x336584C8E6Dc19637A5b36206B1c79923111b405', // CRV
     '0x310990E8091b5cF083fA55F500F140CFBb959016'  // EUR
   ].includes(address) ? 44 : 43  // most of pricess are 43 slot
