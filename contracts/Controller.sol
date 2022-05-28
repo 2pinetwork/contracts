@@ -33,6 +33,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     // This value should be in the same decimal representation as want
     // 0 value means unlimit
     uint public depositCap;
+    uint public userDepositCap;
 
     event NewStrategy(address oldStrategy, address newStrategy);
     event NewTreasury(address oldTreasury, address newTreasury);
@@ -129,10 +130,19 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         depositCap = _amount;
     }
 
+    function setUserDepositCap(uint _amount) external onlyAdmin nonReentrant {
+        require(_amount != userDepositCap, "Same cap");
+
+        emit NewDepositCap(userDepositCap, _amount);
+
+        userDepositCap = _amount;
+    }
+
+
     function deposit(address _senderUser, uint _amount) external onlyArchimedes nonReentrant {
         require(!_strategyPaused(), "Strategy paused");
         require(_amount > 0, "Insufficient amount");
-        _checkDepositCap(_amount);
+        _checkDepositCap(_senderUser, _amount);
 
         IStrategy(strategy).beforeMovement();
 
@@ -230,10 +240,18 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         }
     }
 
-    function _checkDepositCap(uint _amount) internal view {
+    function _checkDepositCap(address _user, uint _amount) internal view {
         // 0 depositCap means no-cap
         if (depositCap > 0) {
             require(balance() + _amount <= depositCap, "Max depositCap reached");
+        }
+
+        if (userDepositCap > 0) {
+            // Check the real amount in want for the user
+            uint pricePerShare = (balance() * (10 ** decimals()) / totalSupply());
+            uint finalAmount = (balanceOf(_user) * pricePerShare) + _amount;
+
+            require(finalAmount <= userDepositCap, "Max userDepositCap reached");
         }
     }
 }
