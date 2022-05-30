@@ -12,8 +12,8 @@ interface IController {
     function deposit(address _depositor, uint _amount) external;
     function withdraw(address _depositor, uint _shares) external returns (uint);
     function setPid(uint pid) external returns (uint);
-    function depositCap() external view returns (uint);
-    function userDepositCap(address) external view returns (uint);
+    function depositLimit() external view returns (uint);
+    function userDepositLimit(address) external view returns (uint);
     function availableDeposit() external view returns (uint);
     function availableUserDeposit(address) external view returns (uint);
 }

@@ -348,52 +348,52 @@ describe('Controller', () => {
     })
   })
 
-  describe('setDepositCap', async () => {
+  describe('setDepositLimit', async () => {
     it('should be reverted for non admin', async () => {
-      await expect(controller.connect(bob).setDepositCap(10)).to.be.revertedWith(
+      await expect(controller.connect(bob).setDepositLimit(10)).to.be.revertedWith(
         'Not an admin'
       )
     })
 
-    it('should change depositCap', async () => {
-      expect(await controller.depositCap()).to.be.equal(0)
-      await expect(controller.setDepositCap(10)).to.emit(
-        controller, 'NewDepositCap'
+    it('should change depositLimit', async () => {
+      expect(await controller.depositLimit()).to.be.equal(0)
+      await expect(controller.setDepositLimit(10)).to.emit(
+        controller, 'NewDepositLimit'
       ).withArgs(0, 10)
-      expect(await controller.depositCap()).to.be.equal(10)
+      expect(await controller.depositLimit()).to.be.equal(10)
     })
 
-    it('should revert for depositCap', async () => {
+    it('should revert for depositLimit', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setDepositCap(10000)
+      await controller.setDepositLimit(10000)
       await piToken.transfer(bob.address, 10001)
       await piToken.connect(bob).approve(archimedes.address, 10001)
 
       // test totalSupply branch
       await waitFor(archimedes.connect(bob).deposit(0, 5000, zeroAddress))
       await waitFor(archimedes.connect(bob).deposit(0, 5000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositCap reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositLimit reached")
     })
   })
 
-  describe('setUserDepositCap', async () => {
+  describe('setUserDepositLimit', async () => {
     it('should be reverted for non admin', async () => {
-      await expect(controller.connect(bob).setUserDepositCap(10)).to.be.revertedWith(
+      await expect(controller.connect(bob).setUserDepositLimit(10)).to.be.revertedWith(
         'Not an admin'
       )
     })
 
-    it('should change userDepositCap', async () => {
-      expect(await controller.userDepositCap()).to.be.equal(0)
-      await expect(controller.setUserDepositCap(10)).to.emit(
-        controller, 'NewDepositCap'
+    it('should change userDepositLimit', async () => {
+      expect(await controller.userDepositLimit()).to.be.equal(0)
+      await expect(controller.setUserDepositLimit(10)).to.emit(
+        controller, 'NewDepositLimit'
       ).withArgs(0, 10)
-      expect(await controller.userDepositCap()).to.be.equal(10)
+      expect(await controller.userDepositLimit()).to.be.equal(10)
     })
 
-    it('should revert for userDepositCap without totalSupply', async () => {
+    it('should revert for userDepositLimit without totalSupply', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setUserDepositCap(10000)
+      await controller.setUserDepositLimit(10000)
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(10000)
       expect(await archimedes.availableUserDeposit(0, bob.address)).to.be.equal(10000)
 
@@ -404,12 +404,12 @@ describe('Controller', () => {
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(0)
       expect(await archimedes.availableUserDeposit(0, bob.address)).to.be.equal(0)
 
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositCap reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositLimit reached")
     })
 
-    it('should revert for userDepositCap', async () => {
+    it('should revert for userDepositLimit', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setUserDepositCap(10000)
+      await controller.setUserDepositLimit(10000)
       await piToken.transfer(bob.address, 10001)
       await piToken.connect(bob).approve(archimedes.address, 10001)
 
@@ -418,31 +418,31 @@ describe('Controller', () => {
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(9000)
       expect(await archimedes.availableUserDeposit(0, bob.address)).to.be.equal(9000)
       await waitFor(archimedes.connect(bob).deposit(0, 9000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositCap reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositLimit reached")
     })
 
-    it('should revert for depositCap with userDepositCap', async () => {
+    it('should revert for depositLimit with userDepositLimit', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setUserDepositCap(10000)
-      await controller.setDepositCap(5000)
+      await controller.setUserDepositLimit(10000)
+      await controller.setDepositLimit(5000)
       await piToken.transfer(bob.address, 5001)
       await piToken.connect(bob).approve(archimedes.address, 5001)
 
       // test totalSupply branch
       await waitFor(archimedes.connect(bob).deposit(0, 1000, zeroAddress))
       await waitFor(archimedes.connect(bob).deposit(0, 4000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositCap reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositLimit reached")
     })
   })
 
   describe('availableDeposit', async () => {
-    it('should return MAX UINT for un-capped', async () => {
-      expect(await controller.depositCap()).to.be.equal(0)
+    it('should return MAX UINT for un-limit', async () => {
+      expect(await controller.depositLimit()).to.be.equal(0)
       expect(await controller.availableDeposit()).to.be.equal(MAX_UINT)
     })
 
-    it('should return diff between deposited & cap', async () => {
-      expect(await controller.setDepositCap(10))
+    it('should return diff between deposited & limit', async () => {
+      expect(await controller.setDepositLimit(10))
       expect(await controller.availableDeposit()).to.be.equal(10)
 
       await waitFor(piToken.transfer(controller.address, 7))
@@ -452,7 +452,7 @@ describe('Controller', () => {
     })
 
     it('should return 0 for full controller', async () => {
-      expect(await controller.setDepositCap(10))
+      expect(await controller.setDepositLimit(10))
 
       await waitFor(piToken.transfer(controller.address, 12))
 

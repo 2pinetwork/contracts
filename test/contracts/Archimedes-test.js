@@ -623,17 +623,17 @@ describe('Archimedes', () => {
 
   describe('Deposit with CAP', async () => {
     it('should deposit only allowed cap', async () => {
-      await expect(controller.setDepositCap(10)).to.emit(controller, 'NewDepositCap')
+      await expect(controller.setDepositLimit(10)).to.emit(controller, 'NewDepositLimit')
       await piToken.approve(archimedes.address, 20)
       await waitFor(archimedes.deposit(0, 10, zeroAddress))
 
       await expect(archimedes.deposit(0, 1, zeroAddress)).to.be.revertedWith(
-        'Max depositCap reached'
+        'Max depositLimit reached'
       )
     })
 
     it('should deposit only allowed cap with yield', async () => {
-      await expect(controller.setDepositCap(10)).to.emit(controller, 'NewDepositCap')
+      await expect(controller.setDepositLimit(10)).to.emit(controller, 'NewDepositLimit')
       await piToken.approve(archimedes.address, 20)
       await waitFor(archimedes.deposit(0, 8, zeroAddress))
 
@@ -644,7 +644,7 @@ describe('Archimedes', () => {
       expect(await controller.availableDeposit()).to.be.equal(0)
 
       await expect(archimedes.deposit(0, 1, zeroAddress)).to.be.revertedWith(
-        'Max depositCap reached'
+        'Max depositLimit reached'
       )
     })
   })
