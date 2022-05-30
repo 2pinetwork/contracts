@@ -391,7 +391,7 @@ describe('Controller', () => {
       expect(await controller.userDepositCap()).to.be.equal(10)
     })
 
-    it('should revert for userDepositCap', async () => {
+    it('should revert for userDepositCap without totalSupply', async () => {
       await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
       await controller.setUserDepositCap(10000)
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(10000)
