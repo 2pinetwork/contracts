@@ -124,6 +124,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
 
     function setDepositCap(uint _amount) external onlyAdmin nonReentrant {
         require(_amount != depositCap, "Same cap");
+        require(_amount >= 0, "Can't be negative");
 
         emit NewDepositCap(depositCap, _amount);
 
@@ -132,12 +133,12 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
 
     function setUserDepositCap(uint _amount) external onlyAdmin nonReentrant {
         require(_amount != userDepositCap, "Same cap");
+        require(_amount >= 0, "Can't be negative");
 
         emit NewDepositCap(userDepositCap, _amount);
 
         userDepositCap = _amount;
     }
-
 
     function deposit(address _senderUser, uint _amount) external onlyArchimedes nonReentrant {
         require(!_strategyPaused(), "Strategy paused");
@@ -230,6 +231,27 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         }
     }
 
+    function availableUserDeposit(address _user) public view returns (uint _available) {
+        if (userDepositCap <= 0) { // without cap
+            _available = type(uint).max;
+        } else {
+            _available = userDepositCap;
+            // if there's no deposit yet, the totalSupply division raise
+            if (totalSupply() > 0) {
+                // Check the real amount in want for the user
+                uint _precision = 10 ** decimals();
+                uint _pricePerShare = (balance() * _precision) / totalSupply();
+                uint _current = balanceOf(_user) * _pricePerShare / _precision;
+
+                if (_current >= _available) {
+                    _available = 0;
+                }  else {
+                    _available -= _current;
+                }
+            }
+        }
+    }
+
     function _strategyDeposit() internal {
         uint _amount = wantBalance();
 
@@ -247,11 +269,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         }
 
         if (userDepositCap > 0) {
-            // Check the real amount in want for the user
-            uint pricePerShare = (balance() * (10 ** decimals()) / totalSupply());
-            uint finalAmount = (balanceOf(_user) * pricePerShare) + _amount;
-
-            require(finalAmount <= userDepositCap, "Max userDepositCap reached");
+            require(_amount <= availableUserDeposit(_user), "Max userDepositCap reached");
         }
     }
 }
