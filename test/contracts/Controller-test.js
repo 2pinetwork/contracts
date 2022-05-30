@@ -372,7 +372,7 @@ describe('Controller', () => {
       // test totalSupply branch
       await waitFor(archimedes.connect(bob).deposit(0, 5000, zeroAddress))
       await waitFor(archimedes.connect(bob).deposit(0, 5000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositLimit reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith('Max depositLimit reached')
     })
   })
 
@@ -404,7 +404,7 @@ describe('Controller', () => {
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(0)
       expect(await archimedes.availableUserDeposit(0, bob.address)).to.be.equal(0)
 
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositLimit reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith('Max userDepositLimit reached')
     })
 
     it('should revert for userDepositLimit', async () => {
@@ -418,7 +418,7 @@ describe('Controller', () => {
       expect(await controller.availableUserDeposit(bob.address)).to.be.equal(9000)
       expect(await archimedes.availableUserDeposit(0, bob.address)).to.be.equal(9000)
       await waitFor(archimedes.connect(bob).deposit(0, 9000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max userDepositLimit reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith('Max userDepositLimit reached')
     })
 
     it('should revert for depositLimit with userDepositLimit', async () => {
@@ -431,7 +431,7 @@ describe('Controller', () => {
       // test totalSupply branch
       await waitFor(archimedes.connect(bob).deposit(0, 1000, zeroAddress))
       await waitFor(archimedes.connect(bob).deposit(0, 4000, zeroAddress))
-      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith("Max depositLimit reached")
+      await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith('Max depositLimit reached')
     })
   })
 
