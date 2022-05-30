@@ -2,8 +2,6 @@
 
 pragma solidity 0.8.13;
 
-import "hardhat/console.sol";
-
 import "./ControllerStratAbs.sol";
 import "../interfaces/ICurve.sol";
 
@@ -17,8 +15,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
     address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wNative
     address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
     address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
-    address constant public GAUGE = address(0x8D9649e50A0d1da8E939f800fB926cdE8f18B47D);
-    address constant public GAUGE_FACTORY = address(0xabC000d88f23Bb45525E447528DBF656A9D55bf5);
+    address constant public GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
+    address constant public GAUGE_FACTORY = address(0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2);
 
     constructor(address _controller, address _exchange, address _treasury)
         ControllerStratAbs(

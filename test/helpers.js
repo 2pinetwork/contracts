@@ -307,6 +307,10 @@ const setupNeededTokens = async () => {
   global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock')
   expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
 
+  console.log('Deploying Curve GaugeFactory')
+  global.CurveGaugeFactory = await deployWithMainDeployer('CurveGaugeFactoryMock')
+  expect(global.CurveGaugeFactory.address).to.be.equal('0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2')
+
   // Set BTC 8 decimals
   await waitFor(BTC.setDecimals(8));
 }
