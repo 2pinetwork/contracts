@@ -40,12 +40,12 @@ async function main() {
 
       let result = (await oracle.latestRoundData()).answer
 
-      let cap = (1000000 / (parseFloat(result) / 1e8)).toFixed()
+      let limit = (1000000 / (parseFloat(result) / 1e8)).toFixed()
 
       let decimals = parseInt(await controller.decimals(), 10)
 
-      console.log(`Set ${pool.currency} cap to ${cap}`)
-      await (await controller.setDepositCap(cap + '0'.repeat(decimals), {gasPrice: MIN_GAS_PRICE})).wait()
+      console.log(`Set ${pool.currency} limit to ${limit}`)
+      await (await controller.setDepositLimit(limit + '0'.repeat(decimals), {gasPrice: MIN_GAS_PRICE})).wait()
     }
 
     args = [

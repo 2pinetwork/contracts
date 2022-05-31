@@ -476,6 +476,14 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         return IStrategy(_controller(_pid).strategy()).paused();
     }
 
+    function availableDeposit(uint _pid) external view returns (uint) {
+        return _controller(_pid).availableDeposit();
+    }
+
+    function availableUserDeposit(uint _pid, address _user) external view returns (uint) {
+        return _controller(_pid).availableUserDeposit(_user);
+    }
+
     function piTokenPerBlock() public view returns (uint) {
         // Skip 0~5% of minting per block for Referrals
         uint reserve = COMMISSION_RATE_PRECISION - referralCommissionRate;

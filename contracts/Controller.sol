@@ -32,11 +32,12 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     // Deposit limit a contract can hold
     // This value should be in the same decimal representation as want
     // 0 value means unlimit
-    uint public depositCap;
+    uint public depositLimit;
+    uint public userDepositLimit;
 
     event NewStrategy(address oldStrategy, address newStrategy);
     event NewTreasury(address oldTreasury, address newTreasury);
-    event NewDepositCap(uint oldCap, uint newCap);
+    event NewDepositLimit(uint oldLimit, uint newLimit);
 
     constructor(
         IERC20Metadata _want,
@@ -121,18 +122,28 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         withdrawFee = _fee;
     }
 
-    function setDepositCap(uint _amount) external onlyAdmin nonReentrant {
-        require(_amount != depositCap, "Same cap");
+    function setDepositLimit(uint _amount) external onlyAdmin nonReentrant {
+        require(_amount != depositLimit, "Same limit");
+        require(_amount >= 0, "Can't be negative");
 
-        emit NewDepositCap(depositCap, _amount);
+        emit NewDepositLimit(depositLimit, _amount);
 
-        depositCap = _amount;
+        depositLimit = _amount;
+    }
+
+    function setUserDepositLimit(uint _amount) external onlyAdmin nonReentrant {
+        require(_amount != userDepositLimit, "Same limit");
+        require(_amount >= 0, "Can't be negative");
+
+        emit NewDepositLimit(userDepositLimit, _amount);
+
+        userDepositLimit = _amount;
     }
 
     function deposit(address _senderUser, uint _amount) external onlyArchimedes nonReentrant {
         require(!_strategyPaused(), "Strategy paused");
         require(_amount > 0, "Insufficient amount");
-        _checkDepositCap(_amount);
+        _checkDepositLimit(_senderUser, _amount);
 
         IStrategy(strategy).beforeMovement();
 
@@ -213,10 +224,31 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
 
     // Check whats the max available amount to deposit
     function availableDeposit() external view returns (uint _available) {
-        if (depositCap <= 0) { // without cap
+        if (depositLimit <= 0) { // without limit
             _available = type(uint).max;
-        } else if (balance() < depositCap) {
-            _available = depositCap - balance();
+        } else if (balance() < depositLimit) {
+            _available = depositLimit - balance();
+        }
+    }
+
+    function availableUserDeposit(address _user) public view returns (uint _available) {
+        if (userDepositLimit <= 0) { // without limit
+            _available = type(uint).max;
+        } else {
+            _available = userDepositLimit;
+            // if there's no deposit yet, the totalSupply division raise
+            if (totalSupply() > 0) {
+                // Check the real amount in want for the user
+                uint _precision = 10 ** decimals();
+                uint _pricePerShare = (balance() * _precision) / totalSupply();
+                uint _current = balanceOf(_user) * _pricePerShare / _precision;
+
+                if (_current >= _available) {
+                    _available = 0;
+                }  else {
+                    _available -= _current;
+                }
+            }
         }
     }
 
@@ -230,10 +262,14 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         }
     }
 
-    function _checkDepositCap(uint _amount) internal view {
-        // 0 depositCap means no-cap
-        if (depositCap > 0) {
-            require(balance() + _amount <= depositCap, "Max depositCap reached");
+    function _checkDepositLimit(address _user, uint _amount) internal view {
+        // 0 depositLimit means no-limit
+        if (depositLimit > 0) {
+            require(balance() + _amount <= depositLimit, "Max depositLimit reached");
+        }
+
+        if (userDepositLimit > 0) {
+            require(_amount <= availableUserDeposit(_user), "Max userDepositLimit reached");
         }
     }
 }
