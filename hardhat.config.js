@@ -130,6 +130,11 @@ module.exports = {
   },
   networks: {
     hardhat: hardhatNetwork(),
+    mainnet: {
+      url:        `https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts:   accounts,
+      network_id: 1,
+    },
     polygon: {
       // url:        'https://polygon-rpc.com',
       url:        `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
