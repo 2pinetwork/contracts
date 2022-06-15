@@ -217,6 +217,15 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           extraArgs.maxWantBalance
         )
         break
+      case 'ControllerDummyStrat':
+        strategy = await deploy(
+          'ControllerDummyStrat',
+          token.address,
+          controller.address,
+          global.exchange.address,
+          owner.address
+        )
+        break
   }
 
   await waitFor(controller.setStrategy(strategy.address))
