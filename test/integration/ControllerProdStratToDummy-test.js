@@ -28,7 +28,7 @@ describe('Controller Production Strat to dummy', () => {
       return (shares * price / (10 ** decimals))
     }
 
-    let currentUserBalance = await userBalance(userSigner.address)
+    let currentUserBalance = await userBalance()
 
     const otherStrat = await (
       await ethers.getContractFactory('ControllerDummyStrat')
@@ -50,7 +50,7 @@ describe('Controller Production Strat to dummy', () => {
       currentUserBalance * 1.01
     )
 
-    currentUserBalance = await userBalance(userSigner.address)
+    currentUserBalance = await userBalance()
 
     expect(await controller.balanceOf(userSigner.address)).to.be.equal(userShares)
     expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
@@ -87,7 +87,7 @@ describe('Controller Production Strat to dummy', () => {
       currentUserBalance
     )
 
-    currentUserBalance = await userBalance(userSigner.address)
+    currentUserBalance = await userBalance()
 
     await waitFor(otherStrat.grantRole(await otherStrat.BOOSTER_ROLE(), boosterSigner.address))
     await waitFor(USDC.connect(boosterSigner).approve(otherStrat.address, 40e6))
@@ -97,7 +97,7 @@ describe('Controller Production Strat to dummy', () => {
       currentUserBalance * 1.0001, currentUserBalance * 1.01
     )
 
-    currentUserBalance = await userBalance(userSigner.address)
+    currentUserBalance = await userBalance()
 
     await waitFor(archimedes.withdraw(1, 1000))
     expect(await userBalance()).to.be.within(
