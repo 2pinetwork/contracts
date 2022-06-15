@@ -38,6 +38,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     event NewStrategy(address oldStrategy, address newStrategy);
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewDepositLimit(uint oldLimit, uint newLimit);
+    event NewUserDepositLimit(uint oldLimit, uint newLimit);
 
     constructor(
         IERC20Metadata _want,
@@ -61,19 +62,19 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     }
 
     // BeforeTransfer callback to harvest the archimedes rewards for both users
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
-        // ignore mint/burn
-        if (from != address(0) && to != address(0) && amount > 0) {
-            IArchimedes(archimedes).beforeSharesTransfer(uint(pid), from, to, amount);
-        }
-    }
+    // function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+    //     // ignore mint/burn
+    //     if (from != address(0) && to != address(0) && amount > 0) {
+    //         IArchimedes(archimedes).beforeSharesTransfer(uint(pid), from, to, amount);
+    //     }
+    // }
 
     // AferTransfer callback to update the archimedes rewards for both users
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
-        if (from != address(0) && to != address(0) && amount > 0) {
-            IArchimedes(archimedes).afterSharesTransfer(uint(pid), from, to, amount);
-        }
-    }
+    // function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+    //     if (from != address(0) && to != address(0) && amount > 0) {
+    //         IArchimedes(archimedes).afterSharesTransfer(uint(pid), from, to, amount);
+    //     }
+    // }
 
     modifier onlyArchimedes() {
         require(msg.sender == archimedes, "Not from Archimedes");
@@ -135,7 +136,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         require(_amount != userDepositLimit, "Same limit");
         require(_amount >= 0, "Can't be negative");
 
-        emit NewDepositLimit(userDepositLimit, _amount);
+        emit NewUserDepositLimit(userDepositLimit, _amount);
 
         userDepositLimit = _amount;
     }

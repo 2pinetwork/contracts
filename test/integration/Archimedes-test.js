@@ -400,7 +400,7 @@ describe('Archimedes', () => {
       ).to.be.revertedWith('Only Native token pool')
     })
 
-    it('Should get wnative shares and then withdraw', async () => {
+    it.only('Should get wnative shares and then withdraw', async () => {
       // initial accounts balance  less a few gas fees
       const balance = new BigNumber(
         (await ethers.provider.getBalance(owner.address)) / 1e18
@@ -419,14 +419,26 @@ describe('Archimedes', () => {
         Math.floor(balance.minus(1).toNumber())
       )
 
-      await waitFor(archimedes.withdraw(1, toNumber(1e18), {gasLimit: 30e6}))
+      console.log(
+        "Before",
+        (await ethers.provider.getBalance(owner.address)) / 0.5e18,
+        await WMATIC.balanceOf(owner.address)
+      )
+      await waitFor(archimedes.withdraw(1, toNumber(0.5e18), {gasLimit: 30e6}))
+      expect(await wmaticCtroller.balanceOf(owner.address)).to.be.above(0)
 
+      await waitFor(archimedes.emergencyWithdraw(1, {gasLimit: 30e6}))
       expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(0)
 
       currentBalance = Math.floor(
-        (await ethers.provider.getBalance(owner.address)) / 1e18
+        (await ethers.provider.getBalance(owner.address)) / 0.5e18
       )
 
+      console.log(
+        "After",
+        (await ethers.provider.getBalance(owner.address)) / 0.5e18,
+        await WMATIC.balanceOf(owner.address)
+      )
       // original value
       expect(currentBalance).to.be.equal(
         Math.floor(balance.toNumber())
