@@ -27,11 +27,11 @@ contract ControllerDummyStrat is ControllerStratAbs {
     }
 
     // amount is the `want` expected to be withdrawn
-    function _withdraw(uint _amount) internal view override returns (uint) {
-        return wantBalance() - _amount;
+    function _withdraw(uint) internal pure override returns (uint) {
+        return 0;
     }
 
-    function _withdrawAll() internal view override returns (uint) {
+    function _withdrawAll() internal pure override returns (uint) {
         return 0;
     }
 
