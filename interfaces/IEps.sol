@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 interface IEpsPool {
     function add_liquidity(uint[3] memory amounts, uint min_mint_amount) external;
