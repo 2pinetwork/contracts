@@ -14,20 +14,25 @@ async function main() {
   const pools = deploy.aavePools
 
   let originalPool
+  console.log('5-deploy_aave_strategies.js:16', chainId);
   const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
+  console.log('5-deploy_aave_strategies.js:18');
 
   let args, pool
 
   for (originalPool of pools) {
     pool = {...originalPool}
     let ctrollerArgs = [
-      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${pool.currency}`
+      pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-demo`
     ]
+    console.log('5-deploy_aave_strategies.js:25', ctrollerArgs);
     let controller = await (
       await hre.ethers.getContractFactory('Controller')
     ).deploy(...ctrollerArgs, {gasPrice: MIN_GAS_PRICE});
 
-    await controller.deployed(10);
+    console.log('5-deploy_aave_strategies.js:30');
+    await controller.deployed(20);
+    console.log('5-deploy_aave_strategies.js:32');
 
     await verify('Controller', controller.address, ctrollerArgs)
 
@@ -59,9 +64,9 @@ async function main() {
       deploy.FeeManager
     ]
 
-    let strategy = await ( await hre.ethers.getContractFactory('ControllerAaveStrat')).deploy(...args, {gasPrice: MIN_GAS_PRICE});
+    let strategy = await ( await hre.ethers.getContractFactory('ControllerAaveStrat')).deploy(...args, {gasLimit: 2e6, gasPrice: MIN_GAS_PRICE});
 
-    await strategy.deployed(10);
+    await strategy.deployed(20);
 
     console.log('Strategy ' + pool.currency + ':')
 

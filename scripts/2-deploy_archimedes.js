@@ -8,9 +8,7 @@ const main = async () => {
   let block = await hre.ethers.provider.getBlock()
 
   const chainId = hre.network.config.network_id
-  const deploy = JSON.parse(
-    fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8')
-  )
+  const deploy = JSON.parse( fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8'))
 
   deploy.block = block.number + 1714 // 1hour in block time
 

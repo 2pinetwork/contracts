@@ -400,37 +400,45 @@ describe('Archimedes', () => {
       ).to.be.revertedWith('Only Native token pool')
     })
 
-    it('Should get wnative shares and then withdraw', async () => {
+    it.only('Should get wnative shares and then withdraw', async () => {
       // initial accounts balance  less a few gas fees
-      const balance = new BigNumber(
-        (await ethers.provider.getBalance(owner.address)) / 1e18
-      )
+      const currentBalance = async () => {
+        return await ethers.provider.getBalance(bob.address)
+      }
 
-      await waitFor(archimedes.depositNative(1, zeroAddress, { value: toNumber(1e18) }))
-      expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(toNumber(1e18))
+      let balance = await currentBalance()
+
+      await waitFor(archimedes.connect(bob).depositNative(1, zeroAddress, { value: toNumber(1e18) }))
+      expect(await wmaticCtroller.balanceOf(bob.address)).to.be.equal(toNumber(1e18))
 
       // This is because eth is the main token and every transaction has fees
-      let currentBalance = Math.floor(
-        (await ethers.provider.getBalance(owner.address)) / 1e18
-      )
 
       // original balance less 1 MATIC
-      expect(currentBalance).to.be.equal(
-        Math.floor(balance.minus(1).toNumber())
+      expect(await currentBalance()).to.be.within(
+        balance.sub(1.2e18 + ''),
+        balance.sub(1e18 + '')
       )
 
-      await waitFor(archimedes.withdraw(1, toNumber(1e18), {gasLimit: 30e6}))
+      balance = await currentBalance()
 
-      expect(await wmaticCtroller.balanceOf(owner.address)).to.be.equal(0)
+      await waitFor(archimedes.connect(bob).withdraw(1, toNumber(0.5e18), {gasLimit: 30e6}))
+      expect(await wmaticCtroller.balanceOf(bob.address)).to.be.above(0)
 
-      currentBalance = Math.floor(
-        (await ethers.provider.getBalance(owner.address)) / 1e18
+      expect(await currentBalance()).to.be.within(
+        balance.add(0.49e18 + ''),
+        balance.add(0.51e18 + '')
       )
 
-      // original value
-      expect(currentBalance).to.be.equal(
-        Math.floor(balance.toNumber())
+      //Emergency withdraw for native will return wrapped token
+      expect(await WMATIC.balanceOf(bob.address)).to.be.equal(0)
+      await waitFor(archimedes.connect(bob).emergencyWithdraw(1, {gasLimit: 30e6}))
+      expect(await wmaticCtroller.balanceOf(bob.address)).to.be.equal(0)
+
+      expect(await currentBalance()).to.be.within(
+        balance.add(0.49e18 + ''),
+        balance.add(0.51e18 + '')
       )
+      expect(await WMATIC.balanceOf(bob.address)).to.be.within(0.49e18 + '', 0.5e18 + '')
     })
   })
 

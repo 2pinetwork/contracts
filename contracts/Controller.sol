@@ -2,16 +2,16 @@
 
 pragma solidity 0.8.15;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./PiAdmin.sol";
 import "../interfaces/IArchimedes.sol";
 import "../interfaces/IStrategy.sol";
 
-contract Controller is ERC20, PiAdmin, ReentrancyGuard {
+contract Controller is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
 
     // Address of Archimedes
@@ -38,6 +38,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
     event NewStrategy(address oldStrategy, address newStrategy);
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewDepositLimit(uint oldLimit, uint newLimit);
+    event NewUserDepositLimit(uint oldLimit, uint newLimit);
 
     constructor(
         IERC20Metadata _want,
@@ -88,7 +89,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         return pid;
     }
 
-    function setTreasury(address _treasury) external onlyAdmin nonReentrant {
+    function setTreasury(address _treasury) external onlyOwner nonReentrant {
         require(_treasury != treasury, "Same address");
         require(_treasury != address(0), "!ZeroAddress");
         emit NewTreasury(treasury, _treasury);
@@ -96,7 +97,7 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         treasury = _treasury;
     }
 
-    function setStrategy(address newStrategy) external onlyAdmin nonReentrant {
+    function setStrategy(address newStrategy) external onlyOwner nonReentrant {
         require(newStrategy != strategy, "Same strategy");
         require(newStrategy != address(0), "!ZeroAddress");
         require(IStrategy(newStrategy).want() == address(want), "Not same want");
@@ -115,14 +116,14 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         _strategyDeposit();
     }
 
-    function setWithdrawFee(uint _fee) external onlyAdmin nonReentrant {
+    function setWithdrawFee(uint _fee) external onlyOwner nonReentrant {
         require(_fee != withdrawFee, "Same fee");
         require(_fee <= MAX_WITHDRAW_FEE, "!cap");
 
         withdrawFee = _fee;
     }
 
-    function setDepositLimit(uint _amount) external onlyAdmin nonReentrant {
+    function setDepositLimit(uint _amount) external onlyOwner nonReentrant {
         require(_amount != depositLimit, "Same limit");
         require(_amount >= 0, "Can't be negative");
 
@@ -131,11 +132,11 @@ contract Controller is ERC20, PiAdmin, ReentrancyGuard {
         depositLimit = _amount;
     }
 
-    function setUserDepositLimit(uint _amount) external onlyAdmin nonReentrant {
+    function setUserDepositLimit(uint _amount) external onlyOwner nonReentrant {
         require(_amount != userDepositLimit, "Same limit");
         require(_amount >= 0, "Can't be negative");
 
-        emit NewDepositLimit(userDepositLimit, _amount);
+        emit NewUserDepositLimit(userDepositLimit, _amount);
 
         userDepositLimit = _amount;
     }
