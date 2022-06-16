@@ -62,19 +62,19 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     }
 
     // BeforeTransfer callback to harvest the archimedes rewards for both users
-    // function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
-    //     // ignore mint/burn
-    //     if (from != address(0) && to != address(0) && amount > 0) {
-    //         IArchimedes(archimedes).beforeSharesTransfer(uint(pid), from, to, amount);
-    //     }
-    // }
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        // ignore mint/burn
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IArchimedes(archimedes).beforeSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
 
     // AferTransfer callback to update the archimedes rewards for both users
-    // function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
-    //     if (from != address(0) && to != address(0) && amount > 0) {
-    //         IArchimedes(archimedes).afterSharesTransfer(uint(pid), from, to, amount);
-    //     }
-    // }
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        if (from != address(0) && to != address(0) && amount > 0) {
+            IArchimedes(archimedes).afterSharesTransfer(uint(pid), from, to, amount);
+        }
+    }
 
     modifier onlyArchimedes() {
         require(msg.sender == archimedes, "Not from Archimedes");

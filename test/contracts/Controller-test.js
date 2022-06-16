@@ -107,7 +107,7 @@ describe('Controller', () => {
     it('Should not set the treasury as non admin', async () => {
       expect(
         controller.connect(bob).setTreasury(bob.address)
-      ).to.be.revertedWith('Not an admin')
+      ).to.be.revertedWith('Ownable: caller is not the owner')
     })
   })
 
@@ -131,7 +131,7 @@ describe('Controller', () => {
     it('Should not set the strategy as non admin', async () => {
       await expect(
         controller.connect(bob).setStrategy(strat.address)
-      ).to.be.revertedWith('Not an admin')
+      ).to.be.revertedWith('Ownable: caller is not the owner')
     })
 
     it('should call strategy retireStrat', async () => {
@@ -351,7 +351,7 @@ describe('Controller', () => {
   describe('setDepositLimit', async () => {
     it('should be reverted for non admin', async () => {
       await expect(controller.connect(bob).setDepositLimit(10)).to.be.revertedWith(
-        'Not an admin'
+        'Ownable: caller is not the owner'
       )
     })
 
@@ -379,14 +379,14 @@ describe('Controller', () => {
   describe('setUserDepositLimit', async () => {
     it('should be reverted for non admin', async () => {
       await expect(controller.connect(bob).setUserDepositLimit(10)).to.be.revertedWith(
-        'Not an admin'
+        'Ownable: caller is not the owner'
       )
     })
 
     it('should change userDepositLimit', async () => {
       expect(await controller.userDepositLimit()).to.be.equal(0)
       await expect(controller.setUserDepositLimit(10)).to.emit(
-        controller, 'NewDepositLimit'
+        controller, 'NewUserDepositLimit'
       ).withArgs(0, 10)
       expect(await controller.userDepositLimit()).to.be.equal(10)
     })
