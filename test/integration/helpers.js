@@ -80,8 +80,8 @@ const setChainlinkRoundForNow = async (feed) => {
 }
 
 const createUsdcPairWithPrice = async (token, price, exchangeData = {}) => {
-  const factoryAddr = exchangeData.factoryAddr || '0xc35DADB65012eC5796536bD9864eD8773aBc74C4'
-  const exchange = exchangeData.exchange || global.exchange
+  const factoryAddr  = exchangeData.factoryAddr || '0xc35DADB65012eC5796536bD9864eD8773aBc74C4'
+  const exchange     = exchangeData.exchange || global.exchange
   const currentBlock = await hre.ethers.provider.getBlock()
   const factoryAbi   = require('./abis/uniswap-factory.json')
   const factory      = await ethers.getContractAt(factoryAbi, factoryAddr)
