@@ -1,5 +1,6 @@
 module.exports = {
   enableTimeouts: false,
+  configureYulOptimizer: true,
   skipFiles: [
     'mocks/ArchimedesAPIMock.sol',
     'mocks/ArchimedesMock.sol',

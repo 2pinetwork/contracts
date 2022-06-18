@@ -3,20 +3,38 @@ const {
   createController,
   createPiToken,
   deploy,
+  deployWithMainDeployer,
   getBlock,
   impersonateContract,
   waitFor,
   zeroAddress
 } = require('../helpers')
 
+const addresses = {
+  crvToken:     '0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8',
+  pool:         '0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8',
+  swapPool:     '0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8',
+  gauge:        '0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2',
+  gaugeFactory: '0xC92B72ecf468D2642992b195bea99F9B9BB4A838'
+}
+
 describe('Controller Curve Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
     await expect(
       deploy(
         'ControllerCurveStrat',
+        BTC.address,
         zeroAddress,
         exchange.address,
-        owner.address
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
       )
     ).to.be.revertedWith('Controller !ZeroAddress')
   })
@@ -25,9 +43,18 @@ describe('Controller Curve Strat wrong deployment', () => {
     await expect(
       deploy(
         'ControllerCurveStrat',
+        BTC.address,
         PiToken.address,
         zeroAddress,
-        owner.address
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
       )
     ).to.be.revertedWith('Exchange !ZeroAddress')
   })
@@ -36,11 +63,180 @@ describe('Controller Curve Strat wrong deployment', () => {
     await expect(
       deploy(
         'ControllerCurveStrat',
+        BTC.address,
         PiToken.address,
         exchange.address,
-        zeroAddress
+        zeroAddress,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
       )
     ).to.be.revertedWith('Treasury !ZeroAddress')
+  })
+
+  it('Should not deploy with zero address CRV token', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        zeroAddress,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('crvToken !ZeroAddress')
+  })
+
+  it('Should not deploy with zero address pool', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        zeroAddress,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('pool !ZeroAddress')
+  })
+
+  it('Should not deploy with zero address swap pool', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        zeroAddress,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('swapPool !ZeroAddress')
+  })
+
+  it('Should not deploy with zero address gauge', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        zeroAddress,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('gauge !ZeroAddress')
+  })
+
+  it('Should not deploy with zero address gauge factory', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        zeroAddress,
+        1, // Child gauge
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('gaugeFactory !ZeroAddress')
+  })
+
+  it('Should not deploy with unknown gauge type', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        2, // Unknown type
+        2, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('gaugeType unknown')
+  })
+
+  it('Should not deploy with zero pool size', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        0, // Pool size
+        0  // BTC index
+      )
+    ).to.be.revertedWith('poolSize is zero')
+  })
+
+  it('Should not deploy with out of bounds token index', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1, // Child gauge
+        2, // Pool size
+        2  // Out of bounds index
+      )
+    ).to.be.revertedWith('tokenIndex out of bounds')
   })
 })
 
@@ -55,6 +251,7 @@ describe('Controller Curve Strat', () => {
   let wNativeFeed
   let btcFeed
   let crvFeed
+  let daiFeed
 
   beforeEach(async () => {
     [, bob]      = await ethers.getSigners()
@@ -67,7 +264,12 @@ describe('Controller Curve Strat', () => {
       WMATIC.address
     )
 
-    controller = await createController(BTC, archimedes, 'ControllerCurveStrat')
+    controller = await createController(BTC, archimedes, 'ControllerCurveStrat', {
+      ...addresses,
+      gaugeType:  1, // Child gauge
+      poolSize:   2,
+      tokenIndex: 0
+    })
 
     strat = await ethers.getContractAt(
       'ControllerCurveStrat',
@@ -77,19 +279,20 @@ describe('Controller Curve Strat', () => {
     wNativeFeed = await deploy('PriceFeedMock')
     btcFeed = await deploy('PriceFeedMock')
     crvFeed = await deploy('PriceFeedMock')
+    daiFeed = await deploy('PriceFeedMock')
 
     // 2021-10-06 wNative-eth prices
     await Promise.all([
       waitFor(wNativeFeed.setPrice(129755407)),
       waitFor(btcFeed.setPrice(5394968350000)),
       waitFor(crvFeed.setPrice(283589154)),
+      waitFor(daiFeed.setPrice(100000000)),
       waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
       waitFor(strat.setPriceFeed(BTC.address, btcFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
       waitFor(strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, piToken.address, BTC.address])),
       waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, piToken.address, BTC.address]))
     ])
-
 
     pool = CurvePool
   })
@@ -106,7 +309,7 @@ describe('Controller Curve Strat', () => {
     })
 
     it('Right identifier', async () => {
-      expect(await strat.identifier()).to.be.equal('Ren@Curve#1.0.0')
+      expect(await strat.identifier()).to.be.equal('BTC@Curve#1.0.0')
     })
   })
 
@@ -248,7 +451,6 @@ describe('Controller Curve Strat', () => {
       await waitFor(strat.connect(ctrollerSigner).deposit())
       await BTC.transfer(strat.address, 1e3)
 
-
       expect(await BTC.balanceOf(controller.address)).to.equal(0)
       expect(await BTC.balanceOf(strat.address)).to.equal(1e3)
       expect(await BTC.balanceOf(pool.address)).to.equal(1e6)
@@ -308,7 +510,7 @@ describe('Controller Curve Strat', () => {
     })
   })
 
-  describe('Harvest', () => {
+  describe('Harvest child gauge', () => {
     it('Should harvest', async () => {
       await waitFor(strat.harvest()) // Not revert
     })
@@ -563,6 +765,166 @@ describe('Controller Curve Strat', () => {
       expect(await BTC.balanceOf(controller.address)).to.be.within(
         9.9e8, 10e8
       ) // 1% slippage
+    })
+  })
+})
+
+describe('Controller Curve Strat 4 pool', () => {
+  let bob
+  let piToken
+  let archimedes
+  let controller
+  let strat
+  let rewardsBlock
+  let pool
+  let gauge
+  let wNativeFeed
+  let btcFeed
+  let crvFeed
+  let daiFeed
+
+  beforeEach(async () => {
+    [, bob]      = await ethers.getSigners()
+    piToken      = await createPiToken()
+    rewardsBlock = (await getBlock()) + 20
+    archimedes   = await deploy(
+      'Archimedes',
+      piToken.address,
+      rewardsBlock,
+      WMATIC.address
+    )
+
+    wNativeFeed = await deploy('PriceFeedMock')
+    crvFeed = await deploy('PriceFeedMock')
+    daiFeed = await deploy('PriceFeedMock')
+
+    pool  = await deployWithMainDeployer('CurvePoolMock', DAI.address, zeroAddress, 'daiCRV')
+    gauge = await deployWithMainDeployer('CurveRewardsGaugeMock', pool.address)
+
+    controller = await createController(DAI, archimedes, 'ControllerCurveStrat', {
+      ...addresses,
+      crvToken:   pool.address,
+      pool:       pool.address,
+      swapPool:   pool.address,
+      gauge:      gauge.address,
+      gaugeType:  0, // Staking gauge
+      poolSize:   4,
+      tokenIndex: 0
+    })
+
+    strat = await ethers.getContractAt(
+      'ControllerCurveStrat',
+      (await controller.strategy())
+    )
+
+    // 2021-10-06 wNative-eth prices
+    await Promise.all([
+      waitFor(wNativeFeed.setPrice(129755407)),
+      waitFor(crvFeed.setPrice(283589154)),
+      waitFor(daiFeed.setPrice(100000000)),
+      waitFor(strat.setPriceFeed(WMATIC.address, wNativeFeed.address)),
+      waitFor(strat.setPriceFeed(DAI.address, daiFeed.address)),
+      waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+      waitFor(strat.setRewardToWantRoute(WMATIC.address, [WMATIC.address, piToken.address, DAI.address])),
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, piToken.address, DAI.address]))
+    ])
+  })
+
+  afterEach(async ()=> {
+    await waitFor(wNativeFeed.setPrice(129755407))
+    await waitFor(daiFeed.setPrice(100000000))
+    await waitFor(crvFeed.setPrice(283589154))
+  })
+
+  describe('Harvest staking gauge', () => {
+    it('Should harvest', async () => {
+      await waitFor(strat.harvest()) // Not revert
+    })
+
+    it('should harvest and not swap', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(DAI.transfer(strat.address, '' + 1e18))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(WMATIC.deposit({ value: 100 }))
+      await waitFor(WMATIC.transfer(gauge.address, 100))
+
+      const balance = await DAI.balanceOf(owner.address)
+      const stratBalance = await DAI.balanceOf(strat.address)
+
+      expect(await WMATIC.balanceOf(strat.address)).to.be.equal(0)
+
+      await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(daiFeed.setPrice(20))
+
+      // 1 x 0.2 ratio => Expected 0 for WMATIC
+      await waitFor(strat.harvest())
+
+      // Without swap
+      expect(await DAI.balanceOf(owner.address)).to.be.equal(balance)
+      expect(await DAI.balanceOf(strat.address)).to.be.equal(stratBalance)
+      // At least claim rewards
+      // expect(await WMATIC.balanceOf(strat.address)).to.be.equal(100)
+    })
+
+    it('should harvest and receive fee', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(DAI.transfer(strat.address, '' + 1e18))
+      await waitFor(DAI.transfer(exchange.address, '' + 10e18))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(CRV.mint(CurveGaugeFactory.address, '' + 1e18))
+      await waitFor(gauge.setClaimable(CRV.address, strat.address, '' + 1e18))
+
+      const balance = await DAI.balanceOf(owner.address)
+
+      // await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(crvFeed.setPrice(100))
+      await waitFor(daiFeed.setPrice(20))
+
+      // 1 x 0.2 ratio
+      await waitFor(strat.harvest())
+
+      // RATIO => (100 * 1e18) * 99 / 100 == 49500000000000000000.0
+      // 1e18 * RATIO / 1e19 => 4950000000000000000.0 (swapped)
+      // 4950000000000000000.0 * 0.045 == 222750000000000000  (perf fee)
+      expect(await DAI.balanceOf(owner.address)).to.be.equal(
+        balance.add('' + 222750000000000000)
+      )
+    })
+
+    it('should harvest and receive fee for both rewards', async () => {
+      const ctrollerSigner = await impersonateContract(controller.address)
+
+      await waitFor(DAI.transfer(strat.address, ''+ 1e18))
+      await waitFor(DAI.transfer(exchange.address, '' + 10e18))
+      await waitFor(strat.connect(ctrollerSigner).deposit())
+
+      await waitFor(WMATIC.deposit({ value: '' + 1e18 }))
+      await waitFor(WMATIC.transfer(gauge.address, '' + 1e18))
+      await waitFor(CRV.mint(CurveGaugeFactory.address, '' + 1e18))
+      await waitFor(gauge.setClaimable(CRV.address, strat.address, '' + 1e18))
+      await waitFor(gauge.setClaimable(WMATIC.address, strat.address, '' + 1e18))
+
+      const balance = await DAI.balanceOf(owner.address)
+
+      await waitFor(wNativeFeed.setPrice(100))
+      await waitFor(crvFeed.setPrice(100))
+      await waitFor(daiFeed.setPrice(20))
+
+      // 1 x 0.2 ratio
+      await waitFor(strat.harvest())
+
+      // RATIO => (100 * 1e18 / ) * 99 / 100 == 49500000000000000000.0
+      // 1e18 * RATIO / 1e19 => 4950000000000000000.0 (swapped)
+      // 4950000000000000000.0 * 0.045 == 222750000000000000  (perf fee)
+      expect(await DAI.balanceOf(owner.address)).to.be.equal(
+        balance.add('' + (222750000000000000 * 2)) // same ratio crv & wNative
+      )
+      expect(await WMATIC.balanceOf(gauge.address)).to.be.equal(0)
+      expect(await CRV.balanceOf(gauge.address)).to.be.equal(0)
     })
   })
 })
