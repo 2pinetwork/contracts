@@ -11,10 +11,21 @@ contract CurvePoolMock is ERC20 {
 
     IERC20 public token;
     address private gauge;
+    address[] private tokens;
 
-    constructor(address _token, address _gauge, string memory _name) ERC20(_name, _name) {
-        token = IERC20(_token);
-        gauge = _gauge;
+    constructor(
+        address _token,
+        address _gauge,
+        address[] memory _coins,
+        string memory _name
+    ) ERC20(_name, _name) {
+        token  = IERC20(_token);
+        gauge  = _gauge;
+        tokens = _coins;
+    }
+
+    function underlying_coins(int128 i) external view returns (address) {
+        return tokens[uint(int256(i))];
     }
 
     function setGauge(address _gauge) public {

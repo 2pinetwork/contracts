@@ -13,6 +13,8 @@ interface ICurvePool {
     function calc_withdraw_one_coin(uint _token_amount, int128 i) external view returns (uint);
     function calc_token_amount(uint[2] calldata _amounts, bool is_deposit) external view returns (uint);
     function calc_token_amount(uint[4] calldata _amounts, bool is_deposit) external view returns (uint);
+    function underlying_coins(int128 i) external view returns (address);
+    function underlying_coins(uint256 i) external view returns (address);
 }
 
 interface ICurveGauge {
@@ -31,4 +33,5 @@ interface ICurveGauge {
 
 interface ICurveGaugeFactory {
     function mint(address _gauge) external;
+    function minted(address _arg0, address _arg1) external returns (uint256);
 }

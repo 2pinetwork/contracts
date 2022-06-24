@@ -32,9 +32,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('Controller !ZeroAddress')
   })
@@ -52,9 +50,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('Exchange !ZeroAddress')
   })
@@ -72,9 +68,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('Treasury !ZeroAddress')
   })
@@ -92,11 +86,27 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
-    ).to.be.revertedWith('crvToken !ZeroAddress')
+    ).to.be.revertedWith('Invalid crvToken')
+  })
+
+  it('Should not deploy with non ERC20 address CRV token', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        owner.address,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        addresses.gaugeFactory,
+        1 // Child gauge
+      )
+    ).to.be.revertedWith('Transaction reverted: function returned an unexpected amount of data')
   })
 
   it('Should not deploy with zero address pool', async () => {
@@ -112,9 +122,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('pool !ZeroAddress')
   })
@@ -132,9 +140,7 @@ describe('Controller Curve Strat wrong deployment', () => {
         zeroAddress,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('swapPool !ZeroAddress')
   })
@@ -152,11 +158,27 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         zeroAddress,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('gauge !ZeroAddress')
+  })
+
+  it('Should not deploy with invalid gauge address', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        owner.address,
+        addresses.gaugeFactory,
+        1 // Child gauge
+      )
+    ).to.be.revertedWith('Transaction reverted: function returned an unexpected amount of data')
   })
 
   it('Should not deploy with zero address gauge factory', async () => {
@@ -172,11 +194,27 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         zeroAddress,
-        1, // Child gauge
-        2, // Pool size
-        0  // BTC index
+        1 // Child gauge
       )
     ).to.be.revertedWith('gaugeFactory !ZeroAddress')
+  })
+
+  it('Should not deploy with invalid gauge factory address', async () => {
+    await expect(
+      deploy(
+        'ControllerCurveStrat',
+        BTC.address,
+        PiToken.address,
+        exchange.address,
+        owner.address,
+        addresses.crvToken,
+        addresses.pool,
+        addresses.swapPool,
+        addresses.gauge,
+        owner.address,
+        1 // Child gauge
+      )
+    ).to.be.revertedWith('Transaction reverted: function returned an unexpected amount of data')
   })
 
   it('Should not deploy with unknown gauge type', async () => {
@@ -192,14 +230,20 @@ describe('Controller Curve Strat wrong deployment', () => {
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        2, // Unknown type
-        2, // Pool size
-        0  // BTC index
+        2 // Unknown type
       )
     ).to.be.revertedWith('gaugeType unknown')
   })
 
   it('Should not deploy with zero pool size', async () => {
+    const pool = await deployWithMainDeployer(
+      'CurvePoolMock',
+      BTC.address,
+      zeroAddress,
+      [],
+      'btcCRV'
+    )
+
     await expect(
       deploy(
         'ControllerCurveStrat',
@@ -208,18 +252,24 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         owner.address,
         addresses.crvToken,
-        addresses.pool,
+        pool.address,
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        0, // Pool size
-        0  // BTC index
+        0 // Unknown type
       )
     ).to.be.revertedWith('poolSize is zero')
   })
 
-  it('Should not deploy with out of bounds token index', async () => {
+  it('Should not deploy when want does not match pool tokens', async () => {
+    const pool = await deployWithMainDeployer(
+      'CurvePoolMock',
+      BTC.address,
+      zeroAddress,
+      [DAI.address, CRV.address],
+      'btcCRV'
+    )
+
     await expect(
       deploy(
         'ControllerCurveStrat',
@@ -228,15 +278,13 @@ describe('Controller Curve Strat wrong deployment', () => {
         exchange.address,
         owner.address,
         addresses.crvToken,
-        addresses.pool,
+        pool.address,
         addresses.swapPool,
         addresses.gauge,
         addresses.gaugeFactory,
-        1, // Child gauge
-        2, // Pool size
-        2  // Out of bounds index
+        0 // Unknown type
       )
-    ).to.be.revertedWith('tokenIndex out of bounds')
+    ).to.be.revertedWith('Index out of bounds')
   })
 })
 
@@ -266,9 +314,7 @@ describe('Controller Curve Strat', () => {
 
     controller = await createController(BTC, archimedes, 'ControllerCurveStrat', {
       ...addresses,
-      gaugeType:  1, // Child gauge
-      poolSize:   2,
-      tokenIndex: 0
+      gaugeType: 1 // Child gauge
     })
 
     strat = await ethers.getContractAt(
@@ -277,9 +323,9 @@ describe('Controller Curve Strat', () => {
     )
 
     wNativeFeed = await deploy('PriceFeedMock')
-    btcFeed = await deploy('PriceFeedMock')
-    crvFeed = await deploy('PriceFeedMock')
-    daiFeed = await deploy('PriceFeedMock')
+    btcFeed     = await deploy('PriceFeedMock')
+    crvFeed     = await deploy('PriceFeedMock')
+    daiFeed     = await deploy('PriceFeedMock')
 
     // 2021-10-06 wNative-eth prices
     await Promise.all([
@@ -795,21 +841,25 @@ describe('Controller Curve Strat 4 pool', () => {
     )
 
     wNativeFeed = await deploy('PriceFeedMock')
-    crvFeed = await deploy('PriceFeedMock')
-    daiFeed = await deploy('PriceFeedMock')
+    crvFeed     = await deploy('PriceFeedMock')
+    daiFeed     = await deploy('PriceFeedMock')
 
-    pool  = await deployWithMainDeployer('CurvePoolMock', DAI.address, zeroAddress, 'daiCRV')
-    gauge = await deployWithMainDeployer('CurveRewardsGaugeMock', pool.address)
+    pool = await deployWithMainDeployer(
+      'CurvePoolMock',
+      DAI.address,
+      zeroAddress,
+      [DAI.address, BTC.address, WMATIC.address, CRV.address],
+      'daiCRV'
+    )
 
+    gauge      = await deployWithMainDeployer('CurveRewardsGaugeMock', pool.address)
     controller = await createController(DAI, archimedes, 'ControllerCurveStrat', {
       ...addresses,
       crvToken:   pool.address,
       pool:       pool.address,
       swapPool:   pool.address,
       gauge:      gauge.address,
-      gaugeType:  0, // Staking gauge
-      poolSize:   4,
-      tokenIndex: 0
+      gaugeType:  0 // Staking gauge
     })
 
     strat = await ethers.getContractAt(

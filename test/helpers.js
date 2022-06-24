@@ -153,9 +153,7 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           extraArgs.swapPool,
           extraArgs.gauge,
           extraArgs.gaugeFactory,
-          extraArgs.gaugeType,
-          extraArgs.poolSize,
-          extraArgs.tokenIndex
+          extraArgs.gaugeType
         )
         break
       case 'ControllerCurveStableStrat':
@@ -331,7 +329,13 @@ const setupNeededTokens = async () => {
   expect(global.CRV.address).to.be.equal('0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4')
 
   console.log('Deploying Curve Pool & BTC-CRV')
-  global.CurvePool = await deployWithMainDeployer('CurvePoolMock', BTC.address, '0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2', 'btcCRV')
+  global.CurvePool = await deployWithMainDeployer(
+    'CurvePoolMock',
+    BTC.address,
+    '0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2',
+    [BTC.address, CRV.address],
+    'btcCRV'
+  )
   expect(global.CurvePool.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
 
   console.log('Deploying Curve RewardsGauge')

@@ -9,40 +9,42 @@ contract ControllerCurveStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    address public crvToken;
-    address public pool;
-    address public swapPool;
-    address public gauge;
-    address public gaugeFactory;
+    IERC20Metadata public immutable crvToken;
+    address public immutable pool;
+    address public immutable swapPool;
+    ICurveGauge public immutable gauge;
+    ICurveGaugeFactory public immutable gaugeFactory;
 
-    uint private immutable poolSize;
-    int128 private immutable tokenIndex; // want token index in the pool
+    int128 private immutable poolSize;
+    int128 private immutable tokenIndex; // want token index on the pool
 
-    // gaugeType { STAKING = 0, CHILD_STAKING = 1 }
-    uint private immutable gaugeType; // 0 == staking, 1 == child
+    uint8 private immutable gaugeType;
+    uint8 private constant GAUGE_TYPE_STAKING = 0;
+    uint8 private constant GAUGE_TYPE_CHILD_STAKING = 1;
 
     constructor(
         IERC20Metadata _want,
         address _controller,
         address _exchange,
         address _treasury,
-        address _crvToken,
+        IERC20Metadata _crvToken,
         address _pool,
         address _swapPool,
-        address _gauge,
-        address _gaugeFactory,
-        uint _gaugeType,
-        uint _poolSize,
-        int128 _tokenIndex
+        ICurveGauge _gauge,
+        ICurveGaugeFactory _gaugeFactory,
+        uint8 _gaugeType
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
-        require(_crvToken != address(0), "crvToken !ZeroAddress");
         require(_pool != address(0), "pool !ZeroAddress");
         require(_swapPool != address(0), "swapPool !ZeroAddress");
-        require(_gauge != address(0), "gauge !ZeroAddress");
-        require(_gaugeFactory != address(0), "gaugeFactory !ZeroAddress");
+        require(address(_gauge) != address(0), "gauge !ZeroAddress");
+        require(address(_gaugeFactory) != address(0), "gaugeFactory !ZeroAddress");
         require(_gaugeType < 2, "gaugeType unknown");
-        require(_poolSize > 0, "poolSize is zero");
-        require(uint(int256(_tokenIndex)) < _poolSize, "tokenIndex out of bounds");
+
+        _checkIERC20(_crvToken, "Invalid crvToken");
+        // Check gauge _behaves_ as a gauge
+        _gauge.claimable_tokens(address(this));
+        // Check gauge factory _behaves_ as a gauge factory
+        _gaugeFactory.minted(address(this), address(this));
 
         crvToken = _crvToken;
         pool = _pool;
@@ -50,8 +52,17 @@ contract ControllerCurveStrat is ControllerStratAbs {
         gauge = _gauge;
         gaugeFactory = _gaugeFactory;
         gaugeType = _gaugeType;
+
+        (int128 _poolSize, bool _int128) = _guessPoolSize();
+
+        require(_poolSize > 0, "poolSize is zero");
+
+        int128 _index = _guessTokenIndex(_poolSize, _int128);
+
+        require(_index < _poolSize, "Index out of bounds");
+
         poolSize = _poolSize;
-        tokenIndex = _tokenIndex;
+        tokenIndex = _index;
     }
 
     function identifier() external view returns (string memory) {
@@ -59,11 +70,11 @@ contract ControllerCurveStrat is ControllerStratAbs {
     }
 
     function wantCRVBalance() public view returns (uint) {
-        return IERC20(crvToken).balanceOf(address(this));
+        return crvToken.balanceOf(address(this));
     }
 
     function balanceOfPool() public view override returns (uint) {
-        return ICurveGauge(gauge).balanceOf(address(this));
+        return gauge.balanceOf(address(this));
     }
 
     function balanceOfPoolInWant() public view override returns (uint) {
@@ -80,8 +91,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
         uint _wantCRVBalance = wantCRVBalance();
 
         if (_wantCRVBalance > 0) {
-            IERC20(crvToken).safeApprove(gauge, _wantCRVBalance);
-            ICurveGauge(gauge).deposit(_wantCRVBalance);
+            crvToken.safeApprove(address(gauge), _wantCRVBalance);
+            gauge.deposit(_wantCRVBalance);
         }
     }
 
@@ -108,11 +119,9 @@ contract ControllerCurveStrat is ControllerStratAbs {
     function _withdraw(uint _amount) internal override returns (uint) {
         uint _balance = wantBalance();
 
-        if (_balance < _amount) {
-            _withdrawFromPool(
-                _wantToWantCrvDoubleCheck(_amount - _balance, false)
-            );
-        }
+        _withdrawFromPool(
+            _wantToWantCrvDoubleCheck(_amount - _balance, false)
+        );
 
         uint _withdrawn = wantBalance() - _balance;
 
@@ -129,7 +138,7 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
     function _withdrawFromPool(uint _wantCrvAmount) internal {
         // Remove staked from gauge
-        ICurveGauge(gauge).withdraw(_wantCrvAmount);
+        gauge.withdraw(_wantCrvAmount);
 
         // remove_liquidity
         uint _balance = wantCRVBalance();
@@ -137,39 +146,38 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
         require(_expected > 0, "remove_liquidity expected = 0");
 
-        if (IERC20(crvToken).allowance(address(this), pool) == 0) {
-            IERC20(crvToken).safeApprove(pool, _balance);
+        if (crvToken.allowance(address(this), pool) == 0) {
+            crvToken.safeApprove(pool, _balance);
         }
 
         ICurvePool(pool).remove_liquidity_one_coin(_balance, tokenIndex, _expected, true);
     }
 
     function _claimRewards() internal override {
-        if (ICurveGauge(gauge).claimable_tokens(address(this)) > 0) {
-            ICurveGaugeFactory(gaugeFactory).mint(gauge);
+        // CRV rewards
+        if (gauge.claimable_tokens(address(this)) > 0) {
+            gaugeFactory.mint(address(gauge));
         }
 
         // no-CRV rewards
         bool _claim = false;
 
-        if (gaugeType == 0) {
-            if (ICurveGauge(gauge).claimable_reward(address(this)) > 0) {
+        if (gaugeType == GAUGE_TYPE_STAKING) {
+            if (gauge.claimable_reward(address(this)) > 0) {
                 _claim = true;
             }
-        }
+        } else if (gaugeType == GAUGE_TYPE_CHILD_STAKING) {
+            for (uint i = 0; i < gauge.reward_count(); i++) {
+                address _reward = gauge.reward_tokens(i);
 
-        if (gaugeType == 1) {
-            for (uint i = 0; i < ICurveGauge(gauge).reward_count(); i++) {
-                address _reward = ICurveGauge(gauge).reward_tokens(i);
-
-                if (ICurveGauge(gauge).claimable_reward(address(this), _reward) > 0) {
+                if (gauge.claimable_reward(address(this), _reward) > 0) {
                     _claim = true;
                     break;
                 }
             }
         }
 
-        if (_claim) { ICurveGauge(gauge).claim_rewards(); }
+        if (_claim) { gauge.claim_rewards(); }
     }
 
     function _minWantToWantCrv(uint _amount) internal view returns (uint) {
@@ -228,6 +236,41 @@ contract ControllerCurveStrat is ControllerStratAbs {
             return ICurvePool(pool).calc_withdraw_one_coin(_amount, tokenIndex);
         } else {
             return 0;
+        }
+    }
+
+    // Constructor helper
+
+    function _guessPoolSize() internal view returns (int128 _poolSize, bool _int128) {
+        ICurvePool _pool = ICurvePool(pool);
+        bool _loop = true;
+
+        _int128 = true;
+
+        while (_loop) {
+            try _pool.underlying_coins(_poolSize) returns (address) {
+                _poolSize += 1;
+            } catch {
+                try _pool.underlying_coins(uint256(int256(_poolSize))) returns (address) {
+                    _int128 = false;
+                    _poolSize += 1;
+                } catch {
+                    _loop = false;
+                }
+            }
+        }
+    }
+
+    function _guessTokenIndex(int128 _poolSize, bool _int128) internal view returns (int128 _index) {
+        address _want = address(want);
+        ICurvePool _pool = ICurvePool(pool);
+
+        for (_index; _index < _poolSize; _index++) {
+            if (_int128) {
+                if (_want == _pool.underlying_coins(_index)) { break; }
+            } else {
+                if (_want == _pool.underlying_coins(uint256(int256(_index)))) { break; }
+            }
         }
     }
 }

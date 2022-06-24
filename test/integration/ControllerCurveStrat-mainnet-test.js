@@ -85,9 +85,7 @@ describe('Controller Curve Strat', () => {
     REWARD_TOKEN = await ethers.getContractAt('IERC20Metadata', CRV.address)
     controller   = await createController(USDC, archimedes, 'ControllerCurveStrat', {
       ...addresses,
-      gaugeType:  0,
-      poolSize:   4,
-      tokenIndex: 1
+      gaugeType: 0
     })
 
     strat = await ethers.getContractAt('ControllerCurveStrat', (await controller.strategy()))
@@ -228,9 +226,7 @@ describe('Controller Curve Strat', () => {
       addresses.swapPool,
       addresses.gauge,
       addresses.gaugeFactory,
-      0, // Staking gauge
-      4, // Pool size
-      1  // USDC index
+      0 // Staking gauge
     )
 
     await stratCallback(otherStrat)
@@ -339,9 +335,7 @@ describe('Controller Curve Strat with DAI', () => {
     REWARD_TOKEN = await ethers.getContractAt('IERC20Metadata', CRV.address)
     controller   = await createController(DAI, archimedes, 'ControllerCurveStrat', {
       ...addresses,
-      gaugeType:  0,
-      poolSize:   4,
-      tokenIndex: 0
+      gaugeType: 0
     })
 
     strat = await ethers.getContractAt('ControllerCurveStrat', (await controller.strategy()))
@@ -487,9 +481,7 @@ describe('Controller Curve Strat with DAI', () => {
       '0xA5407eAE9Ba41422680e2e00537571bcC53efBfD', // DAI/USDC/USDT/sUSD swap pool
       '0xA90996896660DEcC6E997655E065b23788857849', // DAI/USDC/USDT/sUSD gauge
       '0xd061D61a4d941c39E5453435B6345Dc261C2fcE0', // DAI/USDC/USDT/sUSD gauge factory
-      0, // Staking gauge
-      4, // Pool size
-      0 // DAI index
+      0 // Staking gauge
     )
 
     await stratCallback(otherStrat)

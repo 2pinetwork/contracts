@@ -46,9 +46,7 @@ describe('Controller Curve Strat', () => {
 
     controller = await createController(BTC, archimedes, 'ControllerCurveStrat', {
       ...addresses,
-      gaugeType:  1,
-      poolSize:   2,
-      tokenIndex: 0
+      gaugeType: 1
     })
 
     await waitFor(archimedes.addNewPool(BTC.address, controller.address, 10, false));

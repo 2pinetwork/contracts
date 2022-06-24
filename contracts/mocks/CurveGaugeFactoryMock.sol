@@ -25,4 +25,8 @@ contract CurveGaugeFactoryMock {
             ICurveMock(_gauge).claimed(msg.sender);
         }
     }
+
+    function minted(address, address) public pure returns (uint256) {
+        return 0;
+    }
 }
