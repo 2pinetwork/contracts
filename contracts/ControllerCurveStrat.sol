@@ -146,7 +146,7 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
         require(_expected > 0, "remove_liquidity expected = 0");
 
-        if (crvToken.allowance(address(this), pool) == 0) {
+        if (address(pool) != address(swapPool)) {
             crvToken.safeApprove(pool, _balance);
         }
 
