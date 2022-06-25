@@ -10,6 +10,14 @@ const {
 
 const { resetHardhat, setWbtcBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
+const addresses = {
+  crvToken:     '0xf8a57c1d3b9629b77b6726a042ca48990A84Fb49',
+  pool:         '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67',
+  swapPool:     '0xC2d95EEF97Ec6C17551d45e77B590dc1F9117C67',
+  gauge:        '0x8D9649e50A0d1da8E939f800fB926cdE8f18B47D',
+  gaugeFactory: '0xabC000d88f23Bb45525E447528DBF656A9D55bf5'
+}
+
 describe('Controller Curve Strat', () => {
   let bob
   let piToken
@@ -36,7 +44,10 @@ describe('Controller Curve Strat', () => {
       WMATIC.address
     )
 
-    controller = await createController(BTC, archimedes, 'ControllerCurveStrat')
+    controller = await createController(BTC, archimedes, 'ControllerCurveStrat', {
+      ...addresses,
+      gaugeType: 1
+    })
 
     await waitFor(archimedes.addNewPool(BTC.address, controller.address, 10, false));
 
@@ -87,7 +98,6 @@ describe('Controller Curve Strat', () => {
       if (balance < (await strat.balanceOfPool())) { break }
       console.log('Mined 6 blocks...')
     }
-    console.log(`Claim en el bloque: ${await getBlock()} `)
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
     // withdraw 95 BTC in shares

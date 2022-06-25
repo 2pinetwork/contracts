@@ -14,6 +14,17 @@ const isIntegration = process.env.HARDHAT_INTEGRATION_TESTS
 const hardhatNetwork = () => {
   if (isIntegration) {
     switch (+process.env.HARDHAT_INTEGRATION_CHAIN) {
+        case 1:
+          return {
+            network_id:    1,
+            chainId:       1,
+            gasMultiplier: 5,
+            forking:       {
+              url:           `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_MAINNET_API_KEY}`,
+              gasMultiplier: 5,
+              blockNumber:   14980909
+            }
+          }
         case 56:
           return {
             network_id:    56,
@@ -31,7 +42,7 @@ const hardhatNetwork = () => {
             chainId:       80001,
             gasMultiplier: 5,
             forking:       {
-              url:        `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
+              url:           `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_MUMBAI_KEY}`,
               gasMultiplier: 5,
               blockNumber:   20761905
             }

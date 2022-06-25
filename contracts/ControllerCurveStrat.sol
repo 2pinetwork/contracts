@@ -9,58 +9,123 @@ contract ControllerCurveStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
-    // Test
-    address constant public WNATIVE = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f);
-    address constant public CRV = address(0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E);
-    address constant public ETH = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // same than wNative
-    address constant public BTCCRV = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4); // same than CurvePool
-    address constant public CURVE_POOL = address(0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4);
-    address constant public GAUGE = address(0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8);
-    address constant public GAUGE_FACTORY = address(0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2);
+    IERC20Metadata public immutable crvToken;
+    address public immutable pool;
+    address public immutable swapPool;
+    ICurveGauge public immutable gauge;
+    ICurveGaugeFactory public immutable gaugeFactory;
 
-    constructor(address _controller, address _exchange, address _treasury)
-        ControllerStratAbs(
-            IERC20Metadata(0x6d925938Edb8A16B3035A4cF34FAA090f490202a), // BTC
-            _controller,
-            _exchange,
-            _treasury
-        ) {}
+    int128 private immutable poolSize;
+    int128 private immutable tokenIndex; // want token index on the pool
 
-    function identifier() external pure returns (string memory) {
-        return string("Ren@Curve#1.0.0");
+    uint8 private immutable gaugeType;
+    uint8 private constant GAUGE_TYPE_STAKING = 0;
+    uint8 private constant GAUGE_TYPE_CHILD_STAKING = 1;
+
+    constructor(
+        IERC20Metadata _want,
+        address _controller,
+        address _exchange,
+        address _treasury,
+        IERC20Metadata _crvToken,
+        address _pool,
+        address _swapPool,
+        ICurveGauge _gauge,
+        ICurveGaugeFactory _gaugeFactory,
+        uint8 _gaugeType
+    ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
+        require(_pool != address(0), "pool !ZeroAddress");
+        require(_swapPool != address(0), "swapPool !ZeroAddress");
+        require(address(_gauge) != address(0), "gauge !ZeroAddress");
+        require(address(_gaugeFactory) != address(0), "gaugeFactory !ZeroAddress");
+        require(_gaugeType < 2, "gaugeType unknown");
+
+        _checkIERC20(_crvToken, "Invalid crvToken");
+        // Check gauge _behaves_ as a gauge
+        _gauge.claimable_tokens(address(this));
+        // Check gauge factory _behaves_ as a gauge factory
+        _gaugeFactory.minted(address(this), address(this));
+
+        crvToken = _crvToken;
+        pool = _pool;
+        swapPool = _swapPool;
+        gauge = _gauge;
+        gaugeFactory = _gaugeFactory;
+        gaugeType = _gaugeType;
+
+        (int128 _poolSize, bool _int128) = _guessPoolSize();
+
+        require(_poolSize > 0, "poolSize is zero");
+
+        int128 _index = _guessTokenIndex(_poolSize, _int128);
+
+        require(_index < _poolSize, "Index out of bounds");
+
+        poolSize = _poolSize;
+        tokenIndex = _index;
+    }
+
+    function identifier() external view returns (string memory) {
+        return string(abi.encodePacked(want.symbol(), "@Curve#1.0.0"));
+    }
+
+    function wantCRVBalance() public view returns (uint) {
+        return crvToken.balanceOf(address(this));
+    }
+
+    function balanceOfPool() public view override returns (uint) {
+        return gauge.balanceOf(address(this));
+    }
+
+    function balanceOfPoolInWant() public view override returns (uint) {
+        return _calcWithdrawOneCoin(balanceOfPool());
     }
 
     function _deposit() internal override {
-        uint wantBal = wantBalance();
+        uint _wantBal = wantBalance();
 
-        if (wantBal > 0) {
-            uint[2] memory amounts = [wantBal, 0];
-            uint btcCrvAmount = _btcToBtcCrvDoubleCheck(wantBal, true);
-
-            want.safeApprove(CURVE_POOL, wantBal);
-            ICurvePool(CURVE_POOL).add_liquidity(amounts, btcCrvAmount, true);
+        if (_wantBal > 0) {
+            _addLiquidity(_wantBal);
         }
 
-        uint _btcCRVBalance = btcCRVBalance();
+        uint _wantCRVBalance = wantCRVBalance();
 
-        if (_btcCRVBalance > 0) {
-            IERC20(BTCCRV).safeApprove(GAUGE, _btcCRVBalance);
-            ICurveGauge(GAUGE).deposit(_btcCRVBalance);
+        if (_wantCRVBalance > 0) {
+            crvToken.safeApprove(address(gauge), _wantCRVBalance);
+            gauge.deposit(_wantCRVBalance);
+        }
+    }
+
+    function _addLiquidity(uint _wantBal) internal {
+        uint _expected = _wantToWantCrvDoubleCheck(_wantBal, true);
+
+        if (poolSize == 2) {
+            uint[2] memory _amounts;
+
+            _amounts[uint(uint128(tokenIndex))] = _wantBal;
+
+            want.safeApprove(pool, _wantBal);
+            ICurvePool(pool).add_liquidity(_amounts, _expected, true);
+        } else if (poolSize == 4) {
+            uint[4] memory _amounts;
+
+            _amounts[uint(uint128(tokenIndex))] = _wantBal;
+
+            want.safeApprove(pool, _wantBal);
+            ICurvePool(pool).add_liquidity(_amounts, _expected);
         }
     }
 
     function _withdraw(uint _amount) internal override returns (uint) {
         uint _balance = wantBalance();
 
-        if (_balance < _amount) {
-            _withdrawFromPool(
-                _btcToBtcCrvDoubleCheck(_amount - _balance, false)
-            );
+        _withdrawFromPool(
+            _wantToWantCrvDoubleCheck(_amount - _balance, false)
+        );
 
-        }
-        uint withdrawn = wantBalance() - _balance;
+        uint _withdrawn = wantBalance() - _balance;
 
-        return (withdrawn > _amount) ? _amount : withdrawn;
+        return (_withdrawn > _amount) ? _amount : _withdrawn;
     }
 
     function _withdrawAll() internal override returns (uint) {
@@ -71,103 +136,141 @@ contract ControllerCurveStrat is ControllerStratAbs {
         return wantBalance() - _balance;
     }
 
-    function _withdrawFromPool(uint btcCrvAmount) internal {
+    function _withdrawFromPool(uint _wantCrvAmount) internal {
         // Remove staked from gauge
-        ICurveGauge(GAUGE).withdraw(btcCrvAmount);
+        gauge.withdraw(_wantCrvAmount);
 
         // remove_liquidity
-        uint _balance = btcCRVBalance();
-        uint expected = _btcCrvToBtcDoubleCheck(_balance);
+        uint _balance = wantCRVBalance();
+        uint _expected = _wantCrvToWantDoubleCheck(_balance);
 
-        require(expected > 0, "remove_liquidity expected = 0");
+        require(_expected > 0, "remove_liquidity expected = 0");
 
-        ICurvePool(CURVE_POOL).remove_liquidity_one_coin(_balance, 0,  expected, true);
+        if (address(pool) != address(swapPool)) {
+            crvToken.safeApprove(pool, _balance);
+        }
+
+        ICurvePool(pool).remove_liquidity_one_coin(_balance, tokenIndex, _expected, true);
     }
 
-    /**
-     * @dev Curve gauge claim_rewards claim WMatic & CRV tokens
-     */
     function _claimRewards() internal override {
-        // CRV tokens
-        if (ICurveGauge(GAUGE).claimable_tokens(address(this)) > 0) {
-            ICurveGaugeFactory(GAUGE_FACTORY).mint(GAUGE);
+        // CRV rewards
+        if (gauge.claimable_tokens(address(this)) > 0) {
+            gaugeFactory.mint(address(gauge));
         }
 
         // no-CRV rewards
         bool _claim = false;
 
-        for (uint i = 0; i < ICurveGauge(GAUGE).reward_count(); i++) {
-            address _reward = ICurveGauge(GAUGE).reward_tokens(i);
-
-            if (ICurveGauge(GAUGE).claimable_reward(address(this), _reward) > 0) {
+        if (gaugeType == GAUGE_TYPE_STAKING) {
+            if (gauge.claimable_reward(address(this)) > 0) {
                 _claim = true;
-                break;
+            }
+        } else if (gaugeType == GAUGE_TYPE_CHILD_STAKING) {
+            for (uint i = 0; i < gauge.reward_count(); i++) {
+                address _reward = gauge.reward_tokens(i);
+
+                if (gauge.claimable_reward(address(this), _reward) > 0) {
+                    _claim = true;
+                    break;
+                }
             }
         }
 
-        if (_claim) { ICurveGauge(GAUGE).claim_rewards(); }
+        if (_claim) { gauge.claim_rewards(); }
     }
 
-    function _minBtcToBtcCrv(uint _amount) internal view returns (uint) {
+    function _minWantToWantCrv(uint _amount) internal view returns (uint) {
         // Based on virtual_price (poolMinVirtualPrice) and poolSlippageRatio
-        // the expected amount is represented with 18 decimals as crvBtc token
-        // so we have to add 10 decimals to the btc balance.
-        // E.g. 1e8 (1BTC) * 1e10 * 99.4 / 100.0 => 0.994e18 BTCCRV tokens
+        // the expected amount is represented with 18 decimals as crvWant token
+        // so we have to add 12 decimals (on USDC and USDT for example) to the want balance.
+        // E.g. 1e6 (1WANT) * 1e12 * 99.4 / 100.0 => 0.994e18 crvToken tokens
         return _amount * WANT_MISSING_PRECISION * (RATIO_PRECISION - poolSlippageRatio - poolMinVirtualPrice) / RATIO_PRECISION;
     }
 
-    function _btcToBtcCrvDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint btcCrvAmount) {
-        uint[2] memory amounts = [_amount, 0];
-        // calc_token_amount doesn't consider fee
-        btcCrvAmount = ICurvePool(CURVE_POOL).calc_token_amount(amounts, _isDeposit);
+    function _wantToWantCrvDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint _wantCrvAmount) {
+        if (poolSize == 2) {
+            uint[2] memory _amounts;
+
+            _amounts[uint(uint128(tokenIndex))] = _amount;
+            // calc_token_amount doesn't consider fee
+            _wantCrvAmount = ICurvePool(swapPool).calc_token_amount(_amounts, _isDeposit);
+        } else if (poolSize == 4) {
+            uint[4] memory _amounts;
+
+            _amounts[uint(uint128(tokenIndex))] = _amount;
+            // calc_token_amount doesn't consider fee
+            _wantCrvAmount = ICurvePool(swapPool).calc_token_amount(_amounts, _isDeposit);
+        }
+
         // Remove max fee
-        btcCrvAmount = btcCrvAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
+        _wantCrvAmount = _wantCrvAmount * (RATIO_PRECISION - poolSlippageRatio) / RATIO_PRECISION;
 
         // In case the pool is unbalanced (attack), make a double check for
         // the expected amount with minExpected set ratios.
-        uint btcToBtcCrv = _minBtcToBtcCrv(_amount);
+        uint _wantToWantCrv = _minWantToWantCrv(_amount);
 
-        if (btcToBtcCrv > btcCrvAmount) { btcCrvAmount = btcToBtcCrv; }
+        if (_wantToWantCrv > _wantCrvAmount) { _wantCrvAmount = _wantToWantCrv; }
     }
 
     // Calculate at least xx% of the expected. The function doesn't
     // consider the fee.
-    function _btcCrvToBtcDoubleCheck(uint _balance) internal view returns (uint expected) {
-        expected = (
-            _calc_withdraw_one_coin(_balance) * (RATIO_PRECISION - poolSlippageRatio)
+    function _wantCrvToWantDoubleCheck(uint _balance) internal view returns (uint _expected) {
+        _expected = (
+            _calcWithdrawOneCoin(_balance) * (RATIO_PRECISION - poolSlippageRatio)
         ) / RATIO_PRECISION;
 
         // Double check for expected value
-        // In this case we sum the poolMinVirtualPrice and divide by 1e10 because we want to swap BTCCRV => BTC
-        uint minExpected = _balance *
+        // In this case we sum the poolMinVirtualPrice and divide by
+        // (for example) 1e12 because we want to swap crvToken => WANT
+        uint _minExpected = _balance *
             (RATIO_PRECISION + poolMinVirtualPrice - poolSlippageRatio) /
             RATIO_PRECISION /
             WANT_MISSING_PRECISION;
 
-        if (minExpected > expected) { expected = minExpected; }
+        if (_minExpected > _expected) { _expected = _minExpected; }
     }
 
-    function _calc_withdraw_one_coin(uint _amount) internal view returns (uint) {
+    function _calcWithdrawOneCoin(uint _amount) internal view returns (uint) {
         if (_amount > 0) {
-            return ICurvePool(CURVE_POOL).calc_withdraw_one_coin(_amount, 0);
+            return ICurvePool(pool).calc_withdraw_one_coin(_amount, tokenIndex);
         } else {
             return 0;
         }
     }
 
-    function wNativeBalance() public view returns (uint) {
-        return IERC20(WNATIVE).balanceOf(address(this));
+    // Constructor helper
+
+    function _guessPoolSize() internal view returns (int128 _poolSize, bool _int128) {
+        ICurvePool _pool = ICurvePool(pool);
+        bool _loop = true;
+
+        _int128 = true;
+
+        while (_loop) {
+            try _pool.underlying_coins(_poolSize) returns (address) {
+                _poolSize += 1;
+            } catch {
+                try _pool.underlying_coins(uint256(int256(_poolSize))) returns (address) {
+                    _int128 = false;
+                    _poolSize += 1;
+                } catch {
+                    _loop = false;
+                }
+            }
+        }
     }
-    function crvBalance() public view returns (uint) {
-        return IERC20(CRV).balanceOf(address(this));
-    }
-    function btcCRVBalance() public view returns (uint) {
-        return IERC20(BTCCRV).balanceOf(address(this));
-    }
-    function balanceOfPool() public view override returns (uint) {
-        return ICurveGauge(GAUGE).balanceOf(address(this));
-    }
-    function balanceOfPoolInWant() public view override returns (uint) {
-        return _calc_withdraw_one_coin(balanceOfPool());
+
+    function _guessTokenIndex(int128 _poolSize, bool _int128) internal view returns (int128 _index) {
+        address _want = address(want);
+        ICurvePool _pool = ICurvePool(pool);
+
+        for (_index; _index < _poolSize; _index++) {
+            if (_int128) {
+                if (_want == _pool.underlying_coins(_index)) { break; }
+            } else {
+                if (_want == _pool.underlying_coins(uint256(int256(_index)))) { break; }
+            }
+        }
     }
 }

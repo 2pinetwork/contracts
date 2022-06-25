@@ -144,6 +144,22 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
       case 'ControllerCurveStrat':
         strategy = await deploy(
           'ControllerCurveStrat',
+          token.address,
+          controller.address,
+          global.exchange.address,
+          owner.address,
+          extraArgs.crvToken,
+          extraArgs.pool,
+          extraArgs.swapPool,
+          extraArgs.gauge,
+          extraArgs.gaugeFactory,
+          extraArgs.gaugeType
+        )
+        break
+      case 'ControllerCurveStableStrat':
+        strategy = await deploy(
+          'ControllerCurveStableStrat',
+          token.address,
           controller.address,
           global.exchange.address,
           owner.address
@@ -304,21 +320,31 @@ const setupNeededTokens = async () => {
   global.BTC = await deployWithMainDeployer('TokenMock', 'BTC', 'BTC')
   expect(global.BTC.address).to.be.equal('0x6d925938Edb8A16B3035A4cF34FAA090f490202a')
 
+  console.log('Deploying DAI')
+  global.DAI = await deployWithMainDeployer('TokenMock', 'DAI', 'DAI')
+  expect(global.DAI.address).to.be.equal('0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E')
+
   console.log('Deploying CRV')
   global.CRV = await deployWithMainDeployer('TokenMock', 'CRV', 'CRV')
-  expect(global.CRV.address).to.be.equal('0xED8CAB8a931A4C0489ad3E3FB5BdEA84f74fD23E')
+  expect(global.CRV.address).to.be.equal('0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4')
 
   console.log('Deploying Curve Pool & BTC-CRV')
-  global.CurvePool = await deployWithMainDeployer('CurvePoolMock')
-  expect(global.CurvePool.address).to.be.equal('0x40bde52e6B80Ae11F34C58c14E1E7fE1f9c834C4')
+  global.CurvePool = await deployWithMainDeployer(
+    'CurvePoolMock',
+    BTC.address,
+    '0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2',
+    [BTC.address, CRV.address],
+    'btcCRV'
+  )
+  expect(global.CurvePool.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
 
   console.log('Deploying Curve RewardsGauge')
-  global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock')
-  expect(global.CurveRewardsGauge.address).to.be.equal('0xE9061F92bA9A3D9ef3f4eb8456ac9E552B3Ff5C8')
+  global.CurveRewardsGauge = await deployWithMainDeployer('CurveRewardsGaugeMock', CurvePool.address)
+  expect(global.CurveRewardsGauge.address).to.be.equal('0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2')
 
   console.log('Deploying Curve GaugeFactory')
   global.CurveGaugeFactory = await deployWithMainDeployer('CurveGaugeFactoryMock')
-  expect(global.CurveGaugeFactory.address).to.be.equal('0xA7c8B0D74b68EF10511F27e97c379FB1651e1eD2')
+  expect(global.CurveGaugeFactory.address).to.be.equal('0xC92B72ecf468D2642992b195bea99F9B9BB4A838')
 
   // Set BTC 8 decimals
   await waitFor(BTC.setDecimals(8));
@@ -360,6 +386,7 @@ module.exports = {
   createController,
   createPiToken,
   deploy,
+  deployWithMainDeployer,
   expectedOnlyAdmin,
   getBlock,
   impersonateContract,

@@ -48,15 +48,15 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     uint public lastExternalBoost;
 
     // Migrate to a library or something
-    function _checkIERC20(IERC20Metadata token) internal view {
-        require(address(token) != address(0), "Want !ZeroAddress");
+    function _checkIERC20(IERC20Metadata token, string memory errorMsg) internal view {
+        require(address(token) != address(0), errorMsg);
         token.symbol(); // Check that want is at least an ERC20
         require(token.balanceOf(address(this)) == 0, "Invalid ERC20"); // Check that want is at least an ERC20
         require(token.allowance(msg.sender, address(this)) == 0, "Invalid ERC20"); // Check that want is at least an ERC20
     }
 
     constructor(IERC20Metadata _want, address _controller, address _exchange, address _treasury) {
-        _checkIERC20(_want);
+        _checkIERC20(_want, "Want !ZeroAddress");
         require(_controller != address(0), "Controller !ZeroAddress");
         require(_exchange != address(0), "Exchange !ZeroAddress");
         require(_treasury != address(0), "Treasury !ZeroAddress");

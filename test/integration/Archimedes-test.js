@@ -400,7 +400,7 @@ describe('Archimedes', () => {
       ).to.be.revertedWith('Only Native token pool')
     })
 
-    it.only('Should get wnative shares and then withdraw', async () => {
+    it('Should get wnative shares and then withdraw', async () => {
       // initial accounts balance  less a few gas fees
       const currentBalance = async () => {
         return await ethers.provider.getBalance(bob.address)
