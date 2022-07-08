@@ -32,7 +32,10 @@ contract ControllerMStableStrat is ControllerStratAbs {
 
         uint harvested = wantBalance() - _before;
 
-        // Charge performance fee for earned want + rewards
+        // Charge fees for the swapped rewards
+        _chargeFees(harvested);
+
+        // Charge performance fee for the deposits yield
         _beforeMovement();
 
         // re-deposit
@@ -147,5 +150,36 @@ contract ControllerMStableStrat is ControllerStratAbs {
         return _musdAmountToImusd(
             _wantToMusdDoubleCheck(_amount)
         );
+    }
+
+    // We use balanceOfPoolInMUsd instead of balance to prevent
+    // `lastBalance` be less than the last harvest with the same deposits.
+    function _beforeMovement() internal override {
+        uint _currentMUsdBalance = _balanceOfPoolInMUsd();
+        uint _currentBalance = wantBalance();
+
+        if (_currentMUsdBalance > lastBalance) {
+            uint perfFee = ((_currentMUsdBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
+
+            if (perfFee > 0) {
+                _withdrawFromPool(_musdAmountToImusd(perfFee));
+
+                uint feeInWant = wantBalance() - _currentBalance;
+
+                if (feeInWant > 0) {
+                    want.safeTransfer(treasury, feeInWant);
+                    emit PerformanceFee(feeInWant);
+                }
+            }
+        }
+    }
+
+    // Update new `lastBalance` for the next charge
+    function _afterMovement() internal override {
+        lastBalance = _balanceOfPoolInMUsd();
+    }
+
+    function _balanceOfPoolInMUsd() internal view returns (uint){
+        return _imusdAmountToMusd(balanceOfPool());
     }
 }

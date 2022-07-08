@@ -329,6 +329,8 @@ describe('Controller Curve Strat', () => {
 
     // 2021-10-06 wNative-eth prices
     await Promise.all([
+      // This is to skip re-calculate all the performanceFee numbers
+      waitFor(strat.setPerformanceFee(450)),
       waitFor(wNativeFeed.setPrice(129755407)),
       waitFor(btcFeed.setPrice(5394968350000)),
       waitFor(crvFeed.setPrice(283589154)),
@@ -869,6 +871,8 @@ describe('Controller Curve Strat 4 pool', () => {
 
     // 2021-10-06 wNative-eth prices
     await Promise.all([
+      // This is to skip re-calculate all the performanceFee numbers
+      waitFor(strat.setPerformanceFee(450)),
       waitFor(wNativeFeed.setPrice(129755407)),
       waitFor(crvFeed.setPrice(283589154)),
       waitFor(daiFeed.setPrice(100000000)),
