@@ -5,7 +5,6 @@ pragma solidity 0.8.15;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "hardhat/console.sol";
 
 import "./Swappable.sol";
 
@@ -33,7 +32,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
 
     // Fees
     uint constant public MAX_PERFORMANCE_FEE = 5000; // 50% max
-    uint public performanceFee = 450; // 4.5%
+    uint public performanceFee = 500; // 5.0%
     uint internal lastBalance;
 
     address public treasury;
@@ -165,7 +164,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     }
 
     // Update new `lastBalance` for the next charge
-    function _afterMovement() internal {
+    function _afterMovement() internal virtual {
         lastBalance = balance();
     }
 
@@ -244,7 +243,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         emit Boosted(msg.sender, _amount);
     }
 
-    function _beforeMovement() internal {
+    function _beforeMovement() internal virtual{
         uint currentBalance = balance();
 
         if (currentBalance > lastBalance) {

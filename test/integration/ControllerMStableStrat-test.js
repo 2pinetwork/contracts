@@ -3,6 +3,7 @@ const {
   createPiToken,
   deploy,
   getBlock,
+  impersonateContract,
   mineNTimes,
   waitFor,
   zeroAddress
@@ -14,6 +15,30 @@ const {
   setChainlinkRoundForNow,
   setCustomBalanceFor,
 } = require('./helpers')
+
+const changeExchangeRate = async() => {
+  const holder  = (await ethers.getSigners())[17]
+  const mToken  = await ethers.getContractAt('IMToken', '0xE840B73E5287865EEc17d250bFb1536704B43B21', holder)
+  const imToken = await ethers.getContractAt('IIMToken', '0x5290Ad3d83476CA6A2b178Cd9727eE1EF72432af', holder)
+  const imVault = await ethers.getContractAt('IMVault', '0x32aBa856Dc5fFd5A56Bcd182b13380e5C855aa29', holder)
+
+
+  const newBalance = ethers.BigNumber.from('' + 10e6) // 1000 USDC
+  await setCustomBalanceFor(USDC.address, holder.address, newBalance)
+
+  await waitFor(USDC.connect(holder).approve(mToken.address, newBalance))
+  await waitFor(mToken.mint(USDC.address, newBalance, 1, holder.address))
+
+  const mBalance = await mToken.balanceOf(holder.address)
+
+  await waitFor(mToken.approve(imToken.address, mBalance))
+
+  await waitFor(imToken.depositSavings(mBalance))
+  const credits = await imToken.balanceOf(holder.address)
+
+  await waitFor(imToken.approve(imVault.address, credits))
+  await waitFor(imVault.stake(credits))
+}
 
 describe('Controller mStable Strat', () => {
   let bob
@@ -87,8 +112,13 @@ describe('Controller mStable Strat', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
+    await changeExchangeRate()
+
     await mineNTimes(100)
-    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+    const treasuryBalance = await USDC.balanceOf(owner.address)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested').to.emit(strat, 'PerformanceFee')
+    expect(await USDC.balanceOf(owner.address)).to.be.above(treasuryBalance)
 
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
@@ -133,8 +163,13 @@ describe('Controller mStable Strat', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
+    await changeExchangeRate()
+
     await mineNTimes(100)
-    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+    const treasuryBalance = await USDC.balanceOf(owner.address)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested').to.emit(strat, 'PerformanceFee')
+    expect(await USDC.balanceOf(owner.address)).to.be.above(treasuryBalance)
 
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
@@ -341,8 +376,13 @@ describe('Controller mStable Strat with DAI', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
+    await changeExchangeRate()
+
     await mineNTimes(100)
-    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+    const treasuryBalance = await DAI.balanceOf(owner.address)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested').to.emit(strat, 'PerformanceFee')
+    expect(await DAI.balanceOf(owner.address)).to.be.above(treasuryBalance)
 
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
@@ -390,8 +430,13 @@ describe('Controller mStable Strat with DAI', () => {
 
     const balance = await strat.balanceOfPool() // more decimals
 
+    await changeExchangeRate()
+
     await mineNTimes(100)
-    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+    const treasuryBalance = await DAI.balanceOf(owner.address)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested').to.emit(strat, 'PerformanceFee')
+    expect(await DAI.balanceOf(owner.address)).to.be.above(treasuryBalance)
 
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
