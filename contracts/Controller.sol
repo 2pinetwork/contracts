@@ -202,6 +202,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         want.safeTransfer(archimedes, withdrawn);
         want.safeTransfer(treasury, withdrawalFee);
 
+        // TODO: ADD withdraw fee
+
         if (!_strategyPaused()) { _strategyDeposit(); }
 
         return withdrawn;

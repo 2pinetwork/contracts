@@ -13,5 +13,5 @@ run_in_network.sh
 
 # Ignore tmp or utils
 build/
-utils/
+# utils/
 ganache_polygon_fork/
