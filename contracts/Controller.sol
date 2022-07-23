@@ -39,6 +39,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewDepositLimit(uint oldLimit, uint newLimit);
     event NewUserDepositLimit(uint oldLimit, uint newLimit);
+    event WithdrawalFee(uint amount);
 
     constructor(
         IERC20Metadata _want,
@@ -200,7 +201,10 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         withdrawn = _withdraw - withdrawalFee;
 
         want.safeTransfer(archimedes, withdrawn);
-        want.safeTransfer(treasury, withdrawalFee);
+        if (withdrawalFee > 0) {
+            want.safeTransfer(treasury, withdrawalFee);
+            emit WithdrawalFee(withdrawFee);
+        }
 
         // TODO: ADD withdraw fee
 
