@@ -21,11 +21,11 @@ async function main() {
     let ctrollerArgs = [
       pool.address, deploy.Archimedes, deploy.FeeManager, `2pi-${chainId}-${pool.currency}`
     ]
-    let controller = await (
+     controller = await (
       await hre.ethers.getContractFactory('Controller')
     ).deploy(...ctrollerArgs, {gasPrice: MIN_GAS_PRICE});
 
-    await controller.deployed(10);
+    await controller.deployTransaction.wait(10)
 
     await verify('Controller', controller.address, ctrollerArgs)
 
@@ -55,7 +55,7 @@ async function main() {
 
     let strategy = await ( await hre.ethers.getContractFactory('ControllerMStableStrat')).deploy(...args, {gasPrice: MIN_GAS_PRICE});
 
-    await strategy.deployed(10);
+    await strategy.deployTransaction.wait(10);
 
     console.log('Strategy ' + pool.currency + ':')
 
@@ -63,7 +63,7 @@ async function main() {
 
     pool.strategy = strategy.address
 
-    await (await controller.setStrategy(strategy.address, {gasPrice: MIN_GAS_PRICE})).wait()
+    await (await controller.setStrategy(strategy.address, {gasPrice: MIN_GAS_PRICE, gasLimit: 1e6})).wait()
 
     await (await archimedes.addNewPool(pool.address, controller.address, 5, false, {gasPrice: MIN_GAS_PRICE})).wait()
 

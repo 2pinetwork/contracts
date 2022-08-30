@@ -160,8 +160,10 @@ contract ControllerMStableStrat is ControllerStratAbs {
 
         if (_currentMUsdBalance > lastBalance) {
             uint perfFee = ((_currentMUsdBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
+            // Prevent to raise when perfFee is super small
+            uint _expected = _musdAmountToWant(_imusdAmountToMusd(perfFee));
 
-            if (perfFee > 0) {
+            if (perfFee > 0 && _expected > 0) {
                 _withdrawFromPool(_musdAmountToImusd(perfFee));
 
                 uint feeInWant = wantBalance() - _currentBalance;

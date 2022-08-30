@@ -206,8 +206,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
             emit WithdrawalFee(withdrawFee);
         }
 
-        // TODO: ADD withdraw fee
-
         if (!_strategyPaused()) { _strategyDeposit(); }
 
         return withdrawn;
