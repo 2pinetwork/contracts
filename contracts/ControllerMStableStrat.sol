@@ -154,16 +154,16 @@ contract ControllerMStableStrat is ControllerStratAbs {
 
     // We use balanceOfPoolInMUsd instead of balance to prevent
     // `lastBalance` be less than the last harvest with the same deposits.
+    // balanceOfPool can't be used because it doesn't change over time
     function _beforeMovement() internal override {
-        uint _currentMUsdBalance = _balanceOfPoolInMUsd();
+        uint _currentPoolBalance = _balanceOfPoolInMUsd();
         uint _currentBalance = wantBalance();
 
-        if (_currentMUsdBalance > lastBalance) {
-            uint perfFee = ((_currentMUsdBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
-            // Prevent to raise when perfFee is super small
-            uint _expected = _musdAmountToWant(_imusdAmountToMusd(perfFee));
+        if (_currentPoolBalance > lastBalance) {
+            uint perfFee = ((_currentPoolBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
 
-            if (perfFee > 0 && _expected > 0) {
+            // Prevent to raise when perfFee is super small
+            if (perfFee > 0 && _musdAmountToWant(perfFee) > 0) {
                 _withdrawFromPool(_musdAmountToImusd(perfFee));
 
                 uint feeInWant = wantBalance() - _currentBalance;
