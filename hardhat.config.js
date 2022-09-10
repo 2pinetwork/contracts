@@ -25,6 +25,17 @@ const hardhatNetwork = () => {
               blockNumber:   14980909
             }
           }
+        case 10:
+          return {
+            network_id:    10,
+            chainId:       10,
+            gasMultiplier: 5,
+            forking:       {
+              url:           `https://rpc.ankr.com/optimism`,
+              gasMultiplier: 5,
+              blockNumber:   22562704
+            }
+          }
         case 56:
           return {
             network_id:    56,
@@ -79,9 +90,14 @@ const getStringReplacements = (hre) => {
   const chainId = hre.network.config.network_id
 
   if (chainId)
+    try {
     return JSON.parse(
       fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
     )
+    } catch {
+      console.log("🚨🚨🚨🚨 Not replacements address file found  🚨🚨🚨🚨")
+      return {}
+    }
 }
 
 let stringReplacements
@@ -200,6 +216,13 @@ module.exports = {
       url:        'https://api.avax.network/ext/bc/C/rpc',
       network_id: 43114,
       chainId:    43114,
+      accounts:   accounts,
+      timeout:    60000
+    },
+    optimism: {
+      url:        'https://rpc.ankr.com/optimism',
+      network_id: 10,
+      chainId:    10,
       accounts:   accounts,
       timeout:    60000
     },

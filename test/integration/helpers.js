@@ -4,6 +4,16 @@ const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/
 const { Framework } = require('@superfluid-finance/js-sdk')
 const { createPiToken, deploy, } = require('../helpers')
 
+const setBalanceFor = async (token, wallet, amount, slot) => {
+  slot = slot || 0
+
+  const newBalance = ethers.utils.parseUnits(amount)
+  const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [wallet, slot])
+  const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(newBalance.toHexString(), 32))
+
+  await ethers.provider.send('hardhat_setStorageAt', [token, index.toString(), balance32])
+}
+
 const setWMaticBalanceFor = async (address, amount) => {
   const wmaticSlot = 3
   const newBalance = ethers.utils.parseUnits(amount)
@@ -320,4 +330,5 @@ module.exports = {
   setCustomBalanceFor,
   setChainlinkRound,
   setChainlinkRoundForNow,
+  setBalanceFor,
 }
