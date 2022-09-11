@@ -5,13 +5,13 @@ pragma solidity 0.8.15;
 import "./ControllerStratAbs.sol";
 import "../interfaces/ICurve.sol";
 
-contract ControllerCurveStrat is ControllerStratAbs {
+contract ControllerMetaCurveStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
     IERC20Metadata public immutable crvToken;
+    address public immutable metaPool;
     address public immutable pool;
-    address public immutable swapPool;
     ICurveGauge public immutable gauge;
     ICurveGaugeFactory public immutable gaugeFactory;
 
@@ -22,7 +22,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
     uint8 private constant GAUGE_TYPE_STAKING = 0;
     uint8 private constant GAUGE_TYPE_CHILD_STAKING = 1;
 
-    address public immutable metaPool;
+    error PoolSizeZero();
+    error InvalidIndex();
 
     constructor(
         IERC20Metadata _want,
@@ -31,14 +32,15 @@ contract ControllerCurveStrat is ControllerStratAbs {
         address _treasury,
         IERC20Metadata _crvToken,
         address _pool,
-        address _swapPool,
+        address _metaPool,
         ICurveGauge _gauge,
         ICurveGaugeFactory _gaugeFactory,
         uint8 _gaugeType,
-        address _metaPool
+        int128 _poolSize,
+        int128 _tokenIndex
     ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
         require(_pool != address(0), "pool !ZeroAddress");
-        require(_swapPool != address(0), "swapPool !ZeroAddress");
+        require(_metaPool != address(0), "metaPool !ZeroAddress");
         require(address(_gauge) != address(0), "gauge !ZeroAddress");
         require(address(_gaugeFactory) != address(0), "gaugeFactory !ZeroAddress");
         require(_gaugeType < 2, "gaugeType unknown");
@@ -49,25 +51,17 @@ contract ControllerCurveStrat is ControllerStratAbs {
         // Check gauge factory _behaves_ as a gauge factory
         _gaugeFactory.minted(address(this), address(this));
 
-        crvToken = _crvToken;
-        pool = _pool;
-        swapPool = _swapPool;
-        gauge = _gauge;
+        // poolSize = ICurvePool(_pool).N_ALL_COINS();
+        if (_poolSize <= 0) { revert PoolSizeZero(); }
+
+        poolSize     = _poolSize;
+        crvToken     = _crvToken;
+        pool         = _pool;
+        metaPool     = _metaPool;
+        gauge        = _gauge;
         gaugeFactory = _gaugeFactory;
-        gaugeType = _gaugeType;
-
-
-        poolSize = IMetaPool(_metaPool).N_ALL_COINS();
-        metaPool = _metaPool;
-
-        require(poolSize > 0, "poolSize is zero");
-
-        int128 _index = _guessTokenIndex(_poolSize, _int128);
-
-        require(_index < _poolSize, "Index out of bounds");
-
-        poolSize = _poolSize;
-        tokenIndex = _index;
+        gaugeType    = _gaugeType;
+        tokenIndex   = _tokenIndex;
     }
 
     function identifier() external view returns (string memory) {
@@ -89,9 +83,13 @@ contract ControllerCurveStrat is ControllerStratAbs {
     function _deposit() internal override {
         uint _wantBal = wantBalance();
 
-        if (_wantBal > 0) {
-            _addLiquidity(_wantBal);
-        }
+        console.log("[0] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
+        console.log("[0] balanceOfPool: ", balanceOfPool());
+
+        if (_wantBal > 0) { _addLiquidity(_wantBal); }
+
+        console.log("[afterAddLiq] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
+        console.log("[afterAddLiq] balanceOfPool: ", balanceOfPool());
 
         uint _wantCRVBalance = wantCRVBalance();
 
@@ -99,10 +97,16 @@ contract ControllerCurveStrat is ControllerStratAbs {
             crvToken.safeApprove(address(gauge), _wantCRVBalance);
             gauge.deposit(_wantCRVBalance);
         }
+
+        console.log("[afterStaking] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
+        console.log("[afterStaking] balanceOfPool: ", balanceOfPool());
     }
 
     function _addLiquidity(uint _wantBal) internal {
         uint _expected = _wantToWantCrvDoubleCheck(_wantBal, true);
+
+
+        console.log("[0] Expected wantCRV", _expected);
 
         if (poolSize == 2) {
             uint[2] memory _amounts;
@@ -110,14 +114,14 @@ contract ControllerCurveStrat is ControllerStratAbs {
             _amounts[uint(uint128(tokenIndex))] = _wantBal;
 
             want.safeApprove(pool, _wantBal);
-            ICurvePool(pool).add_liquidity(_amounts, _expected, true);
+            ICurvePool(pool).add_liquidity(metaPool, _amounts, _expected, true);
         } else if (poolSize == 4) {
             uint[4] memory _amounts;
 
             _amounts[uint(uint128(tokenIndex))] = _wantBal;
 
             want.safeApprove(pool, _wantBal);
-            ICurvePool(pool).add_liquidity(_amounts, _expected);
+            ICurvePool(pool).add_liquidity(metaPool, _amounts, _expected);
         }
     }
 
@@ -151,11 +155,8 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
         require(_expected > 0, "remove_liquidity expected = 0");
 
-        if (address(pool) != address(swapPool)) {
-            crvToken.safeApprove(pool, _balance);
-        }
-
-        ICurvePool(pool).remove_liquidity_one_coin(_balance, tokenIndex, _expected, true);
+        crvToken.safeApprove(pool, _balance);
+        ICurvePool(pool).remove_liquidity_one_coin(metaPool, _balance, tokenIndex, _expected, true);
     }
 
     function _claimRewards() internal override {
@@ -199,13 +200,13 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
             _amounts[uint(uint128(tokenIndex))] = _amount;
             // calc_token_amount doesn't consider fee
-            _wantCrvAmount = ICurvePool(swapPool).calc_token_amount(_amounts, _isDeposit);
+            _wantCrvAmount = ICurvePool(pool).calc_token_amount(metaPool, _amounts, _isDeposit);
         } else if (poolSize == 4) {
             uint[4] memory _amounts;
 
             _amounts[uint(uint128(tokenIndex))] = _amount;
             // calc_token_amount doesn't consider fee
-            _wantCrvAmount = ICurvePool(swapPool).calc_token_amount(_amounts, _isDeposit);
+            _wantCrvAmount = ICurvePool(pool).calc_token_amount(metaPool, _amounts, _isDeposit);
         }
 
         // Remove max fee
@@ -238,31 +239,9 @@ contract ControllerCurveStrat is ControllerStratAbs {
 
     function _calcWithdrawOneCoin(uint _amount) internal view returns (uint) {
         if (_amount > 0) {
-            return ICurvePool(pool).calc_withdraw_one_coin(_amount, tokenIndex);
+            return ICurvePool(pool).calc_withdraw_one_coin(metaPool, _amount, tokenIndex);
         } else {
             return 0;
         }
-    }
-
-    // Constructor helper
-
-    function _guessPoolSize() internal view returns (int128 _poolSize, bool _int128) {
-        ICurvePool _pool = ICurvePool(pool);
-        bool _loop = true;
-
-        _poolSize = pool.N_ALL_COINS()
-    }
-
-    function _guessTokenIndex(int128 _poolSize, bool _int128) internal view returns (int128) {
-        address _want = address(want);
-
-        for (uint i = 0; i < poolSize; i++) {
-            if (want == IMetaPool(metaPool).BASE_COINS(i)) {
-                // MetaPools has 1 token + 1 composed crv pool (E.g. sUSD + 3CRV)
-                return i + 1;
-            }
-        }
-
-        revert("Token index not found");
     }
 }

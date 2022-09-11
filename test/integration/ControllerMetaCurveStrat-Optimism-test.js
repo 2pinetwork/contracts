@@ -13,7 +13,7 @@ const { resetHardhat, setBalanceFor, setChainlinkRoundForNow } = require('./help
 const addresses = {
   crvToken:     '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53',
   pool:         '0x167e42a1C7ab4Be03764A2222aAC57F5f6754411',
-  swapPool:     '0x167e42a1C7ab4Be03764A2222aAC57F5f6754411',
+  metaPool:     '0x061b87122Ed14b9526A813209C8a59a633257bAb',
   gauge:        '0xc5aE4B5F86332e70f3205a8151Ee9eD9F71e0797',
   gaugeFactory: '0xabc000d88f23bb45525e447528dbf656a9d55bf5'
 }
@@ -56,11 +56,16 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     global.CRV = await ethers.getContractAt('IERC20Metadata', addresses.crvToken)
     global.WETH = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000006')
     global.USDC = await ethers.getContractAt('IERC20Metadata', '0x7f5c764cbc14f9669b88837ca1490cca17c31607')
+    global.CurveRewardsGauge = await ethers.getContractAt('ICurveGauge', addresses.gauge)
+    global.exchange = await ethers.getContractAt('IUniswapRouter', '0xe592427a0aece92de3edee1f18e0157c05861564')
 
-    controller = await createController(DAI, archimedes, 'ControllerCurveStrat', {
+    controller = await createController(DAI, archimedes, 'ControllerMetaCurveStrat', {
       ...addresses,
-      gaugeType: 1
+      gaugeType: 1,
+      poolSize: 4,
+      tokenIndex: 1 // [sUSD, DAI, USDC, USDT]
     })
+
 
     await waitFor(archimedes.addNewPool(DAI.address, controller.address, 10, false));
 
@@ -85,7 +90,8 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     ])
   })
 
-  itIf(hre.network.config.network_id == 10, 'Full deposit + harvest strat + withdraw', async () => {
+  // itIf(hre.network.config.network_id == 10, 'Full deposit + harvest strat + withdraw', async () => {
+  it.only('Full deposit + harvest strat + withdraw', async () => {
     await setBalanceFor(DAI.address, bob.address, '100')
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)

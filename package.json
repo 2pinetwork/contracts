@@ -9,6 +9,7 @@
     "test": "npx hardhat test",
     "full_test": "npx hardhat test && HARDHAT_INTEGRATION_TESTS=true npx hardhat test",
     "itest": "HARDHAT_INTEGRATION_TESTS=true npx hardhat test",
+    "itest:optimism": "HARDHAT_INTEGRATION_CHAIN=10 HARDHAT_INTEGRATION_TESTS=true npx hardhat test",
     "lint": "eslint test/",
     "build-contracts": "sol-merger \"./contracts/*.sol\" ./build",
     "code-checker": "docker run --rm -v $PWD:/app trailofbits/eth-security-toolbox /app/scripts/code_checker.sh"
