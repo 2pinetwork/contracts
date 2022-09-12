@@ -4,16 +4,6 @@ const deployFramework = require('@superfluid-finance/ethereum-contracts/scripts/
 const { Framework } = require('@superfluid-finance/js-sdk')
 const { createPiToken, deploy, } = require('../helpers')
 
-const setBalanceFor = async (token, wallet, amount, slot) => {
-  slot = slot || 0
-
-  const newBalance = ethers.utils.parseUnits(amount)
-  const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [wallet, slot])
-  const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(newBalance.toHexString(), 32))
-
-  await ethers.provider.send('hardhat_setStorageAt', [token, index.toString(), balance32])
-}
-
 const setWMaticBalanceFor = async (address, amount) => {
   const wmaticSlot = 3
   const newBalance = ethers.utils.parseUnits(amount)
@@ -52,7 +42,8 @@ const setChainlinkRound = async (address, roundId, timestamp, price) => {
   const slot = [
     '0x89C991cbC41Af1a0294f79947aD71A028bf164b7', // CRV-agg
     '0x336584C8E6Dc19637A5b36206B1c79923111b405', // CRV
-    '0x310990E8091b5cF083fA55F500F140CFBb959016'  // EUR
+    '0x310990E8091b5cF083fA55F500F140CFBb959016', // EUR
+    '0xbce7579e241e5d676c2371dc21891489dacda250', // DAI (OPTIMISM)
   ].includes(address) ? 44 : 43  // most of pricess are 43 slot
 
   const timestampL = 16
@@ -330,5 +321,4 @@ module.exports = {
   setCustomBalanceFor,
   setChainlinkRound,
   setChainlinkRoundForNow,
-  setBalanceFor,
 }

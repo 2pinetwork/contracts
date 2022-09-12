@@ -5,6 +5,21 @@ pragma solidity 0.8.15;
 import "./ControllerStratAbs.sol";
 import "../interfaces/ICurve.sol";
 
+interface IUniswapV3 {
+  struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
+    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
+    /// @return amountOut The amount of the received token
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
+}
+
 contract ControllerMetaCurveStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
@@ -83,13 +98,7 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
     function _deposit() internal override {
         uint _wantBal = wantBalance();
 
-        console.log("[0] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
-        console.log("[0] balanceOfPool: ", balanceOfPool());
-
         if (_wantBal > 0) { _addLiquidity(_wantBal); }
-
-        console.log("[afterAddLiq] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
-        console.log("[afterAddLiq] balanceOfPool: ", balanceOfPool());
 
         uint _wantCRVBalance = wantCRVBalance();
 
@@ -97,16 +106,10 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
             crvToken.safeApprove(address(gauge), _wantCRVBalance);
             gauge.deposit(_wantCRVBalance);
         }
-
-        console.log("[afterStaking] Want balance: ", _wantBal, "wantCRV:", wantCRVBalance());
-        console.log("[afterStaking] balanceOfPool: ", balanceOfPool());
     }
 
     function _addLiquidity(uint _wantBal) internal {
         uint _expected = _wantToWantCrvDoubleCheck(_wantBal, true);
-
-
-        console.log("[0] Expected wantCRV", _expected);
 
         if (poolSize == 2) {
             uint[2] memory _amounts;
@@ -156,7 +159,7 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
         require(_expected > 0, "remove_liquidity expected = 0");
 
         crvToken.safeApprove(pool, _balance);
-        ICurvePool(pool).remove_liquidity_one_coin(metaPool, _balance, tokenIndex, _expected, true);
+        ICurvePool(pool).remove_liquidity_one_coin(metaPool, _balance, tokenIndex, _expected);
     }
 
     function _claimRewards() internal override {
@@ -242,6 +245,42 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
             return ICurvePool(pool).calc_withdraw_one_coin(metaPool, _amount, tokenIndex);
         } else {
             return 0;
+        }
+    }
+
+    // UniswapV3
+    function _swapRewards() internal override {
+        // should be implemented
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address rewardToken = rewardTokens[i];
+            uint _balance = IERC20Metadata(rewardToken).balanceOf(address(this));
+
+            if (_balance > 0) {
+                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
+
+                // Want price sometimes is too high so it requires a lot of rewards to swap
+                if (expected > 1) {
+                    IERC20Metadata(rewardToken).safeApprove(exchange, _balance);
+
+                    bytes memory _path = abi.encodePacked(rewardToken);
+
+                    for (uint j = 1; j < rewardToWantRoute[rewardToken].length; j++) {
+                        _path = abi.encodePacked(
+                            _path,
+                            uint24(3000),
+                            rewardToWantRoute[rewardToken][j]
+                        );
+                    }
+
+                    IUniswapV3(exchange).exactInput(IUniswapV3.ExactInputParams({
+                        path: _path,
+                        recipient: address(this),
+                        deadline: block.timestamp + 60,
+                        amountIn: _balance,
+                        amountOutMinimum: 0 // _expected
+                    }));
+                }
+            }
         }
     }
 }

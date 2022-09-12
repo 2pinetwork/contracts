@@ -294,13 +294,12 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
 
             if (_balance > 0) {
                 uint expected = _expectedForSwap(_balance, rewardToken, address(want));
-
                 // Want price sometimes is too high so it requires a lot of rewards to swap
                 if (expected > 1) {
                     IERC20Metadata(rewardToken).safeApprove(exchange, _balance);
 
                     IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                        _balance, 0, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
                     );
                 }
             }

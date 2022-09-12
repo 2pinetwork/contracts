@@ -8,10 +8,10 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { resetHardhat, setBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setCustomBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
 const addresses = {
-  crvToken:     '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53',
+  crvToken:     '0x061b87122Ed14b9526A813209C8a59a633257bAb',
   pool:         '0x167e42a1C7ab4Be03764A2222aAC57F5f6754411',
   metaPool:     '0x061b87122Ed14b9526A813209C8a59a633257bAb',
   gauge:        '0xc5aE4B5F86332e70f3205a8151Ee9eD9F71e0797',
@@ -34,9 +34,10 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
   let OPFeed
   let daiFeed
   let crvFeed
+  let poolSlipage
 
   before(async () => {
-    await resetHardhat(22562704) // 10 DAIs
+    // await resetHardhat(22562704) // 10 DAIs
   })
 
   beforeEach(async () => {
@@ -53,9 +54,9 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     )
 
     global.DAI = await ethers.getContractAt('IERC20Metadata', '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1')
-    global.CRV = await ethers.getContractAt('IERC20Metadata', addresses.crvToken)
+    global.CRV = await ethers.getContractAt('IERC20Metadata', '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53')
     global.WETH = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000006')
-    global.USDC = await ethers.getContractAt('IERC20Metadata', '0x7f5c764cbc14f9669b88837ca1490cca17c31607')
+    // global.USDC = await ethers.getContractAt('IERC20Metadata', '0x7f5c764cbc14f9669b88837ca1490cca17c31607')
     global.CurveRewardsGauge = await ethers.getContractAt('ICurveGauge', addresses.gauge)
     global.exchange = await ethers.getContractAt('IUniswapRouter', '0xe592427a0aece92de3edee1f18e0157c05861564')
 
@@ -76,23 +77,25 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       ethers.getContractAt('IChainLink', '0xbd92c6c284271c227a1e0bf1786f468b539f51d9'),
     ])
 
+    poolSlipage = 0.015
+
     await Promise.all([
       setChainlinkRoundForNow(OPFeed),
       setChainlinkRoundForNow(daiFeed),
       setChainlinkRoundForNow(crvFeed),
+      waitFor(strat.setMaxPriceOffset(86400)),
       waitFor(strat.setPriceFeed(OP.address, OPFeed.address)),
       waitFor(strat.setPriceFeed(DAI.address, daiFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
-      waitFor(strat.setPoolSlippageRatio(100)),
+      waitFor(strat.setPoolSlippageRatio(poolSlipage * 10000)),
       waitFor(strat.setSwapSlippageRatio(200)),
-      waitFor(strat.setRewardToWantRoute(OP.address, [OP.address, WETH.address, USDC.address, DAI.address])),
-      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, USDC.address, DAI.address]))
+      waitFor(strat.setRewardToWantRoute(OP.address, [OP.address, DAI.address])),
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, DAI.address]))
     ])
   })
 
-  // itIf(hre.network.config.network_id == 10, 'Full deposit + harvest strat + withdraw', async () => {
-  it.only('Full deposit + harvest strat + withdraw', async () => {
-    await setBalanceFor(DAI.address, bob.address, '100')
+  itIf(hre.network.config.network_id == 10, 'Full deposit + harvest strat + withdraw', async () => {
+    await setCustomBalanceFor(DAI.address, bob.address, '100', 2)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
 
@@ -102,7 +105,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
-      99e18 + '', // production virtual price is ~1.0093.
+      (100e18 - (100e18 * poolSlipage)) + '', // production virtual price is ~1.0093.
       100e18 + ''
     )
 
@@ -121,7 +124,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
 
     // withdraw 95 DAI in shares
     const toWithdraw = (
-      (await controller.totalSupply()).mul(95e18).div(
+      (await controller.totalSupply()).mul(95e18 + '').div(
         await controller.balance()
       )
     )
@@ -129,7 +132,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
     expect(await DAI.balanceOf(bob.address)).to.within(
-      94.9e18, 95e18 // 95 - 0.1% withdrawFee
+      94.9e18 + '', 95e18 + '' // 95 - 0.1% withdrawFee
     )
     expect(await DAI.balanceOf(strat.address)).to.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
@@ -145,48 +148,39 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
   })
 
   itIf(hre.network.config.network_id == 10, 'Deposit and change strategy', async () => {
-    await setWdaiBalanceFor(bob.address, '100')
+    await setCustomBalanceFor(DAI.address, bob.address, '100', 2)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
 
     await waitFor(DAI.connect(bob).approve(archimedes.address, '' + 100e18))
     await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
-      98.9e18 + '', // production virtual price is ~1.0093.
+      98.0e18 + '', // production virtual price is ~1.0093.
       100e18 + ''
     )
 
     const otherStrat = await deploy(
-      'ControllerAaveStrat',
+      'ControllerDummyStrat',
       DAI.address,
-      4800,
-      5000,
-      8,
-      1e3,
       controller.address,
       global.exchange.address,
       owner.address
     )
-    await Promise.all([
-      waitFor(otherStrat.setMaxPriceOffset(86400)),
-      waitFor(otherStrat.setPriceFeed(OP.address, OPFeed.address)),
-      waitFor(otherStrat.setPriceFeed(DAI.address, daiFeed.address)),
-    ])
 
     expect(await controller.setStrategy(otherStrat.address)).to.emit(controller, 'NewStrategy').withArgs(
       strat.address, otherStrat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await strat.balance()).to.be.equal(0)
     expect(await otherStrat.balance()).to.be.within(
-      99e18, 100e18
+      99e18+'', 100e18+''
     )
 
     await waitFor(strat.unpause())
@@ -194,12 +188,12 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       otherStrat.address, strat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18)
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await otherStrat.balance()).to.be.equal(0)
     expect(await strat.balance()).to.be.within(
-      99e18, 100e18
+      99e18+'', 100e18+''
     )
   })
 })

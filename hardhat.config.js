@@ -31,9 +31,9 @@ const hardhatNetwork = () => {
             chainId:       10,
             gasMultiplier: 5,
             forking:       {
-              url:           `https://rpc.ankr.com/optimism`,
+              url:           `https://opt-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_OPTIMISM_API_KEY}`,
               gasMultiplier: 5,
-              blockNumber:   22562704
+              blockNumber:   (+process.env.BLOCK || 22562704)
             }
           }
         case 56:
