@@ -40,6 +40,9 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
     error PoolSizeZero();
     error InvalidIndex();
 
+    mapping(address => mapping(address => uint24)) public tokenToTokenSwapFee;
+
+
     constructor(
         IERC20Metadata _want,
         address _controller,
@@ -78,6 +81,15 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
         gaugeType    = _gaugeType;
         tokenIndex   = _tokenIndex;
     }
+
+    function setTokenToTokenSwapFee(address _token1, address _token2, uint24 _fee) external onlyAdmin {
+        require(_token1 != address(0), "!ZeroAddress token1");
+        require(_token2 != address(0), "!ZeroAddress token2");
+        require(_fee >= 0, "Fee can't be negative");
+
+        tokenToTokenSwapFee[_token1][_token2] = _fee;
+    }
+
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(want.symbol(), "@Curve#1.0.0"));
@@ -265,9 +277,15 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
                     bytes memory _path = abi.encodePacked(rewardToken);
 
                     for (uint j = 1; j < rewardToWantRoute[rewardToken].length; j++) {
+                        uint24 _fee = tokenToTokenSwapFee[
+                            rewardToWantRoute[rewardToken][j - 1]
+                        ][
+                            rewardToWantRoute[rewardToken][j]
+                        ];
+
                         _path = abi.encodePacked(
                             _path,
-                            uint24(3000),
+                            _fee,
                             rewardToWantRoute[rewardToken][j]
                         );
                     }

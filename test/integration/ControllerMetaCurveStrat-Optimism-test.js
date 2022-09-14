@@ -71,7 +71,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     await waitFor(archimedes.addNewPool(DAI.address, controller.address, 10, false));
 
     [strat, OPFeed, daiFeed, crvFeed] = await Promise.all([
-      ethers.getContractAt('ControllerCurveStrat', (await controller.strategy())),
+      ethers.getContractAt('ControllerMetaCurveStrat', (await controller.strategy())),
       ethers.getContractAt('IChainLink', '0x0d276fc14719f9292d5c1ea2198673d1f4269246'),
       ethers.getContractAt('IChainLink', '0x8dba75e83da73cc766a7e5a0ee71f656bab470d6'),
       ethers.getContractAt('IChainLink', '0xbd92c6c284271c227a1e0bf1786f468b539f51d9'),
@@ -90,7 +90,10 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       waitFor(strat.setPoolSlippageRatio(poolSlipage * 10000)),
       waitFor(strat.setSwapSlippageRatio(200)),
       waitFor(strat.setRewardToWantRoute(OP.address, [OP.address, DAI.address])),
-      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, DAI.address]))
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, DAI.address])),
+      waitFor(strat.setTokenToTokenSwapFee(OP.address, DAI.address, 3000)),
+      waitFor(strat.setTokenToTokenSwapFee(CRV.address, WETH.address, 3000)),
+      waitFor(strat.setTokenToTokenSwapFee(WETH.address, DAI.address, 3000)),
     ])
   })
 
