@@ -88,7 +88,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       waitFor(strat.setPriceFeed(DAI.address, daiFeed.address)),
       waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
       waitFor(strat.setPoolSlippageRatio(poolSlipage * 10000)),
-      waitFor(strat.setSwapSlippageRatio(200)),
+      waitFor(strat.setSwapSlippageRatio(500)),
       waitFor(strat.setRewardToWantRoute(OP.address, [OP.address, DAI.address])),
       waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, DAI.address])),
       waitFor(strat.setTokenToTokenSwapFee(OP.address, DAI.address, 3000)),
