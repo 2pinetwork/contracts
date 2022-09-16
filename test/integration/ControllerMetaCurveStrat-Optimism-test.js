@@ -67,7 +67,6 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       tokenIndex: 1 // [sUSD, DAI, USDC, USDT]
     })
 
-
     await waitFor(archimedes.addNewPool(DAI.address, controller.address, 10, false));
 
     [strat, OPFeed, daiFeed, crvFeed] = await Promise.all([

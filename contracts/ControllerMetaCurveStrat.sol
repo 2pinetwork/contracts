@@ -261,7 +261,6 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
 
     // UniswapV3
     function _swapRewards() internal override {
-        // should be implemented
         for (uint i = 0; i < rewardTokens.length; i++) {
             address rewardToken = rewardTokens[i];
             uint _balance = IERC20Metadata(rewardToken).balanceOf(address(this));
