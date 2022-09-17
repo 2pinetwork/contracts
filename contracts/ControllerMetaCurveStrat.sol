@@ -98,12 +98,12 @@ contract ControllerMetaCurveStrat is ControllerStratAbs {
         return _calcWithdrawOneCoin(balanceOfPool());
     }
 
-    function setTokenToTokenSwapFee(address _token1, address _token2, uint24 _fee) external onlyAdmin {
-        require(_token1 != address(0), "!ZeroAddress token1");
-        require(_token2 != address(0), "!ZeroAddress token2");
+    function setTokenToTokenSwapFee(address _tokenA, address _tokenB, uint24 _fee) external onlyAdmin {
+        require(_tokenA != address(0), "!ZeroAddress tokenA");
+        require(_tokenB != address(0), "!ZeroAddress tokenB");
         require(_fee >= 0, "Fee can't be negative");
 
-        tokenToTokenSwapFee[_token1][_token2] = _fee;
+        tokenToTokenSwapFee[_tokenA][_tokenB] = _fee;
     }
 
     function _deposit() internal override {

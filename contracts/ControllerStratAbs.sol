@@ -313,7 +313,10 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
 
         // Pay to treasury a percentage of the total reward claimed
-        if (fee > 0) { want.safeTransfer(treasury, fee); }
+        if (fee > 0) {
+            want.safeTransfer(treasury, fee);
+            emit PerformanceFee(fee);
+        }
     }
 
     function _compensateDeposit(uint _amount) internal returns (uint) {
