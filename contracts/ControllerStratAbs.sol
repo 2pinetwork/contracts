@@ -76,6 +76,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
     event Harvested(address _want, uint _amount);
     event PerformanceFee(uint _amount);
     event Boosted(address indexed booster, uint amount);
+    event Compensated(address indexed equalizer, uint amount);
 
     modifier onlyController() {
         require(msg.sender == controller, "Not from controller");
@@ -331,6 +332,8 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
         ) {
             want.safeTransferFrom(equalizer, address(this), _comp);
             _amount += _comp;
+
+            emit Compensated(equalizer, _comp);
         }
 
         return _amount;
