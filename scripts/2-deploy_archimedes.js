@@ -22,7 +22,7 @@ const main = async () => {
   ).deploy(...args)
 
   console.log('Archimedes: ')
-  await archimedes.deployed(10)
+  await archimedes.deployTransaction.wait(10)
   await verify('Archimedes', archimedes.address, args)
 
   deploy.Archimedes = archimedes.address

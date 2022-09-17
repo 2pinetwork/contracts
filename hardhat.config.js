@@ -133,6 +133,7 @@ module.exports = {
       polygon:              process.env.POLYGON_SCAN_API_KEY,
       polygonMumbai:        process.env.POLYGON_SCAN_API_KEY,
       bsc:                  process.env.BSC_SCAN_API_KEY,
+      optimisticEthereum:   process.env.OPTIMISM_SCAN_API_KEY,
     }
   },
   tenderly: {
@@ -226,9 +227,9 @@ module.exports = {
       accounts:   accounts,
       timeout:    60000
     },
-    ganache: {
+    testDeploy: {
       url:        'http://localhost:8545',
-      network_id: 137,
+      network_id: process.env.NETWORK,
       accounts:   accounts
     },
     [process.env.NETWORK]: {

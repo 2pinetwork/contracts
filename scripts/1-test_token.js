@@ -12,7 +12,7 @@ const main = async function () {
   )
 
   const contract = await (await hre.ethers.getContractFactory('TestPiToken')).deploy()
-  await contract.deployed(2);
+  await contract.deployTransaction.wait(10);
 
   await verify('TestPiToken', contract.address)
 
