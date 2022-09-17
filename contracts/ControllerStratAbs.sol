@@ -299,7 +299,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
                     IERC20Metadata(rewardToken).safeApprove(exchange, _balance);
 
                     IUniswapRouter(exchange).swapExactTokensForTokens(
-                        _balance, 0, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
+                        _balance, expected, rewardToWantRoute[rewardToken], address(this), block.timestamp + 60
                     );
                 }
             }
