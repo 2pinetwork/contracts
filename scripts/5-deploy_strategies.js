@@ -16,7 +16,7 @@ async function main() {
   const chainId = hre.network.config.network_id
   const deploy = JSON.parse( fs.readFileSync(`utils/deploy.${chainId}.json`, 'utf8'))
 
-  const archimedes = await ( await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
+  const archimedes = await (await hre.ethers.getContractFactory('Archimedes')).attach(deploy.Archimedes)
 
   const pools = deploy[process.env.POOLS]
   let pool
@@ -40,7 +40,7 @@ async function main() {
     if (deploy.chainlink[pool.token]) {
       let oracle = await hre.ethers.getContractAt(
         'IChainLink', deploy.chainlink[pool.token]
-      );
+      )
 
       let result = (await oracle.latestRoundData()).answer
 
@@ -102,6 +102,6 @@ async function main() {
 main()
   .then(() => process.exit(0))
   .catch(error => {
-    console.error(error);
-    process.exit(1);
-  });
+    console.error(error)
+    process.exit(1)
+  })

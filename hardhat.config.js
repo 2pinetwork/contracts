@@ -91,9 +91,9 @@ const getStringReplacements = (hre) => {
 
   if (chainId)
     try {
-    return JSON.parse(
-      fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
-    )
+      return JSON.parse(
+        fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
+      )
     } catch {
       console.log("🚨🚨🚨🚨 Not replacements address file found  🚨🚨🚨🚨")
       return {}

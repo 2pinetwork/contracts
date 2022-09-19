@@ -122,6 +122,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       if (balance < (await strat.balanceOfPool())) { break }
       console.log('Mined 6 blocks...')
     }
+
     expect(await strat.balanceOfPool()).to.be.above(balance)
 
     // withdraw 95 DAI in shares
@@ -157,7 +158,7 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     await waitFor(DAI.connect(bob).approve(archimedes.address, '' + 100e18))
     await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18 + '')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
@@ -177,12 +178,12 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       strat.address, otherStrat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18 + '')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await strat.balance()).to.be.equal(0)
     expect(await otherStrat.balance()).to.be.within(
-      99e18+'', 100e18+''
+      99e18 + '', 100e18 + ''
     )
 
     await waitFor(strat.unpause())
@@ -190,12 +191,12 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
       otherStrat.address, strat.address
     )
 
-    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18+'')
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e18 + '')
     expect(await DAI.balanceOf(controller.address)).to.be.equal(0)
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await otherStrat.balance()).to.be.equal(0)
     expect(await strat.balance()).to.be.within(
-      99e18+'', 100e18+''
+      99e18 + '', 100e18 + ''
     )
   })
 })
