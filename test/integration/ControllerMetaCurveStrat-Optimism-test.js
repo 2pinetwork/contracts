@@ -24,7 +24,7 @@ const itIf = async (cond, title, test) => {
   }
 }
 
-describe('[OPTIMISM] Controller Curve Strat', () => {
+describe('[OPTIMISM] Controller Curve Strat DAI', () => {
   let bob
   let piToken
   let archimedes
@@ -35,10 +35,6 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
   let daiFeed
   let crvFeed
   let poolSlipage
-
-  before(async () => {
-    // await resetHardhat(22562704) // 10 DAIs
-  })
 
   beforeEach(async () => {
     global.OP = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000042');
@@ -197,6 +193,180 @@ describe('[OPTIMISM] Controller Curve Strat', () => {
     expect(await otherStrat.balance()).to.be.equal(0)
     expect(await strat.balance()).to.be.within(
       99e18 + '', 100e18 + ''
+    )
+  })
+})
+
+describe('[OPTIMISM] Controller Curve Strat USDC', () => {
+  let bob
+  let piToken
+  let archimedes
+  let controller
+  let strat
+  let rewardsBlock
+  let OPFeed
+  let daiFeed
+  let crvFeed
+  let poolSlipage
+
+  before(async () => { await resetHardhat(22562704) })
+
+  beforeEach(async () => {
+    global.OP = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000042');
+
+    [, bob]      = await ethers.getSigners()
+    piToken      = await createPiToken()
+    rewardsBlock = (await getBlock()) + 20
+    archimedes   = await deploy(
+      'Archimedes',
+      piToken.address,
+      rewardsBlock,
+      OP.address
+    )
+
+    global.USDC = await ethers.getContractAt('IERC20Metadata', '0x7f5c764cbc14f9669b88837ca1490cca17c31607')
+    global.CRV = await ethers.getContractAt('IERC20Metadata', '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53')
+    global.WETH = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000006')
+    global.CurveRewardsGauge = await ethers.getContractAt('ICurveGauge', addresses.gauge)
+    global.exchange = await ethers.getContractAt('IUniswapRouter', '0xe592427a0aece92de3edee1f18e0157c05861564')
+
+    controller = await createController(USDC, archimedes, 'ControllerMetaCurveStrat', {
+      ...addresses,
+      gaugeType: 1,
+      poolSize: 4,
+      tokenIndex: 2 // [sUSD, DAI, USDC, USDT]
+    })
+
+    await waitFor(archimedes.addNewPool(USDC.address, controller.address, 10, false));
+
+    [strat, OPFeed, usdcFeed, crvFeed] = await Promise.all([
+      ethers.getContractAt('ControllerMetaCurveStrat', (await controller.strategy())),
+      ethers.getContractAt('IChainLink', '0x0d276fc14719f9292d5c1ea2198673d1f4269246'),
+      ethers.getContractAt('IChainLink', '0x16a9fa2fda030272ce99b29cf780dfa30361e0f3'),
+      ethers.getContractAt('IChainLink', '0xbd92c6c284271c227a1e0bf1786f468b539f51d9'),
+    ])
+
+    poolSlipage = 0.015
+
+    await Promise.all([
+      setChainlinkRoundForNow(OPFeed),
+      setChainlinkRoundForNow(usdcFeed),
+      setChainlinkRoundForNow(crvFeed),
+      waitFor(strat.setMaxPriceOffset(86400)),
+      waitFor(strat.setPriceFeed(OP.address, OPFeed.address)),
+      waitFor(strat.setPriceFeed(USDC.address, usdcFeed.address)),
+      waitFor(strat.setPriceFeed(CRV.address, crvFeed.address)),
+      waitFor(strat.setPoolSlippageRatio(poolSlipage * 10000)),
+      waitFor(strat.setSwapSlippageRatio(500)),
+      waitFor(strat.setRewardToWantRoute(OP.address, [OP.address, USDC.address])),
+      waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, USDC.address])),
+      waitFor(strat.setTokenToTokenSwapFee(OP.address, USDC.address, 3000)),
+      waitFor(strat.setTokenToTokenSwapFee(CRV.address, WETH.address, 3000)),
+      waitFor(strat.setTokenToTokenSwapFee(WETH.address, USDC.address, 3000)),
+    ])
+  })
+
+  itIf(hre.network.config.network_id == 10, 'Full deposit + harvest strat + withdraw', async () => {
+    await setCustomBalanceFor(USDC.address, bob.address, ethers.utils.parseUnits('100', 6))
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(USDC.connect(bob).approve(archimedes.address, '' + 100e6))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      (100e18 - (100e18 * poolSlipage)) + '', // production virtual price is ~1.0093.
+      100e18 + ''
+    )
+
+    const balance = await strat.balanceOfPool() // more decimals
+
+    // to ask for rewards (max 100 blocks)
+    for (let i = 0; i < 20; i++) {
+      await mineNTimes(5)
+
+      expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+      if (balance < (await strat.balanceOfPool())) { break }
+      console.log('Mined 6 blocks...')
+    }
+
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 95 USDC in shares
+    const toWithdraw = (
+      (await controller.totalSupply()).mul(95e6 + '').div(
+        await controller.balance()
+      )
+    )
+
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+    expect(await USDC.balanceOf(bob.address)).to.within(
+      94.9e6 + '', 95e6 + '' // 95 - 0.1% withdrawFee
+    )
+    expect(await USDC.balanceOf(strat.address)).to.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      4.6e18 + '', // 99.6 - 95
+      5e18 + ''
+    )
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+    expect(await USDC.balanceOf(bob.address)).to.within(
+      99.8e6 + '', // between 0.1% and 0.2%
+      99.9e6 + ''
+    )
+  })
+
+  itIf(hre.network.config.network_id == 10, 'Deposit and change strategy', async () => {
+    await setCustomBalanceFor(USDC.address, bob.address, ethers.utils.parseUnits('100', 6))
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(USDC.connect(bob).approve(archimedes.address, '' + 100e6))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e6 + '')
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      98.0e18 + '', // production virtual price is ~1.0093.
+      100e18 + ''
+    )
+
+    const otherStrat = await deploy(
+      'ControllerDummyStrat',
+      USDC.address,
+      controller.address,
+      global.exchange.address,
+      owner.address
+    )
+
+    expect(await controller.setStrategy(otherStrat.address)).to.emit(controller, 'NewStrategy').withArgs(
+      strat.address, otherStrat.address
+    )
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e6 + '')
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await strat.balance()).to.be.equal(0)
+    expect(await otherStrat.balance()).to.be.within(
+      99e6 + '', 100e6 + ''
+    )
+
+    await waitFor(strat.unpause())
+    expect(await controller.setStrategy(strat.address)).to.emit(controller, 'NewStrategy').withArgs(
+      otherStrat.address, strat.address
+    )
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(100e6 + '')
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await otherStrat.balance()).to.be.equal(0)
+    expect(await strat.balance()).to.be.within(
+      99e6 + '', 100e6 + ''
     )
   })
 })

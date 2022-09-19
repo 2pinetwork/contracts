@@ -31,9 +31,9 @@ async function main() {
       await hre.ethers.getContractFactory('Controller')
     ).deploy(...ctrollerArgs, callArgs());
 
-    // await controller.deployTransaction.wait(10)
+    await controller.deployTransaction.wait(10)
 
-    // await verify('Controller', controller.address, ctrollerArgs)
+    await verify('Controller', controller.address, ctrollerArgs)
 
     pool.controller = controller.address
 
@@ -62,11 +62,11 @@ async function main() {
 
     let strategy = await (await hre.ethers.getContractFactory(pool.contractName)).deploy(...args, callArgs());
 
-    // await strategy.deployTransaction.wait(10);
+    await strategy.deployTransaction.wait(10);
 
     console.log('Strategy ' + pool.currency + ':')
 
-    // await verify(pool.contractName, strategy.address, args)
+    await verify(pool.contractName, strategy.address, args)
 
     pool.strategy = strategy.address
 
