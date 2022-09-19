@@ -25,6 +25,17 @@ const hardhatNetwork = () => {
               blockNumber:   14980909
             }
           }
+        case 10:
+          return {
+            network_id:    10,
+            chainId:       10,
+            gasMultiplier: 5,
+            forking:       {
+              url:           `https://opt-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_OPTIMISM_API_KEY}`,
+              gasMultiplier: 5,
+              blockNumber:   (+process.env.BLOCK || 22562704)
+            }
+          }
         case 56:
           return {
             network_id:    56,
@@ -79,9 +90,14 @@ const getStringReplacements = (hre) => {
   const chainId = hre.network.config.network_id
 
   if (chainId)
-    return JSON.parse(
-      fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
-    )
+    try {
+      return JSON.parse(
+        fs.readFileSync(`./utils/addr_replacements.${chainId}.json`)
+      )
+    } catch {
+      console.log("🚨🚨🚨🚨 Not replacements address file found  🚨🚨🚨🚨")
+      return {}
+    }
 }
 
 let stringReplacements
@@ -117,6 +133,7 @@ module.exports = {
       polygon:              process.env.POLYGON_SCAN_API_KEY,
       polygonMumbai:        process.env.POLYGON_SCAN_API_KEY,
       bsc:                  process.env.BSC_SCAN_API_KEY,
+      optimisticEthereum:   process.env.OPTIMISM_SCAN_API_KEY,
     }
   },
   tenderly: {
@@ -203,9 +220,16 @@ module.exports = {
       accounts:   accounts,
       timeout:    60000
     },
-    ganache: {
+    optimism: {
+      url:        'https://rpc.ankr.com/optimism',
+      network_id: 10,
+      chainId:    10,
+      accounts:   accounts,
+      timeout:    60000
+    },
+    testDeploy: {
       url:        'http://localhost:8545',
-      network_id: 137,
+      network_id: process.env.NETWORK,
       accounts:   accounts
     },
     [process.env.NETWORK]: {
