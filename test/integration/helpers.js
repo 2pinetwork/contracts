@@ -13,8 +13,7 @@ const setWMaticBalanceFor = async (address, amount) => {
   await ethers.provider.send('hardhat_setStorageAt', [global.WMATIC.address, index.toString(), balance32])
 }
 
-const setWethBalanceFor = async (address, amount) => {
-  const wethSlot   = 0
+const setWethBalanceFor = async (address, amount, wethSlot = 0) => {
   const newBalance = ethers.utils.parseUnits(amount)
   const index      = ethers.utils.solidityKeccak256(['uint256', 'uint256'], [address, wethSlot])
   const balance32  = ethers.utils.hexlify(ethers.utils.zeroPad(newBalance.toHexString(), 32))
