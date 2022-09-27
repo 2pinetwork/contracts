@@ -5,7 +5,7 @@ pragma solidity 0.8.15;
 interface ICurvePool {
     // _use_underlying If True, withdraw underlying assets instead of aTokens
     function add_liquidity(uint[2] calldata amounts, uint min_mint_amount, bool _use_underlying) external;
-    function add_liquidity(uint[2] calldata amounts, uint min_mint_amount) external;
+    function add_liquidity(uint[2] calldata amounts, uint min_mint_amount) external payable;
     function add_liquidity(address _pool, uint[2] calldata amounts, uint min_mint_amount, bool _use_underlying) external;
     function add_liquidity(address _pool, uint[2] calldata amounts, uint min_mint_amount) external;
     function add_liquidity(uint[4] calldata amounts, uint min_mint_amount, bool _use_underlying) external;

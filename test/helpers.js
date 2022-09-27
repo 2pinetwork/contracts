@@ -182,6 +182,23 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           owner.address
         )
         break
+      case 'ControllerCurveUniV3Strat':
+        strategy = await deploy(
+          'ControllerCurveUniV3Strat',
+          token.address,
+          controller.address,
+          global.exchange.address,
+          owner.address,
+          extraArgs.crvToken,
+          extraArgs.pool,
+          extraArgs.swapPool,
+          extraArgs.gauge,
+          extraArgs.gaugeFactory,
+          extraArgs.gaugeType,
+          extraArgs.poolSize,
+          extraArgs.tokenIndex,
+        )
+        break
       case 'ControllerJarvisStrat':
         strategy = await deploy(
           'ControllerJarvisStrat',

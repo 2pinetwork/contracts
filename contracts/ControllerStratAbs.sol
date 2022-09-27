@@ -120,6 +120,7 @@ abstract contract ControllerStratAbs is Swappable, Pausable, ReentrancyGuard {
 
         poolSlippageRatio = _ratio;
     }
+
     function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
         require(_ratio != ratioForFullWithdraw, "Same ratio");
         require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
