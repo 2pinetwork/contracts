@@ -140,18 +140,11 @@ contract ControllerCurveUniV3Strat is ControllerStratAbs {
 
             if (useNative) {
                 IWNative(address(want)).withdraw(_wantBal);
-                ICurvePool(pool).add_liquidity{value: address(this).balance}(_amounts, _expected);
+                ICurvePool(pool).add_liquidity{value: _wantBal}(_amounts, _expected);
             } else {
                 want.safeApprove(pool, _wantBal);
                 ICurvePool(pool).add_liquidity(_amounts, _expected, true);
             }
-        } else if (poolSize == 4) {
-            uint[4] memory _amounts;
-
-            _amounts[uint(uint128(tokenIndex))] = _wantBal;
-
-            want.safeApprove(pool, _wantBal);
-            ICurvePool(pool).add_liquidity(_amounts, _expected);
         }
     }
 
@@ -192,11 +185,7 @@ contract ControllerCurveUniV3Strat is ControllerStratAbs {
         if (useNative) {
             ICurvePool(pool).remove_liquidity_one_coin(_balance, tokenIndex, _expected);
 
-            uint _nativeBalance = address(this).balance;
-
-            if (_nativeBalance > 0) {
-                IWNative(address(want)).deposit{value: _nativeBalance}();
-            }
+            IWNative(address(want)).deposit{value: address(this).balance}();
         } else {
             ICurvePool(pool).remove_liquidity_one_coin(_balance, tokenIndex, _expected, true);
         }
@@ -240,12 +229,6 @@ contract ControllerCurveUniV3Strat is ControllerStratAbs {
     function _wantToWantCrvDoubleCheck(uint _amount, bool _isDeposit) internal view returns (uint _wantCrvAmount) {
         if (poolSize == 2) {
             uint[2] memory _amounts;
-
-            _amounts[uint(uint128(tokenIndex))] = _amount;
-            // calc_token_amount doesn't consider fee
-            _wantCrvAmount = ICurvePool(swapPool).calc_token_amount(_amounts, _isDeposit);
-        } else if (poolSize == 4) {
-            uint[4] memory _amounts;
 
             _amounts[uint(uint128(tokenIndex))] = _amount;
             // calc_token_amount doesn't consider fee

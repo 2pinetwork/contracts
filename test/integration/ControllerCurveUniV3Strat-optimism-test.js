@@ -8,7 +8,7 @@ const {
   zeroAddress
 } = require('../helpers')
 
-const { resetHardhat, setWethBalanceFor, setChainlinkRoundForNow } = require('./helpers')
+const { resetHardhat, setChainlinkRoundForNow } = require('./helpers')
 
 const addresses = {
   crvToken:     '0x7Bc5728BC2b59B45a58d9A576E2Ffc5f0505B35E',
@@ -38,11 +38,11 @@ describe('Controller Curve Strat', () => {
   before(async () => { await resetHardhat(22562704) })
 
   beforeEach(async () => {
-    global.WETH = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000006')
-    global.OP = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000042')
-    global.CRV = await ethers.getContractAt('IERC20Metadata', '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53')
+    global.WETH              = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000006')
+    global.OP                = await ethers.getContractAt('IERC20Metadata', '0x4200000000000000000000000000000000000042')
+    global.CRV               = await ethers.getContractAt('IERC20Metadata', '0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53')
     global.CurveRewardsGauge = await ethers.getContractAt('ICurveGauge', addresses.gauge)
-    global.exchange = await ethers.getContractAt('IUniswapRouter', '0xe592427a0aece92de3edee1f18e0157c05861564');
+    global.exchange          = await ethers.getContractAt('IUniswapRouter', '0xe592427a0aece92de3edee1f18e0157c05861564');
 
     [, bob]      = await ethers.getSigners()
     piToken      = await createPiToken()
@@ -96,17 +96,17 @@ describe('Controller Curve Strat', () => {
       return await ethers.provider.getBalance(bob.address)
     }
 
-    const initialBalance = await currentBalance()
-
-    await setWethBalanceFor(bob.address, '100', 3)
     expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(WETH.connect(bob).approve(archimedes.address, '' + 100e18))
-    await waitFor(archimedes.connect(bob).deposit(0, '' + 100e18, zeroAddress))
+    await waitFor(archimedes.connect(bob).depositNative(0, zeroAddress, { value: '' + 100e18 }))
+
+    const afterDepositBalance = await currentBalance()
 
     expect(await WETH.balanceOf(controller.address)).to.be.equal(0)
     expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
       99.2e18 + '', // production virtual price is ~1.003.
       100e18 + ''
@@ -128,18 +128,20 @@ describe('Controller Curve Strat', () => {
 
     await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
 
-    expect((await currentBalance()).sub(initialBalance)).to.within(
+    expect((await currentBalance()).sub(afterDepositBalance)).to.within(
       94.9e18 + '',
       95e18 + '' // 95 - 0.1% withdrawFee
     )
     expect(await WETH.balanceOf(strat.address)).to.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
       4.6e18 + '', // 99.6 - 95
       5e18 + ''
     )
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
-    expect((await currentBalance()).sub(initialBalance)).to.within(
+    expect(await WETH.balanceOf(strat.address)).to.equal(0)
+    expect((await currentBalance()).sub(afterDepositBalance)).to.within(
       99.8e18 + '', // between 0.1% and 0.2%
       99.9e18 + ''
     )
@@ -150,18 +152,16 @@ describe('Controller Curve Strat', () => {
       return await ethers.provider.getBalance(bob.address)
     }
 
-    const initialBalance = await currentBalance()
-
-    await setWethBalanceFor(bob.address, '100', 3)
     expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
 
-    await waitFor(WETH.connect(bob).approve(archimedes.address, '' + 100e18))
-    await waitFor(archimedes.connect(bob).deposit(0, '' + 100e18, zeroAddress))
+    await waitFor(archimedes.connect(bob).depositNative(0, zeroAddress, { value: '' + 100e18 }))
 
     expect(await controller.balanceOf(bob.address)).to.be.equal('' + 100e18)
     expect(await WETH.balanceOf(controller.address)).to.be.equal(0)
     expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
     expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
       98.9e18 + '', // production virtual price is ~1.0093.
       100e18 + ''
