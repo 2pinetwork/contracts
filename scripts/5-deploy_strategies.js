@@ -86,6 +86,10 @@ async function main() {
     await (await strategy.setMaxPriceOffset(24 * 3600, callArgs())).wait()
     await (await strategy.setPriceFeed(pool.token, deploy.chainlink[pool.token], callArgs())).wait()
 
+    if (pool.useNative) {
+      await (await strategy.setUseNative(true)).wait()
+    }
+
     for (let token of pool.rewards) {
       console.log(`Configuring reward: ${token}`)
       await (await strategy.setPriceFeed(token, deploy.chainlink[token], callArgs())).wait()
