@@ -6,7 +6,8 @@ interface IAaveIncentivesController {
   function claimRewards(
     address[] calldata assets,
     uint amount,
-    address to
+    address to,
+    address reward
   ) external returns (uint);
 }
 
@@ -34,4 +35,6 @@ interface IAaveLendingPool {
         uint ltv,
         uint healthFactor
     );
+
+    function repayWithATokens(address, uint, uint) external;
 }
