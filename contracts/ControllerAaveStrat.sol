@@ -78,7 +78,7 @@ contract ControllerAaveStrat is ControllerStratAbs {
         if (_amount <= 0 ) { return; }
 
         want.safeApprove(POOL, _amount);
-        IAaveLendingPool(POOL).deposit(address(want), _amount, address(this), 0);
+        IAaveLendingPool(POOL).supply(address(want), _amount, address(this), 0);
 
         if (_amount < minLeverage) { return; }
 
@@ -88,7 +88,7 @@ contract ControllerAaveStrat is ControllerStratAbs {
 
             IAaveLendingPool(POOL).borrow(address(want), _amount, INTEREST_RATE_MODE, 0, address(this));
             want.safeApprove(POOL, _amount);
-            IAaveLendingPool(POOL).deposit(address(want), _amount, address(this), 0);
+            IAaveLendingPool(POOL).supply(address(want), _amount, address(this), 0);
 
             if (_amount < minLeverage || _outOfGasForLoop()) { break; }
         }
