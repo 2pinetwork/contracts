@@ -7,50 +7,51 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./Swappable.sol";
 import "../interfaces/IUniswapPair.sol";
-import "../interfaces/IUniswapRouter.sol";
 
-contract SwapperWithCompensation is Swappable, ReentrancyGuard {
+abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
 
     address public immutable strategy;
-    address public exchange = address(0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff);
+    address public exchange;
 
     IUniswapPair public immutable lp;
+    IERC20Metadata public immutable want;
     IERC20Metadata public immutable token0;
     IERC20Metadata public immutable token1;
-    IERC20Metadata public immutable want;
 
-    mapping(address => mapping(address => address[])) public routes;
+    uint internal immutable decimals0;
+    uint internal immutable decimals1;
 
-    uint public reserveSwapRatio = 50; // 0.5% (0.3% of swap fee + a little more to get the more LP as possible
-    uint public offsetRatio = 80; // 0.8% (0.3% of swap fee + 0.5% of staking deposit fee
+    uint public reserveSwapRatio = 0;
+    uint public offsetRatio = 0;
 
-    constructor(IERC20Metadata _want, IUniswapPair _lp, address _strategy) {
+    constructor(
+        IERC20Metadata _want,
+        IUniswapPair _lp,
+        address _strategy,
+        address _exchange
+    ) {
         // Check that want is at least an ERC20
         _want.symbol();
         require(_want.balanceOf(address(this)) == 0, "Invalid ERC20");
         require(_want.allowance(msg.sender, address(this)) == 0, "Invalid ERC20");
+        require(_exchange != address(0), "!ZeroAddress");
 
-        want = _want;
         lp = _lp;
+        want = _want;
         token0 = IERC20Metadata(lp.token0());
         token1 = IERC20Metadata(lp.token1());
 
+        decimals0 = 10 ** IERC20Metadata(token0).decimals();
+        decimals1 = 10 ** IERC20Metadata(token1).decimals();
+
+        exchange = _exchange;
         strategy = _strategy;
     }
 
     modifier onlyStrat() {
         require(msg.sender == strategy, "!Strategy");
         _;
-    }
-
-    function setRoute(address _from, address[] calldata _route) external onlyAdmin {
-        require(_from != address(0), "!ZeroAddress");
-        require(_route[0] == _from, "First route isn't from");
-        require(_route[_route.length - 1] != _from, "Last route is same as from");
-        require(_route.length > 1, "Route length < 2");
-
-        routes[_from][_route[_route.length - 1]] = _route;
     }
 
     function setReserveSwapRatio(uint newRatio) external onlyAdmin {
@@ -69,10 +70,12 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
 
     function swapLpTokensForWant(uint _amount0, uint _amount1) external onlyStrat returns (uint _amount) {
         uint prevBal = wantBalance();
+
         if (token0 != want) {
             token0.safeTransferFrom(strategy, address(this), _amount0);
             _swap(address(token0), _amount0, address(want));
         }
+
         if (token1 != want) {
             token1.safeTransferFrom(strategy, address(this), _amount1);
             _swap(address(token1), _amount1, address(want));
@@ -111,32 +114,6 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         token1.safeTransfer(msg.sender, _amount1);
     }
 
-    function _swap(address _from, uint _amount, address _to) internal returns (uint) {
-        address[] memory _route = _getRoute(_from, _to);
-
-        if (_amount > 0) {
-            uint _expected = _expectedForSwap(_amount, _from, _to);
-
-            if (_expected > 1) {
-                _approveToken(_from, _amount);
-
-                uint[] memory _amounts = IUniswapRouter(exchange).swapExactTokensForTokens(
-                    _amount,
-                    _expected,
-                    _route,
-                    address(this),
-                    block.timestamp
-                );
-
-                _removeAllowance(_from);
-
-                return _amounts[_amounts.length - 1];
-            }
-        }
-
-        return 0;
-    }
-
     function lpInWant(uint _lpAmount) public view returns (uint) {
         (uint112 _reserve0, uint112 _reserve1,) = lp.getReserves();
 
@@ -157,49 +134,8 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         _amount1Min = _liquidity * _reserve1 / _lpTotalSupply;
     }
 
-    function _getAmountsOut(IERC20Metadata _from, IERC20Metadata _to, uint _amount) internal view returns (uint) {
-        if (_from == _to) {
-            return _amount;
-        } else {
-            address[] memory _route = _getRoute(address(_from), address(_to));
-            uint[] memory amounts = IUniswapRouter(exchange).getAmountsOut(_amount, _route);
-
-            return amounts[amounts.length - 1];
-        }
-    }
-
-    function _getRoute(address _from, address _to) internal view returns (address[] memory) {
-        address[] memory _route = routes[_from][_to];
-
-        require(_route.length > 1, "Invalid route!");
-
-        return _route;
-    }
-
-    function _approveToken(address _token, uint _amount) internal {
-        IERC20Metadata(_token).safeApprove(exchange, _amount);
-    }
-
-    function _removeAllowance(address _token) internal {
-        if (IERC20Metadata(_token).allowance(address(this), exchange) > 0) {
-            IERC20Metadata(_token).safeApprove(exchange, 0);
-        }
-    }
-
-    function _max(uint _x, uint _y) internal pure returns (uint) {
-        return _x > _y ? _x : _y;
-    }
-
     function wantBalance() public view returns (uint) {
         return want.balanceOf(address(this));
-    }
-
-    function _reservePrecision() internal view returns (uint) {
-        if (token0.decimals() >= token1.decimals()) {
-            return (10 ** token0.decimals()) / (10 ** token1.decimals());
-        } else {
-            return (10 ** token1.decimals()) / (10 ** token0.decimals());
-        }
     }
 
     function wantToLP(uint _amount) public view returns (uint) {
@@ -218,18 +154,48 @@ contract SwapperWithCompensation is Swappable, ReentrancyGuard {
         return _max(_amount0 * _lpTotalSupply / _reserve0, _amount1 * _lpTotalSupply / _reserve1);
     }
 
+    function _swap(address _from, uint _amount, address _to) internal virtual returns (uint) {
+        // Should be implemented
+    }
+
+    function _getAmountsOut(IERC20Metadata _from, IERC20Metadata _to, uint _amount) internal virtual view returns (uint) {
+        // Should be implemented
+    }
+
+    function _approveToken(address _token, uint _amount) internal {
+        IERC20Metadata(_token).safeApprove(exchange, _amount);
+    }
+
+    function _removeAllowance(address _token) internal {
+        if (IERC20Metadata(_token).allowance(address(this), exchange) > 0) {
+            IERC20Metadata(_token).safeApprove(exchange, 0);
+        }
+    }
+
+    function _max(uint _x, uint _y) internal pure returns (uint) {
+        return _x > _y ? _x : _y;
+    }
+
     function _wantAmountToLpTokensAmount(uint _amount) internal view returns (uint _amount0, uint _amount1) {
-        (uint112 _reserve0, uint112 _reserve1,) = lp.getReserves();
+        (uint _reserve0, uint _reserve1,) = lp.getReserves();
 
-        // Reserves in token0 precision
-        uint totalReserves = _reserve0;
-        totalReserves += _reserve1 / _reservePrecision();
+        _reserve0 = _reserve0 * 1e18 / decimals0;
+        _reserve1 = _reserve1 * 1e18 / decimals1;
 
-        // Get the reserve ratio plus the 0.5% of the swap
-        _amount0 = _amount * _reserve0 *
+        (uint _reserve, uint _decimals) = token0 == want ? (_reserve0, decimals0) : (_reserve1, decimals1);
+        uint _totalReserves = _reserve0 + _reserve1;
+
+        _amount = _amount * 1e18 / _decimals;
+
+        _amount0 = _amount * _reserve *
             (RATIO_PRECISION + reserveSwapRatio) /
-            totalReserves / RATIO_PRECISION;
+            _totalReserves / RATIO_PRECISION;
 
+        // Correction ratio, take "after reserves" into account
+        _amount0 = _amount0 * (_totalReserves + _amount0) / _totalReserves;
         _amount1 = _amount - _amount0;
+
+        _amount0 = _amount0 * _decimals / 1e18;
+        _amount1 = _amount1 * _decimals / 1e18;
     }
 }
