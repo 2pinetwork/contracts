@@ -113,8 +113,8 @@ contract ControllerAaveStrat is ControllerStratAbs {
         uint _balance = wantBalance();
 
         // Keep the "same" healthFactor after withdraw
-        uint toRepay = _needed * borrowRate / RATIO_PRECISION;
-        IAaveLendingPool(POOL).repayWithATokens(address(want), toRepay, INTEREST_RATE_MODE);
+        uint _toRepay = _needed * borrowRate / RATIO_PRECISION;
+        IAaveLendingPool(POOL).repayWithATokens(address(want), _toRepay, INTEREST_RATE_MODE);
 
         IAaveLendingPool(POOL).withdraw(address(want), _needed, address(this));
 
@@ -124,14 +124,15 @@ contract ControllerAaveStrat is ControllerStratAbs {
     // This function is useful to increase Aave HF (to prevent liquidation) and
     // in case of "stucked while loop for withdraws" the strategy can be paused, and then
     // use this function the N needed times to get all the resources out of the Aave pool
-    function increaseHealthFactor(uint byRatio) external onlyAdmin nonReentrant {
-        require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
-        (uint supplyBal, ) = supplyAndBorrow();
+    function increaseHealthFactor(uint _byRatio) external onlyAdmin nonReentrant {
+        require(_byRatio <= RATIO_PRECISION, "Can't be more than 100%");
+        require(borrowDepth > 0, "Not needed");
 
-        // TODO: CHECK IF THAT ACCOUNT IS REALLY WHAT SHOULD BE
-        uint toRepay = (_maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
+        (uint _supplyBal, ) = supplyAndBorrow();
 
-        IAaveLendingPool(POOL).repayWithATokens(address(want), toRepay, INTEREST_RATE_MODE);
+        uint _toRepay = (_maxWithdrawFromSupply(_supplyBal) * _byRatio) / RATIO_PRECISION;
+
+        IAaveLendingPool(POOL).repayWithATokens(address(want), _toRepay, INTEREST_RATE_MODE);
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
@@ -151,10 +152,10 @@ contract ControllerAaveStrat is ControllerStratAbs {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
-        uint hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
+        uint _hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
 
         return _supply - (
-            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / hfDecimals) - HF_WITHDRAW_TOLERANCE)
+            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / _hfDecimals) - HF_WITHDRAW_TOLERANCE)
         );
     }
 
@@ -164,15 +165,15 @@ contract ControllerAaveStrat is ControllerStratAbs {
 
     // it calculates how much 'want' the strategy has working in the controller.
     function balanceOfPool() public view override returns (uint) {
-        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
-        return supplyBal - borrowBal;
+        (uint _supplyBal, uint _borrowBal) = supplyAndBorrow();
+        return _supplyBal - _borrowBal;
     }
 
     function _claimRewards() internal override {
         // Incentive controller only receive aToken addresses
-        address[] memory assets = new address[](2);
-        assets[0] = aToken;
-        assets[1] = debtToken;
+        address[] memory _assets = new address[](2);
+        _assets[0] = aToken;
+        _assets[1] = debtToken;
 
         // If there's no rewards, it's because the reward == want
         address _reward = rewardTokens[0];
@@ -180,7 +181,7 @@ contract ControllerAaveStrat is ControllerStratAbs {
 
         // aave reward should always be the first
         IAaveIncentivesController(INCENTIVES).claimRewards(
-            assets, type(uint).max, address(this), _reward
+            _assets, type(uint).max, address(this), _reward
         );
     }
 
@@ -199,8 +200,8 @@ contract ControllerAaveStrat is ControllerStratAbs {
     }
 
     function supplyAndBorrow() public view returns (uint, uint) {
-        (uint supplyBal,,uint borrowBal,,,,,,) = userReserves();
-        return (supplyBal, borrowBal);
+        (uint _supplyBal,, uint _borrowBal,,,,,,) = userReserves();
+        return (_supplyBal, _borrowBal);
     }
 
     // returns the user account data across all the reserves
@@ -216,33 +217,33 @@ contract ControllerAaveStrat is ControllerStratAbs {
     }
 
     function currentHealthFactor() public view returns (uint) {
-        (,,,,, uint healthFactor) = userAccountData();
+        (,,,,, uint _healthFactor) = userAccountData();
 
-        return healthFactor;
+        return _healthFactor;
     }
 
     // UniswapV3
     function _swapRewards() internal override {
         for (uint i = 0; i < rewardTokens.length; i++) {
-            address rewardToken = rewardTokens[i];
-            uint _balance = IERC20Metadata(rewardToken).balanceOf(address(this));
+            address _rewardToken = rewardTokens[i];
+            uint _balance = IERC20Metadata(_rewardToken).balanceOf(address(this));
 
             if (_balance > 0) {
-                uint expected = _expectedForSwap(_balance, rewardToken, address(want));
+                uint _expected = _expectedForSwap(_balance, _rewardToken, address(want));
 
                 // Want price sometimes is too high so it requires a lot of rewards to swap
-                if (expected > 1) {
-                    IERC20Metadata(rewardToken).safeApprove(exchange, _balance);
+                if (_expected > 1) {
+                    IERC20Metadata(_rewardToken).safeApprove(exchange, _balance);
 
-                    bytes memory _path = abi.encodePacked(rewardToken);
+                    bytes memory _path = abi.encodePacked(_rewardToken);
 
-                    for (uint j = 1; j < rewardToWantRoute[rewardToken].length; j++) {
-                        uint24 _fee = tokenToTokenSwapFee[rewardToWantRoute[rewardToken][j - 1]][rewardToWantRoute[rewardToken][j]];
+                    for (uint j = 1; j < rewardToWantRoute[_rewardToken].length; j++) {
+                        uint24 _fee = tokenToTokenSwapFee[rewardToWantRoute[_rewardToken][j - 1]][rewardToWantRoute[_rewardToken][j]];
 
                         _path = abi.encodePacked(
                             _path,
                             _fee,
-                            rewardToWantRoute[rewardToken][j]
+                            rewardToWantRoute[_rewardToken][j]
                         );
                     }
 
@@ -251,7 +252,7 @@ contract ControllerAaveStrat is ControllerStratAbs {
                         recipient: address(this),
                         deadline: block.timestamp + 60,
                         amountIn: _balance,
-                        amountOutMinimum: expected
+                        amountOutMinimum: _expected
                     }));
                 }
             }

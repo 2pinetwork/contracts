@@ -11,7 +11,7 @@ const {
 
 const { resetHardhat, setWbtcBalanceFor, setChainlinkRoundForNow } = require('./helpers')
 
-describe('Controller Aave Strat', () => {
+describe.skip('Controller Aave Strat', () => {
   let bob
   let piToken
   let archimedes
