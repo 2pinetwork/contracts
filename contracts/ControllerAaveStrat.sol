@@ -2,24 +2,15 @@
 
 pragma solidity 0.8.15;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-// import "hardhat/console.sol";
+import "./ControllerStratAbs.sol";
 
-import "./Swappable.sol";
 import "../interfaces/IAave.sol";
 import "../interfaces/IDataProvider.sol";
+import "../interfaces/IUniswapV3.sol";
 
-// Swappable contract has the AccessControl module
-contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
-    using SafeERC20 for IERC20;
+contract ControllerAaveStrat is ControllerStratAbs {
+    using SafeERC20 for IERC20Metadata;
 
-    address public constant wNative = address(0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f); // test
-
-    address public immutable want;
     address public immutable aToken;
     address public immutable debtToken;
 
@@ -27,11 +18,6 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     address public constant DATA_PROVIDER = address(0x43ca3D2C94be00692D207C6A1e60D8B325c6f12f);
     address public constant INCENTIVES = address(0xC469e7aE4aD962c30c7111dc580B4adbc7E914DD);
     address public constant POOL = address(0xb09da8a5B236fE0295A345035287e80bb0008290);
-
-    // Routes
-    address[] public wNativeToWantRoute;
-
-    address public treasury;
 
     // Profitability vars
     uint public borrowRate;
@@ -42,186 +28,57 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     uint constant public INTEREST_RATE_MODE = 2; // variable
     uint constant public MIN_HEALTH_FACTOR = 1.05e18;  // Always at least 1.05 to not enter default like Arg
 
-    // In the case of leverage we should withdraw when the
-    // amount to withdraw is 50%
-    uint public ratioForFullWithdraw = 5000; // 50%
-
     // The healthFactor value has the same representation than supply so
     // to do the math we should remove 12 places from healthFactor to get a HF
     // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
     uint public constant HF_DECIMAL_FACTOR = 1e6;
     uint public constant HF_WITHDRAW_TOLERANCE = 0.05e6;
 
-    // Fees
-    uint constant public MAX_PERFORMANCE_FEE = 2000; // 20% max
-    uint public performanceFee = 450; // 4.5%
-    uint internal lastBalance;
-
-    address public exchange;
-    address public immutable controller;
+    // UniswapV3 has different fees between each pool (Commonly is 0.3% but can be 0.1% or 1%
+    mapping(address => mapping(address => uint24)) public tokenToTokenSwapFee;
 
     constructor(
-        address _want,
+        IERC20Metadata _want,
+        address _controller,
+        address _exchange,
+        address _treasury,
         uint _borrowRate,
         uint _borrowRateMax,
         uint _borrowDepth,
-        uint _minLeverage,
-        address _controller,
-        address _exchange,
-        address _treasury
-    ) {
-        require(_want != address(0), "want !ZeroAddress");
-        require(_controller != address(0), "Controller !ZeroAddress");
-        require(_treasury != address(0), "Treasury !ZeroAddress");
+        uint _minLeverage
+    ) ControllerStratAbs(_want, _controller, _exchange, _treasury) {
         require(_borrowRate <= _borrowRateMax, "!Borrow <= MaxBorrow");
         require(_borrowRateMax <= RATIO_PRECISION, "!MaxBorrow <= 100%");
 
-        want = _want;
         borrowRate = _borrowRate;
         borrowRateMax = _borrowRateMax;
         borrowDepth = _borrowDepth;
         minLeverage = _minLeverage;
-        controller = _controller;
-        exchange = _exchange;
-        treasury = _treasury;
 
-        (aToken,,debtToken) = IDataProvider(DATA_PROVIDER).getReserveTokensAddresses(_want);
-
-        wNativeToWantRoute = [wNative, _want];
-
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
-    event NewTreasury(address oldTreasury, address newTreasury);
-    event NewExchange(address oldExchange, address newExchange);
-    event NewPerformanceFee(uint oldFee, uint newFee);
-    event Harvested(address _want, uint _amount);
-    event PerformanceFee(uint _amount);
-
-    modifier onlyController() {
-        require(msg.sender == controller, "Not from controller");
-        _;
+        (aToken,,debtToken) = IDataProvider(DATA_PROVIDER).getReserveTokensAddresses(address(_want));
     }
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(
-            IERC20Metadata(want).symbol(), "@AaveV2#1.0.0"
+            want.symbol(), "@AaveV3#1.0.0"
         ));
     }
 
-    function setTreasury(address _treasury) external onlyAdmin nonReentrant {
-        require(_treasury != treasury, "Same address");
-        require(_treasury != address(0), "!ZeroAddress");
-        emit NewTreasury(treasury, _treasury);
+    function setTokenToTokenSwapFee(address _tokenA, address _tokenB, uint24 _fee) external onlyAdmin {
+        require(_tokenA != address(0), "!ZeroAddress tokenA");
+        require(_tokenB != address(0), "!ZeroAddress tokenB");
+        require(_fee >= 0, "Fee can't be negative");
 
-        treasury = _treasury;
+        tokenToTokenSwapFee[_tokenA][_tokenB] = _fee;
     }
 
-    function setExchange(address _exchange) external onlyAdmin nonReentrant {
-        require(_exchange != exchange, "Same address");
-        require(_exchange != address(0), "!ZeroAddress");
-        emit NewExchange(exchange, _exchange);
-
-        exchange = _exchange;
-    }
-
-    function setSwapRoute(address[] calldata _route) external onlyAdmin nonReentrant {
-        require(_route[0] == wNative, "route[0] isn't wNative");
-        require(_route[_route.length - 1] == want, "Last route isn't want");
-        wNativeToWantRoute = _route;
-    }
-
-    function setRatioForFullWithdraw(uint _ratio) public onlyAdmin {
-        require(_ratio != ratioForFullWithdraw, "Same ratio");
-        require(_ratio <= RATIO_PRECISION, "Can't be more than 100%");
-        ratioForFullWithdraw = _ratio;
-    }
-
-    function setPerformanceFee(uint _fee) external onlyAdmin nonReentrant {
-        require(_fee != performanceFee, "Same fee");
-        require(_fee <= MAX_PERFORMANCE_FEE, "Can't be greater than max");
-        emit NewPerformanceFee(performanceFee, _fee);
-
-        performanceFee = _fee;
-    }
-
-    // Charge want auto-generation with performanceFee
-    // Basically we assign `lastBalance` each time that we charge or make a movement
-    function beforeMovement() external onlyController nonReentrant {
-        _beforeMovement();
-    }
-
-    function _beforeMovement() internal {
-        uint currentBalance = balance();
-
-        if (currentBalance > lastBalance) {
-            uint perfFee = ((currentBalance - lastBalance) * performanceFee) / RATIO_PRECISION;
-
-            if (perfFee > 0) {
-                uint _balance = wantBalance();
-
-                if (_balance < perfFee) {
-                    uint _diff = perfFee - _balance;
-
-                    // Call partial because this fee should never be a big amount
-                    _partialDeleverage(_diff);
-                }
-
-                // Just in case
-                _balance = wantBalance();
-                if (_balance < perfFee) { perfFee = _balance; }
-
-                if (perfFee > 0) {
-                    IERC20(want).safeTransfer(treasury, perfFee);
-                    emit PerformanceFee(perfFee);
-                }
-            }
-        }
-    }
-
-    // Update new `lastBalance` for the next charge
-    function _afterMovement() internal {
-        lastBalance = balance();
-    }
-
-    function deposit() external whenNotPaused onlyController nonReentrant {
-        _leverage();
-        _afterMovement();
-    }
-
-    function withdraw(uint _amount) external onlyController nonReentrant returns (uint) {
-        uint _balance = wantBalance();
-
-        if (_balance < _amount) {
-            uint _diff = _amount - _balance;
-
-            // If the amount is at least the half of the real deposit
-            // we have to do a full deleverage, in other case the withdraw+repay
-            // will looping for ever.
-            if ((balanceOfPool() * ratioForFullWithdraw / RATIO_PRECISION) <= _diff) {
-                _fullDeleverage();
-            } else {
-                _partialDeleverage(_diff);
-            }
-
-           _balance =  wantBalance();
-           if (_balance < _amount) { _amount = _balance; }
-        }
-
-        IERC20(want).safeTransfer(controller, _amount);
-
-        if (!paused() && wantBalance() > 0) { _leverage(); }
-
-        _afterMovement();
-
-        return _amount;
-    }
-
-    function _leverage() internal {
+    function _deposit() internal override {
         uint _amount = wantBalance();
 
-        IERC20(want).safeApprove(POOL, _amount);
-        IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
+        if (_amount <= 0 ) { return; }
+
+        want.safeApprove(POOL, _amount);
+        IAaveLendingPool(POOL).supply(address(want), _amount, address(this), 0);
 
         if (_amount < minLeverage) { return; }
 
@@ -229,111 +86,65 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         for (uint i = 0; i < borrowDepth; i++) {
             _amount = (_amount * borrowRate) / RATIO_PRECISION;
 
-            IAaveLendingPool(POOL).borrow(want, _amount, INTEREST_RATE_MODE, 0, address(this));
-            IERC20(want).safeApprove(POOL, _amount);
-            IAaveLendingPool(POOL).deposit(want, _amount, address(this), 0);
+            IAaveLendingPool(POOL).borrow(address(want), _amount, INTEREST_RATE_MODE, 0, address(this));
+            want.safeApprove(POOL, _amount);
+            IAaveLendingPool(POOL).supply(address(want), _amount, address(this), 0);
 
             if (_amount < minLeverage || _outOfGasForLoop()) { break; }
         }
     }
 
-    function _fullDeleverage() internal {
-        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
-        uint toWithdraw;
-        uint toRepay;
+    function _withdrawAll() internal override returns (uint) {
+        uint _balance = wantBalance();
 
-        while (borrowBal > 0) {
-            toWithdraw = _maxWithdrawFromSupply(supplyBal);
+        // Repay all debt with aTokens
+        IAaveLendingPool(POOL).repayWithATokens(address(want), type(uint).max, INTEREST_RATE_MODE);
+        // Withdraw everything
+        IAaveLendingPool(POOL).withdraw(address(want), type(uint).max, address(this));
 
-            IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
-
-            // This is made mainly for the approve != 0
-            toRepay = toWithdraw;
-            if (toWithdraw > borrowBal) { toRepay = borrowBal; }
-
-            IERC20(want).safeApprove(POOL, toRepay);
-            // Repay only will use the needed
-            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
-
-            (supplyBal, borrowBal) = supplyAndBorrow();
-        }
-
-        if (supplyBal > 0) {
-            IAaveLendingPool(POOL).withdraw(want, type(uint).max, address(this));
-        }
+        return wantBalance() - _balance;
     }
 
-    function _partialDeleverage(uint _needed) internal {
+    function _withdraw(uint _needed) internal override returns (uint) {
         // Instead of a require() to raise an exception, the fullDeleverage should
         // fix the health factor
-        if (currentHealthFactor() <= MIN_HEALTH_FACTOR) {
-            _fullDeleverage();
+        if (currentHealthFactor() <= MIN_HEALTH_FACTOR) { return _withdrawAll(); }
 
-            return;
-        }
+        uint _balance = wantBalance();
 
-        // This is because we check the wantBalance in each iteration
-        // but for partialDeleverage we need to withdraw the entire
-        // _needed amount
-        uint toWithdraw = wantBalance() + _needed;
+        // Keep the "same" healthFactor after withdraw
+        uint _toRepay = _needed * borrowRate / RATIO_PRECISION;
+        IAaveLendingPool(POOL).repayWithATokens(address(want), _toRepay, INTEREST_RATE_MODE);
 
-        while (toWithdraw > wantBalance()) { _withdrawAndRepay(toWithdraw); }
-    }
+        IAaveLendingPool(POOL).withdraw(address(want), _needed, address(this));
 
-    function _withdrawAndRepay(uint _needed) internal {
-        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
-        // This amount with borrowDepth = 0 will return the entire deposit
-        uint toWithdraw = _maxWithdrawFromSupply(supplyBal);
-
-        if (toWithdraw > _needed) { toWithdraw = _needed; }
-
-        IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
-
-        // for depth > 0
-        if (borrowBal > 0) {
-            // Only repay the just amount
-            uint toRepay = (toWithdraw * borrowRate) / RATIO_PRECISION;
-            if (toRepay > borrowBal) { toRepay = borrowBal; }
-
-            // In case the toWithdraw is really low it fails to repay 0
-            if (toRepay > 0) {
-                IERC20(want).safeApprove(POOL, toRepay);
-                IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
-            }
-        }
+        return wantBalance() - _balance;
     }
 
     // This function is useful to increase Aave HF (to prevent liquidation) and
     // in case of "stucked while loop for withdraws" the strategy can be paused, and then
     // use this function the N needed times to get all the resources out of the Aave pool
-    function increaseHealthFactor(uint byRatio) external onlyAdmin nonReentrant {
-        require(byRatio <= RATIO_PRECISION, "Can't be more than 100%");
-        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
+    function increaseHealthFactor(uint _byRatio) external onlyAdmin nonReentrant {
+        require(_byRatio <= RATIO_PRECISION, "Can't be more than 100%");
+        require(borrowDepth > 0, "Not needed");
 
-        uint toWithdraw = (_maxWithdrawFromSupply(supplyBal) * byRatio) / RATIO_PRECISION;
+        (uint _supplyBal, ) = supplyAndBorrow();
 
-        IAaveLendingPool(POOL).withdraw(want, toWithdraw, address(this));
+        uint _toRepay = (_maxWithdrawFromSupply(_supplyBal) * _byRatio) / RATIO_PRECISION;
 
-        //  just in case
-        if (borrowBal > 0) {
-            uint toRepay = toWithdraw;
-            if (toWithdraw > borrowBal) { toRepay = borrowBal; }
-
-            IERC20(want).safeApprove(POOL, toRepay);
-            IAaveLendingPool(POOL).repay(want, toRepay, INTEREST_RATE_MODE, address(this));
-        }
+        IAaveLendingPool(POOL).repayWithATokens(address(want), _toRepay, INTEREST_RATE_MODE);
     }
 
     function rebalance(uint _borrowRate, uint _borrowDepth) external onlyAdmin nonReentrant {
         require(_borrowRate <= borrowRateMax, "Exceeds max borrow rate");
         require(_borrowDepth <= BORROW_DEPTH_MAX, "Exceeds max borrow depth");
 
-        _fullDeleverage();
+        _withdrawAll();
 
         borrowRate = _borrowRate;
         borrowDepth = _borrowDepth;
 
-        if (!paused() && wantBalance() > 0) { _leverage(); }
+        if (!paused() && wantBalance() > 0) { _deposit(); }
     }
 
     // Divide the supply with HF less 0.5 to finish at least with HF~=1.05
@@ -341,81 +152,37 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         // The healthFactor value has the same representation than supply so
         // to do the math we should remove 12 places from healthFactor to get a HF
         // with only 6 "decimals" and add 6 "decimals" to supply to divide like we do IRL.
-        uint hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
+        uint _hfDecimals = 1e18 / HF_DECIMAL_FACTOR;
 
         return _supply - (
-            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / hfDecimals) - HF_WITHDRAW_TOLERANCE)
+            (_supply * HF_DECIMAL_FACTOR) / ((currentHealthFactor() / _hfDecimals) - HF_WITHDRAW_TOLERANCE)
         );
     }
 
-    function wantBalance() public view returns (uint) {
-        return IERC20(want).balanceOf(address(this));
-    }
-
-    function balance() public view returns (uint) {
-        return wantBalance() + balanceOfPool();
+    function balanceOfPoolInWant() public view override returns (uint) {
+        return balanceOfPool();
     }
 
     // it calculates how much 'want' the strategy has working in the controller.
-    function balanceOfPool() public view returns (uint) {
-        (uint supplyBal, uint borrowBal) = supplyAndBorrow();
-        return supplyBal - borrowBal;
+    function balanceOfPool() public view override returns (uint) {
+        (uint _supplyBal, uint _borrowBal) = supplyAndBorrow();
+        return _supplyBal - _borrowBal;
     }
 
-    function _claimRewards() internal {
+    function _claimRewards() internal override {
         // Incentive controller only receive aToken addresses
-        address[] memory assets = new address[](2);
-        assets[0] = aToken;
-        assets[1] = debtToken;
+        address[] memory _assets = new address[](2);
+        _assets[0] = aToken;
+        _assets[1] = debtToken;
 
+        // If there's no rewards, it's because the reward == want
+        address _reward = rewardTokens[0];
+        if (_reward == address(0)) { _reward = address(want); }
+
+        // aave reward should always be the first
         IAaveIncentivesController(INCENTIVES).claimRewards(
-            assets, type(uint).max, address(this)
+            _assets, type(uint).max, address(this), _reward
         );
-    }
-
-    function harvest() public nonReentrant {
-        uint _balance = balance();
-        _claimRewards();
-
-        // only need swap when is different =)
-        if (want != wNative) { _swapRewards(); }
-
-        uint harvested = balance() - _balance;
-
-        // Charge performance fee for earned want + rewards
-        _beforeMovement();
-
-        // re-deposit
-        if (!paused() && wantBalance() > 0) { _leverage(); }
-
-        // Update lastBalance for the next movement
-        _afterMovement();
-
-        emit Harvested(want, harvested);
-    }
-
-    function _swapRewards() internal {
-        uint _balance = IERC20(wNative).balanceOf(address(this));
-
-        if (_balance > 0) {
-            // _expectedForSwap checks with oracles to obtain the minExpected amount
-            uint expected = _expectedForSwap(_balance, wNative, want);
-
-            IERC20(wNative).safeApprove(exchange, _balance);
-            IUniswapRouter(exchange).swapExactTokensForTokens(
-                _balance, expected, wNativeToWantRoute, address(this), block.timestamp + 60
-            );
-        }
-    }
-
-    /**
-     * @dev Takes out performance fee.
-     */
-    function _chargeFees(uint _harvested) internal {
-        uint fee = (_harvested * performanceFee) / RATIO_PRECISION;
-
-        // Pay to treasury a percentage of the total reward claimed
-        if (fee > 0) { IERC20(want).safeTransfer(treasury, fee); }
     }
 
     function userReserves() public view returns (
@@ -429,12 +196,12 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
         uint40 stableRateLastUpdated,
         bool usageAsCollateralEnabled
     ) {
-        return IDataProvider(DATA_PROVIDER).getUserReserveData(want, address(this));
+        return IDataProvider(DATA_PROVIDER).getUserReserveData(address(want), address(this));
     }
 
     function supplyAndBorrow() public view returns (uint, uint) {
-        (uint supplyBal,,uint borrowBal,,,,,,) = userReserves();
-        return (supplyBal, borrowBal);
+        (uint _supplyBal,, uint _borrowBal,,,,,,) = userReserves();
+        return (_supplyBal, _borrowBal);
     }
 
     // returns the user account data across all the reserves
@@ -450,37 +217,45 @@ contract ControllerAaveStrat is Pausable, ReentrancyGuard, Swappable {
     }
 
     function currentHealthFactor() public view returns (uint) {
-        (,,,,, uint healthFactor) = userAccountData();
+        (,,,,, uint _healthFactor) = userAccountData();
 
-        return healthFactor;
+        return _healthFactor;
     }
 
-    // called as part of strat migration. Sends all the available funds back to the vault.
-    function retireStrat() external onlyController {
-        if (!paused()) { _pause(); }
+    // UniswapV3
+    function _swapRewards() internal override {
+        for (uint i = 0; i < rewardTokens.length; i++) {
+            address _rewardToken = rewardTokens[i];
+            uint _balance = IERC20Metadata(_rewardToken).balanceOf(address(this));
 
-        if (balanceOfPool() > 0) { _fullDeleverage(); }
+            if (_balance > 0) {
+                uint _expected = _expectedForSwap(_balance, _rewardToken, address(want));
 
-        // Can be called without rewards
-        harvest();
+                // Want price sometimes is too high so it requires a lot of rewards to swap
+                if (_expected > 1) {
+                    IERC20Metadata(_rewardToken).safeApprove(exchange, _balance);
 
-        require(balanceOfPool() <= 0, "Strategy still has deposits");
-        IERC20(want).safeTransfer(controller, wantBalance());
-    }
+                    bytes memory _path = abi.encodePacked(_rewardToken);
 
-    // pauses deposits and withdraws all funds from third party systems.
-    function panic() external onlyAdmin nonReentrant {
-        _fullDeleverage();
-        pause();
-    }
+                    for (uint j = 1; j < rewardToWantRoute[_rewardToken].length; j++) {
+                        uint24 _fee = tokenToTokenSwapFee[rewardToWantRoute[_rewardToken][j - 1]][rewardToWantRoute[_rewardToken][j]];
 
-    function pause() public onlyAdmin {
-        _pause();
-    }
+                        _path = abi.encodePacked(
+                            _path,
+                            _fee,
+                            rewardToWantRoute[_rewardToken][j]
+                        );
+                    }
 
-    function unpause() external onlyAdmin nonReentrant {
-        _unpause();
-
-        if (wantBalance() > 0) { _leverage(); }
+                    IUniswapV3Router(exchange).exactInput(IUniswapV3Router.ExactInputParams({
+                        path: _path,
+                        recipient: address(this),
+                        deadline: block.timestamp + 60,
+                        amountIn: _balance,
+                        amountOutMinimum: _expected
+                    }));
+                }
+            }
+        }
     }
 }

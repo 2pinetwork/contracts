@@ -6,24 +6,9 @@ import "./ControllerStratAbs.sol";
 
 import "../interfaces/ICurve.sol";
 import "../interfaces/IWNative.sol";
-
-interface IUniswapV3Router {
-  struct ExactInputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
-    }
-
-    /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
-    /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
-    /// @return amountOut The amount of the received token
-    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
-}
+import "../interfaces/IUniswapV3.sol";
 
 contract ControllerCurveUniV3Strat is ControllerStratAbs {
-    using SafeERC20 for IERC20;
     using SafeERC20 for IERC20Metadata;
 
     IERC20Metadata public immutable crvToken;

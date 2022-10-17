@@ -10,7 +10,7 @@ const {
   zeroAddress,
 } = require('../helpers')
 
-describe('Controller Aave Strat wrong deployment', () => {
+describe.skip('Controller Aave Strat wrong deployment', () => {
   it('Should not deploy with zero address want', async () => {
     await expect(
       deploy(
@@ -63,7 +63,7 @@ describe('Controller Aave Strat wrong deployment', () => {
   })
 })
 
-describe('Controller Aave Strat', () => {
+describe.skip('Controller Aave Strat', () => {
   let bob
   let piToken
   let archimedes

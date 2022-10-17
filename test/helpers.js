@@ -111,11 +111,7 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
 
   switch (stratName) {
       case 'ControllerAaveStrat':
-        let args =  [
-          0,
-          10000,
-          0,
-          0,
+        let args = [
           controller.address,
           global.exchange.address,
           owner.address
@@ -124,15 +120,9 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
         if (process.env.HARDHAT_INTEGRATION_TESTS) {
           let decimals = parseInt(await token.decimals(), 10)
 
-          args = [
-            4800,
-            5000,
-            8,
-            (10 ** (decimals - 3)),
-            controller.address,
-            global.exchange.address,
-            owner.address
-          ]
+          args = [...args, 4800, 5000, 8, (10 ** (decimals - 3))]
+        } else {
+          args = [...args, 0, 10000, 0, 0]
         }
 
         strategy = await deploy(
