@@ -67,14 +67,7 @@ describe('Controller Solidly LP Strat on WETH', () => {
     ])
 
     setupStrat = async (strategy) => {
-      const LP          = await ethers.getContractAt('IERC20Metadata', '0xFd7FddFc0A729eCF45fB6B12fA3B71A575E1966F')
-      const swapperSeth = await deploy(
-        'SwapperWithCompensationSolidly',
-        seth.address,
-        LP.address,
-        strategy.address,
-        '0xa132DAB612dB5cB9fC9Ac426A0Cc215A3423F9c9'
-      )
+      const LP = await ethers.getContractAt('IERC20Metadata', '0xFd7FddFc0A729eCF45fB6B12fA3B71A575E1966F')
 
       swapper = await deploy(
         'SwapperWithCompensationSolidly',
@@ -92,22 +85,13 @@ describe('Controller Solidly LP Strat on WETH', () => {
         waitFor(strategy.setPriceFeed(seth.address, sethFeed.address)),
         waitFor(strategy.setPriceFeed(velo.address, veloFeed.address)),
         waitFor(strategy.setRewardToWantSolidlyRoute(velo.address, [{ from: velo.address, to: WETH.address, stable: true }])),
-        waitFor(strategy.setSwapper(WETH.address, swapper.address)),
-        waitFor(strategy.setSwapper(seth.address, swapperSeth.address)),
-        waitFor(strategy.setLiquidityToleration(100)), // 1%
+        waitFor(strategy.setSwapper(swapper.address)),
         waitFor(swapper.setMaxPriceOffset(86400)),
         waitFor(swapper.setSwapSlippageRatio(200)), // 2%
         waitFor(swapper.setPriceFeed(WETH.address, ethFeed.address)),
         waitFor(swapper.setPriceFeed(seth.address, sethFeed.address)),
         waitFor(swapper.setRoute(seth.address, [{ from: seth.address, to: WETH.address, stable: true }])),
-        waitFor(swapper.setRoute(WETH.address, [{ from: WETH.address, to: seth.address, stable: true }])),
-        waitFor(swapperSeth.setMaxPriceOffset(86400)),
-        waitFor(swapperSeth.setSwapSlippageRatio(200)), // 2%
-        waitFor(swapperSeth.setReserveSwapRatio(50)), // 0.5%
-        waitFor(swapperSeth.setPriceFeed(WETH.address, ethFeed.address)),
-        waitFor(swapperSeth.setPriceFeed(seth.address, sethFeed.address)),
-        waitFor(swapperSeth.setRoute(seth.address, [{ from: seth.address, to: WETH.address, stable: true }])),
-        waitFor(swapperSeth.setRoute(WETH.address, [{ from: WETH.address, to: seth.address, stable: true }]))
+        waitFor(swapper.setRoute(WETH.address, [{ from: WETH.address, to: seth.address, stable: true }]))
       ])
     }
 
@@ -298,9 +282,15 @@ describe('Controller Solidly LP Strat on WETH', () => {
     expect(await WETH.balanceOf(strat.address)).to.be.equal(1e18 + '')
     expect(await velo.balanceOf(strat.address)).to.be.equal(0)
 
+    let stratBalance = await strat.balanceOfPoolInWant()
+
     await strat.rebalance()
 
     expect((await WETH.balanceOf(strat.address)).lt(1e16 + '')).to.be.equal(true)
+    expect(await strat.balanceOfPoolInWant()).to.be.within(
+      stratBalance.add(0.98e18 + ''),
+      stratBalance.add(1.02e18 + '')
+    )
 
     const timestamp = (await ethers.provider.getBlock()).timestamp
 
@@ -321,8 +311,14 @@ describe('Controller Solidly LP Strat on WETH', () => {
 
     expect(await seth.balanceOf(strat.address)).to.be.gte(1e18 + '')
 
+    stratBalance = await strat.balanceOfPoolInWant()
+
     await strat.rebalance()
 
     expect((await seth.balanceOf(strat.address)).lt(1e16 + '')).to.be.equal(true)
+    expect(await strat.balanceOfPoolInWant()).to.be.within(
+      stratBalance.add(0.98e18 + ''),
+      stratBalance.add(1.02e18 + '')
+    )
   })
 })

@@ -11,4 +11,5 @@ interface ISwapper {
    function lpInWant(uint) external view returns (uint);
    function lpToMinAmounts(uint) external view returns (uint, uint);
    function wantToLP(uint) external view returns (uint);
+   function rebalanceStrategy() external;
 }

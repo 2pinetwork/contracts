@@ -77,7 +77,6 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
         waitFor(swapper.setMaxPriceOffset(86400)),
         waitFor(swapper.setSwapSlippageRatio(200)), // 2%
         waitFor(swapper.setReserveSwapRatio(50)), // 0.5%
-        waitFor(swapper.setOffsetRatio(80)), // 0.8%
         waitFor(swapper.setPriceFeed(USDC.address, usdcFeed.address)),
         waitFor(swapper.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
         waitFor(swapper.setRoute(MAI_ADDRESS, [MAI_ADDRESS, USDC.address])),
@@ -403,8 +402,9 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
   it('Full deposit with compensate + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 18)
 
-    await setCustomBalanceFor(DAI.address, bob.address, newBalance)
-    await setCustomBalanceFor(DAI.address, swapper.address, newBalance)
+    await setCustomBalanceFor(DAI.address, bob.address, newBalance.mul(2))
+    // Has to be done via transfer for some weird bug setting balance using setCustomBalanceFor
+    await DAI.connect(bob).transfer(swapper.address, newBalance.div(2))
 
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)

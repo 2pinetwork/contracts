@@ -21,14 +21,13 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
     using SafeERC20 for IERC20Metadata;
 
     ISolidlyGauge public immutable gauge;
-    ISolidlyPair public lp;
+    ISolidlyPair public immutable lp;
     address public immutable token0;
     address public immutable token1;
     uint public immutable tokenId;
     bool public immutable stable;
 
-    mapping(address => uint) public maxLiquidity;
-    mapping(address => ISwapper) public swappers;
+    ISwapper public swapper;
 
     uint public liquidityToleration = 200; // 2%
 
@@ -52,23 +51,20 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
         token0 = _lp.token0();
         token1 = _lp.token1();
         tokenId = _gauge.tokenIds(address(_lp));
-        maxLiquidity[token0] = 10 ** (IERC20Metadata(token0).decimals() - 2);
-        maxLiquidity[token1] = 10 ** (IERC20Metadata(token1).decimals() - 2);
     }
 
     function identifier() external view returns (string memory) {
         return string(abi.encodePacked(want.symbol(), "@SolidlyLP#1.0.0"));
     }
 
-    function setSwapper(address _want, ISwapper _swapper) external onlyAdmin {
-        require(_want != address(0), "!ZeroAddress");
+    function setSwapper(ISwapper _swapper) external onlyAdmin {
         require(address(_swapper) != address(0), "!ZeroAddress");
-        require(_swapper != swappers[_want], "Same swapper");
-        require(_swapper.want() == _want, "Wrong want");
+        require(_swapper != swapper, "Same swapper");
+        require(_swapper.want() == address(want), "Wrong want");
         require(_swapper.strategy() == address(this), "Unknown strategy");
         require(_swapper.lp() == address(lp), "Unknown LP");
 
-        swappers[_want] = _swapper;
+        swapper = _swapper;
     }
 
     function setLiquidityToleration(uint _liquidityToleration) external onlyAdmin {
@@ -110,48 +106,29 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
     }
 
     function rebalance() external {
-        bool _swap = false;
         (uint _amount0, uint _amount1) = _tokenBalances();
 
-        address[2] memory _addresses;
-        uint[2] memory _amounts;
+        _approveToken(token0, address(swapper), _amount0);
+        _approveToken(token1, address(swapper), _amount1);
 
-        _addresses[0] = token0;
-        _addresses[1] = token1;
+        swapper.rebalanceStrategy();
 
-        _amounts[0] = _amount0;
-        _amounts[1] = _amount1;
+        _addLiquidity();
+        _depositLiquidity();
 
-        for (uint i = 0; i < _addresses.length; i++) {
-            address _token = _addresses[i];
-
-            if (_amounts[i] > maxLiquidity[_token]) {
-                uint _amount = _amounts[i];
-                ISwapper _swapper = swappers[_token];
-
-                _approveToken(_token, address(_swapper), _amount);
-                _swapper.swapWantForLpTokens(_amount);
-                _swap = true;
-            }
-        }
-
-        if (_swap) {
-            _addLiquidity();
-            _depositLiquidity();
-        }
+        _removeAllowance(token0, address(swapper));
+        _removeAllowance(token1, address(swapper));
     }
 
     function _deposit() internal override {
         uint _balance = wantBalance();
 
         if (_balance > 0) {
-            ISwapper _swapper = swappers[address(want)];
+            _approveToken(address(want), address(swapper), _balance);
 
-            _approveToken(address(want), address(_swapper), _balance);
-            _swapper.swapWantForLpTokens(_balance);
-
+            swapper.swapWantForLpTokens(_balance);
             // just in case
-            _removeAllowance(address(want), address(_swapper));
+            _removeAllowance(address(want), address(swapper));
 
             _addLiquidity();
             _depositLiquidity();
@@ -163,7 +140,7 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
         uint _balance = wantBalance();
 
         if (_balance < _amount) {
-            uint _liquidity = swappers[address(want)].wantToLP(_amount);
+            uint _liquidity = swapper.wantToLP(_amount);
 
             _withdrawFromPool(_liquidity);
             _swapLPTokensForWant();
@@ -247,12 +224,8 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
     }
 
     function _swapLPTokensForWant() internal {
-        ISwapper _swapper = swappers[address(want)];
         uint _liquidity = lp.balanceOf(address(this));
-        (uint _amount0Min, uint _amount1Min) = _swapper.lpToMinAmounts(_liquidity);
-
-        _amount0Min = _amount0Min * (RATIO_PRECISION - liquidityToleration) / RATIO_PRECISION;
-        _amount1Min = _amount1Min * (RATIO_PRECISION - liquidityToleration) / RATIO_PRECISION;
+        (uint _amount0Min, uint _amount1Min) = swapper.lpToMinAmounts(_liquidity);
 
         _approveToken(address(lp), exchange, _liquidity);
 
@@ -261,21 +234,21 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
             token1,
             stable,
             _liquidity,
-            _amount0Min,
-            _amount1Min,
+            _amount0Min * (RATIO_PRECISION - liquidityToleration) / RATIO_PRECISION,
+            _amount1Min * (RATIO_PRECISION - liquidityToleration) / RATIO_PRECISION,
             address(this),
             block.timestamp + 60
         );
 
         (uint _amount0, uint _amount1) = _tokenBalances();
 
-        _approveToken(token0, address(_swapper), _amount0);
-        _approveToken(token1, address(_swapper), _amount1);
+        _approveToken(token0, address(swapper), _amount0);
+        _approveToken(token1, address(swapper), _amount1);
 
-        _swapper.swapLpTokensForWant(_amount0, _amount1);
+        swapper.swapLpTokensForWant(_amount0, _amount1);
 
-        _removeAllowance(token0, address(_swapper));
-        _removeAllowance(token1, address(_swapper));
+        _removeAllowance(token0, address(swapper));
+        _removeAllowance(token1, address(swapper));
     }
 
     function _withdrawFromPool(uint _liquidity) internal {
@@ -285,7 +258,7 @@ contract ControllerSolidlyLPStrat is ControllerStratAbs {
     function _liquidityInWant(uint _liquidity) internal view returns (uint) {
         if (_liquidity <= 0) { return 0; }
 
-        return swappers[address(want)].lpInWant(_liquidity);
+        return swapper.lpInWant(_liquidity);
     }
 
     function _tokenBalances() internal view returns (uint _amount0, uint _amount1) {

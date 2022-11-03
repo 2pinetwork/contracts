@@ -25,6 +25,8 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     uint public reserveSwapRatio = 0;
     uint public offsetRatio = 0;
 
+    mapping(address => uint) public maxLiquidity;
+
     constructor(
         IERC20Metadata _want,
         IUniswapPair _lp,
@@ -42,8 +44,11 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         token0 = IERC20Metadata(lp.token0());
         token1 = IERC20Metadata(lp.token1());
 
-        decimals0 = 10 ** IERC20Metadata(token0).decimals();
-        decimals1 = 10 ** IERC20Metadata(token1).decimals();
+        decimals0 = 10 ** token0.decimals();
+        decimals1 = 10 ** token1.decimals();
+
+        maxLiquidity[address(token0)] = 10 ** (token0.decimals() - 2);
+        maxLiquidity[address(token1)] = 10 ** (token1.decimals() - 2);
 
         exchange = _exchange;
         strategy = _strategy;
@@ -66,6 +71,13 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         require(newRatio <= RATIO_PRECISION, "greater than 100%");
 
         offsetRatio = newRatio;
+    }
+
+    function setMaxLiquidity(address _token, uint _amount) external onlyAdmin {
+        require(_token == address(token0) || _token == address(token1), "Unknown token");
+        require(_amount != maxLiquidity[_token], "Same liquidity");
+
+        maxLiquidity[_token] = _amount;
     }
 
     function swapLpTokensForWant(uint _amount0, uint _amount1) external onlyStrat returns (uint _amount) {
@@ -95,19 +107,21 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
 
         if (_amount > wantBalance()) { _amount = wantBalance(); }
 
-        uint _sellAmount;
-        (_amount0, _sellAmount) = _wantAmountToLpTokensAmount(_amount);
+        (_amount0, _amount1) = _wantAmountToLpTokensAmount(_amount);
 
         // If want is one of the LP tokens we need to swap just 1
         if (want == token0) {
-            _amount1 = _swap(address(want), _sellAmount, address(token1));
+            // Since _swap expect amount expressed on "from" decimals
+            _amount1 = _swap(address(want), _amount1 * decimals0 / decimals1, address(token1));
         } else if (want == token1) {
-            _amount1 = _amount0; // _amount - _sellAmount
-            _amount0 = _swap(address(want), _sellAmount, address(token0));
+            // Since _swap expect amount expressed on "from" decimals
+            _amount0 = _swap(address(want), _amount0 * decimals1 / decimals0, address(token0));
         } else {
+            _amount0 = _amount / 2;
+            _amount1 = _amount - _amount0;
             // If want isn't one of LP tokens we swap half for each one
-            _amount1 = _swap(address(want), _amount0, address(token1));
-            _amount0 = _swap(address(want), _sellAmount, address(token0));
+            _amount0 = _swap(address(want), _amount0, address(token0));
+            _amount1 = _swap(address(want), _amount1, address(token1));
         }
 
         token0.safeTransfer(msg.sender, _amount0);
@@ -141,17 +155,49 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     function wantToLP(uint _amount) public view returns (uint) {
         (uint112 _reserve0, uint112 _reserve1,) = lp.getReserves();
 
-        // convert amount from want => token0
-        if (want != token0 && want != token1) {
-            _amount = _getAmountsOut(want, token0, _amount);
-        }
-
         (uint _amount0, uint _amount1) = _wantAmountToLpTokensAmount(_amount);
 
         uint _lpTotalSupply = lp.totalSupply();
 
         // They should be equal, but just in case we strive for maximum liquidity =)
         return _max(_amount0 * _lpTotalSupply / _reserve0, _amount1 * _lpTotalSupply / _reserve1);
+    }
+
+    function rebalanceStrategy() external {
+        uint _amount0 = token0.balanceOf(strategy);
+        uint _amount1 = token1.balanceOf(strategy);
+        address _token0 = address(token0);
+        address _token1 = address(token1);
+
+        if (_amount0 > maxLiquidity[_token0] || _amount1 > maxLiquidity[_token1]) {
+            (uint _reserve0, uint _reserve1,) = lp.getReserves();
+
+            _reserve0 = _reserve0 * 1e18 / decimals0;
+            _reserve1 = _reserve1 * 1e18 / decimals1;
+
+            _amount0 = _amount0 * 1e18 / decimals0;
+            _amount1 = _amount1 * 1e18 / decimals1;
+
+            uint _totalReserves = _reserve0 + _reserve1;
+
+            if (_amount0 > _amount1) {
+                uint _amount = (_amount0 - _amount1) * _reserve1 / _totalReserves * decimals0 / 1e18;
+
+                token0.safeTransferFrom(strategy, address(this), _amount);
+
+                uint _amountOut = _swap(_token0, _amount, _token1);
+
+                token1.safeTransfer(strategy, _amountOut);
+            } else {
+                uint _amount = (_amount1 - _amount0) * _reserve0 / _totalReserves * decimals1 / 1e18;
+
+                token1.safeTransferFrom(strategy, address(this), _amount);
+
+                uint _amountOut = _swap(_token1, _amount, _token0);
+
+                token0.safeTransfer(strategy, _amountOut);
+            }
+        }
     }
 
     function _swap(address _from, uint _amount, address _to) internal virtual returns (uint) {
@@ -195,7 +241,7 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         _amount0 = _amount0 * (_totalReserves + _amount0) / _totalReserves;
         _amount1 = _amount - _amount0;
 
-        _amount0 = _amount0 * _decimals / 1e18;
-        _amount1 = _amount1 * _decimals / 1e18;
+        _amount0 = _amount0 * decimals0 / 1e18;
+        _amount1 = _amount1 * decimals1 / 1e18;
     }
 }
