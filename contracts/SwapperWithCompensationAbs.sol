@@ -81,7 +81,7 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     }
 
     function swapLpTokensForWant(uint _amount0, uint _amount1) external onlyStrat returns (uint _amount) {
-        uint prevBal = wantBalance();
+        uint _prevBal = wantBalance();
 
         if (token0 != want) {
             token0.safeTransferFrom(strategy, address(this), _amount0);
@@ -94,11 +94,13 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         }
 
         // This is because the wantBalance could be more to compensate swaps
-        _amount = wantBalance() - prevBal;
+        _amount = wantBalance() - _prevBal;
         want.safeTransfer(strategy, _amount);
     }
 
     function swapWantForLpTokens(uint _balance) external onlyStrat returns (uint _amount0, uint _amount1) {
+        uint _prevBal = wantBalance();
+
         // Ensure the strategy has the _balance
         want.safeTransferFrom(msg.sender, address(this), _balance);
 
@@ -126,6 +128,9 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
 
         token0.safeTransfer(msg.sender, _amount0);
         token1.safeTransfer(msg.sender, _amount1);
+
+        // Just in case we don't swap it all
+        if (wantBalance() > _prevBal) want.safeTransfer(msg.sender, wantBalance() - _prevBal);
     }
 
     function lpInWant(uint _lpAmount) public view returns (uint) {
