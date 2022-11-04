@@ -19,8 +19,8 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     IERC20Metadata public immutable token0;
     IERC20Metadata public immutable token1;
 
-    uint internal immutable decimals0;
-    uint internal immutable decimals1;
+    uint internal immutable precision0;
+    uint internal immutable precision1;
 
     uint public reserveSwapRatio = 0;
     uint public offsetRatio = 0;
@@ -44,8 +44,8 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         token0 = IERC20Metadata(lp.token0());
         token1 = IERC20Metadata(lp.token1());
 
-        decimals0 = 10 ** token0.decimals();
-        decimals1 = 10 ** token1.decimals();
+        precision0 = 10 ** token0.decimals();
+        precision1 = 10 ** token1.decimals();
 
         maxLiquidity[address(token0)] = 10 ** (token0.decimals() - 2);
         maxLiquidity[address(token1)] = 10 ** (token1.decimals() - 2);
@@ -113,11 +113,11 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
 
         // If want is one of the LP tokens we need to swap just 1
         if (want == token0) {
-            // Since _swap expect amount expressed on "from" decimals
-            _amount1 = _swap(address(want), _amount1 * decimals0 / decimals1, address(token1));
+            // Since _swap expect amount expressed on "from" precision
+            _amount1 = _swap(address(want), _amount1 * precision0 / precision1, address(token1));
         } else if (want == token1) {
-            // Since _swap expect amount expressed on "from" decimals
-            _amount0 = _swap(address(want), _amount0 * decimals1 / decimals0, address(token0));
+            // Since _swap expect amount expressed on "from" precision
+            _amount0 = _swap(address(want), _amount0 * precision1 / precision0, address(token0));
         } else {
             _amount0 = _amount / 2;
             _amount1 = _amount - _amount0;
@@ -168,7 +168,7 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         return _max(_amount0 * _lpTotalSupply / _reserve0, _amount1 * _lpTotalSupply / _reserve1);
     }
 
-    function rebalanceStrategy() external {
+    function rebalanceStrategy() external onlyStrat {
         uint _amount0 = token0.balanceOf(strategy);
         uint _amount1 = token1.balanceOf(strategy);
         address _token0 = address(token0);
@@ -177,16 +177,16 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         if (_amount0 > maxLiquidity[_token0] || _amount1 > maxLiquidity[_token1]) {
             (uint _reserve0, uint _reserve1,) = lp.getReserves();
 
-            _reserve0 = _reserve0 * 1e18 / decimals0;
-            _reserve1 = _reserve1 * 1e18 / decimals1;
+            _reserve0 = _reserve0 * 1e18 / precision0;
+            _reserve1 = _reserve1 * 1e18 / precision1;
 
-            _amount0 = _amount0 * 1e18 / decimals0;
-            _amount1 = _amount1 * 1e18 / decimals1;
+            _amount0 = _amount0 * 1e18 / precision0;
+            _amount1 = _amount1 * 1e18 / precision1;
 
             uint _totalReserves = _reserve0 + _reserve1;
 
             if (_amount0 > _amount1) {
-                uint _amount = (_amount0 - _amount1) * _reserve1 / _totalReserves * decimals0 / 1e18;
+                uint _amount = (_amount0 - _amount1) * _reserve1 / _totalReserves * precision0 / 1e18;
 
                 token0.safeTransferFrom(strategy, address(this), _amount);
 
@@ -194,7 +194,7 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
 
                 token1.safeTransfer(strategy, _amountOut);
             } else {
-                uint _amount = (_amount1 - _amount0) * _reserve0 / _totalReserves * decimals1 / 1e18;
+                uint _amount = (_amount1 - _amount0) * _reserve0 / _totalReserves * precision1 / 1e18;
 
                 token1.safeTransferFrom(strategy, address(this), _amount);
 
@@ -230,13 +230,13 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
     function _wantAmountToLpTokensAmount(uint _amount) internal view returns (uint _amount0, uint _amount1) {
         (uint _reserve0, uint _reserve1,) = lp.getReserves();
 
-        _reserve0 = _reserve0 * 1e18 / decimals0;
-        _reserve1 = _reserve1 * 1e18 / decimals1;
+        _reserve0 = _reserve0 * 1e18 / precision0;
+        _reserve1 = _reserve1 * 1e18 / precision1;
 
-        (uint _reserve, uint _decimals) = token0 == want ? (_reserve0, decimals0) : (_reserve1, decimals1);
+        (uint _reserve, uint _precision) = token0 == want ? (_reserve0, precision0) : (_reserve1, precision1);
         uint _totalReserves = _reserve0 + _reserve1;
 
-        _amount = _amount * 1e18 / _decimals;
+        _amount = _amount * 1e18 / _precision;
 
         _amount0 = _amount * _reserve *
             (RATIO_PRECISION + reserveSwapRatio) /
@@ -246,7 +246,7 @@ abstract contract SwapperWithCompensationAbs is Swappable, ReentrancyGuard {
         _amount0 = _amount0 * (_totalReserves + _amount0) / _totalReserves;
         _amount1 = _amount - _amount0;
 
-        _amount0 = _amount0 * decimals0 / 1e18;
-        _amount1 = _amount1 * decimals1 / 1e18;
+        _amount0 = _amount0 * precision0 / 1e18;
+        _amount1 = _amount1 * precision1 / 1e18;
     }
 }
