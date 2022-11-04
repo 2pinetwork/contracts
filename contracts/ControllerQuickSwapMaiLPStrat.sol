@@ -6,16 +6,7 @@ import "./ControllerStratAbs.sol";
 
 import "../interfaces/IMasterChef.sol";
 import "../interfaces/IUniswapPair.sol";
-
-interface Swapper {
-   function lp() external view returns (address);
-   function strategy() external view returns (address);
-   function swapWantForLpTokens(uint) external returns (uint, uint);
-   function swapLpTokensForWant(uint, uint) external returns (uint);
-   function lpInWant(uint) external view returns (uint);
-   function lpToMinAmounts(uint) external view returns (uint, uint);
-   function wantToLP(uint) external view returns (uint);
-}
+import "../interfaces/ISwapper.sol";
 
 contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     using SafeERC20 for IERC20;
@@ -30,7 +21,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
     uint public minWantToRedeposit;
     uint public liquidityToleration = 200; // 2%
 
-    Swapper public swapper;
+    ISwapper public swapper;
 
     bool private depositMutex = false;
 
@@ -48,7 +39,7 @@ contract ControllerQuickSwapMaiLPStrat is ControllerStratAbs {
         return string(abi.encodePacked(want.symbol(), "@QuickSwapMaiLP#1.0.0"));
     }
 
-    function setSwapper(Swapper _swapper) external onlyAdmin {
+    function setSwapper(ISwapper _swapper) external onlyAdmin {
         require(address(_swapper) != address(0), "!ZeroAddress");
         require(_swapper != swapper, "Same swapper");
         require(_swapper.strategy() == address(this), "Unknown strategy");

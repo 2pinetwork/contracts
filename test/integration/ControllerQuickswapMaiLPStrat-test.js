@@ -55,7 +55,13 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
     setupStrat = async (strategy) => {
       const LP = await ethers.getContractAt('IERC20Metadata', '0x160532D2536175d65C03B97b0630A9802c274daD')
 
-      swapper = await deploy('SwapperWithCompensation', USDC.address, LP.address, strategy.address)
+      swapper = await deploy(
+        'SwapperWithCompensationUniV2',
+        USDC.address,
+        LP.address,
+        strategy.address,
+        '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff'
+      )
 
       const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
@@ -70,6 +76,7 @@ describe('Controller QuickSwap MAI LP Strat on USDC', () => {
         waitFor(strategy.setSwapper(swapper.address)),
         waitFor(swapper.setMaxPriceOffset(86400)),
         waitFor(swapper.setSwapSlippageRatio(200)), // 2%
+        waitFor(swapper.setReserveSwapRatio(50)), // 0.5%
         waitFor(swapper.setPriceFeed(USDC.address, usdcFeed.address)),
         waitFor(swapper.setPriceFeed(MAI_ADDRESS, maiFeed.address)),
         waitFor(swapper.setRoute(MAI_ADDRESS, [MAI_ADDRESS, USDC.address])),
@@ -292,7 +299,13 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
     setupStrat = async (strategy) => {
       const LP = await ethers.getContractAt('IERC20Metadata', '0x160532D2536175d65C03B97b0630A9802c274daD')
 
-      swapper = await deploy('SwapperWithCompensation', DAI.address, LP.address, strategy.address)
+      swapper = await deploy(
+        'SwapperWithCompensationUniV2',
+        DAI.address,
+        LP.address,
+        strategy.address,
+        '0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff'
+      )
 
       const MAI_ADDRESS = '0xa3Fa99A148fA48D14Ed51d610c367C61876997F1'
 
@@ -315,9 +328,7 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
         waitFor(swapper.setRoute(MAI_ADDRESS, [MAI_ADDRESS, DAI.address])),
         waitFor(swapper.setRoute(USDC.address, [USDC.address, DAI.address])),
         waitFor(swapper.setRoute(DAI.address, [DAI.address, USDC.address])),
-        waitFor(swapper.setRoute(DAI.address, [DAI.address, MAI_ADDRESS])),
-        waitFor(swapper.setReserveSwapRatio(80)), // 0.3 twice + a little more
-        waitFor(swapper.setReserveSwapRatio(110)), // 0.3 twice + 0.5 deposit fee
+        waitFor(swapper.setRoute(DAI.address, [DAI.address, MAI_ADDRESS]))
       ])
     }
 
@@ -391,8 +402,9 @@ describe('Controller QuickSwap MAI LP Strat on DAI', () => {
   it('Full deposit with compensate + harvest strat + withdraw', async () => {
     const newBalance = ethers.utils.parseUnits('10000', 18)
 
-    await setCustomBalanceFor(DAI.address, bob.address, newBalance)
-    await setCustomBalanceFor(DAI.address, swapper.address, newBalance)
+    await setCustomBalanceFor(DAI.address, bob.address, newBalance.mul(2))
+    // Has to be done via transfer for some weird bug setting balance using setCustomBalanceFor
+    await DAI.connect(bob).transfer(swapper.address, newBalance.div(2))
 
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await qi.balanceOf(strat.address)).to.be.equal(0)

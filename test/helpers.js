@@ -257,6 +257,17 @@ const createController = async (token, archimedes, stratName, extraArgs = {}) =>
           extraArgs.maxWantBalance
         )
         break
+      case 'ControllerSolidlyLPStrat':
+        strategy = await deploy(
+          'ControllerSolidlyLPStrat',
+          token.address,
+          controller.address,
+          '0x9c12939390052919aF3155f41Bf4160Fd3666A6f', // Velodrome router
+          owner.address,
+          extraArgs.gauge,
+          extraArgs.lp
+        )
+        break
       case 'ControllerDummyStrat':
         strategy = await deploy(
           'ControllerDummyStrat',
