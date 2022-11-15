@@ -72,6 +72,12 @@ async function main() {
 
     await (await controller.setStrategy(strategy.address, callArgs())).wait()
 
+    // GnosisSafe | multisig
+    if (deploy.safe && hre.ethers.utils.isAddress(deploy.safe)) {
+      console.log(`Transfering ownership to: ${deploy.safe}`)
+      await (await controller.transferOwnership(deploy.safe, callArgs())).wait()
+    }
+
     await (await archimedes.addNewPool(pool.token, controller.address, 5, false, callArgs())).wait()
 
     let pid = await controller.pid()
