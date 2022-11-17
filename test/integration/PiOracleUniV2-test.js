@@ -8,7 +8,7 @@ const {
   resetHardhat,
 } = require('./helpers')
 
-describe('PiOracle', () => {
+describe('PiOracleUniV2', () => {
   let oracle
   let pair
   let PERIOD
@@ -17,7 +17,7 @@ describe('PiOracle', () => {
     await resetHardhat()
 
     pair = await createPiTokenExchangePair()
-    oracle = await deploy('PiOracle', pair, PiToken.address)
+    oracle = await deploy('PiOracleUniV2', pair, PiToken.address)
     PERIOD = parseInt(await oracle.PERIOD(), 10)
   })
 
