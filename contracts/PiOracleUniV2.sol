@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.6.6;
 
-import '@uniswap/lib/contracts/libraries/FixedPoint.sol';
+import "@uniswap/lib/contracts/libraries/FixedPoint.sol";
 // import 'hardhat/console.sol';
 
 // Manual interface declaration because of the @openzeppelin lib is for solidity 0.8
@@ -48,14 +48,14 @@ library UniswapV2OracleLibrary {
     }
 }
 
-contract PiOracle {
+contract PiOracleUniV2 {
     using FixedPoint for *;
 
     uint public constant PERIOD = 1 minutes;
 
     IUniswapV2Pair immutable lp;
 
-    address public immutable PiToken;
+    address public immutable target;
     bool    public immutable firstToken;
     uint    public priceCumulativeLast;
     uint32  public blockTimestampLast;
@@ -63,20 +63,20 @@ contract PiOracle {
 
     mapping(address => bool) public admins;
 
-    constructor(IUniswapV2Pair _lp, address _pi) public {
-        PiToken = _pi;
+    constructor(IUniswapV2Pair _lp, address _target) public {
+        target = _target;
         lp = _lp;
 
-        bool _firstToken = _lp.token0() == _pi;
+        bool _firstToken = _lp.token0() == _target;
         firstToken = _firstToken;
 
-        require(_firstToken || _lp.token1() == _pi, "No Pi-LP");
+        require(_firstToken || _lp.token1() == _target, "No target on LP");
 
         uint112 reserve0;
         uint112 reserve1;
         (reserve0, reserve1, blockTimestampLast) = _lp.getReserves();
 
-        require(reserve0 > 0 && reserve1 > 0, 'NO_RESERVES'); // ensure that there's liquidity in the pair
+        require(reserve0 > 0 && reserve1 > 0, "NO_RESERVES"); // ensure that there's liquidity in the pair
 
         if (_firstToken) {
             priceCumulativeLast = _lp.price0CumulativeLast(); // fetch the current accumulated price value (1 / 0)
@@ -102,7 +102,7 @@ contract PiOracle {
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
 
         // ensure that at least one full period has passed since the last update
-        require(timeElapsed >= PERIOD, 'PERIOD_NOT_ELAPSED');
+        require(timeElapsed >= PERIOD, "PERIOD_NOT_ELAPSED");
 
         // overflow is desired, casting never truncates
         // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed

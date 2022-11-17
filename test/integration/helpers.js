@@ -176,7 +176,7 @@ const createOracles = async (tokensData) => {
       pair = await SUSHI_FACTORY.getPair(token, global.USDC.address)
     }
 
-    tokensData[token].oracle = await deploy('PiOracle', pair, token)
+    tokensData[token].oracle = await deploy('PiOracleUniV2', pair, token)
   }
 
   for (let i = 0; i < 3; i++) {
