@@ -27,7 +27,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     // Fees
     uint constant public RATIO_PRECISION = 10000;
     uint constant public MAX_WITHDRAW_FEE = 100; // 1%
-    uint public withdrawFee = 10; // 0.1%
+    uint public withdrawFee = 0; // 0%
 
     // Deposit limit a contract can hold
     // This value should be in the same decimal representation as want
