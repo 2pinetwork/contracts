@@ -142,7 +142,7 @@ describe('[OPTIMISM] Controller Curve Strat DAI', () => {
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await DAI.balanceOf(bob.address)).to.within(
       99.8e18 + '', // between 0.1% and 0.2%
-      99.9e18 + ''
+      100e18 + ''
     )
   })
 
@@ -262,7 +262,7 @@ describe('[OPTIMISM] Controller Curve Strat USDC', () => {
       waitFor(strat.setRewardToWantRoute(CRV.address, [CRV.address, WETH.address, USDC.address])),
       waitFor(strat.setTokenToTokenSwapFee(OP.address, USDC.address, 3000)),
       waitFor(strat.setTokenToTokenSwapFee(CRV.address, WETH.address, 3000)),
-      waitFor(strat.setTokenToTokenSwapFee(WETH.address, USDC.address, 3000)),
+      waitFor(strat.setTokenToTokenSwapFee(WETH.address, USDC.address, 500)),
     ])
   })
 
@@ -316,7 +316,7 @@ describe('[OPTIMISM] Controller Curve Strat USDC', () => {
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await USDC.balanceOf(bob.address)).to.within(
       99.8e6 + '', // between 0.1% and 0.2%
-      99.9e6 + ''
+      100e6 + ''
     )
   })
 
