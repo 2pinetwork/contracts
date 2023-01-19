@@ -533,7 +533,18 @@ describe('Controller mStable Strat with DAI', () => {
       await DAI.connect(bob).approve(archimedes.address, newBalance)
       await expect(archimedes.connect(bob).depositAll(0, zeroAddress)).to.be.revertedWith('Low Share Price')
     })
+
+    it('should revert for low depositShareThreshold after deposit in strat', async () => {
+      const newBalance = ethers.BigNumber.from('' + 1e18).mul(100000) // 100000 DAI
+      await setCustomBalanceFor(DAI.address, bob.address, newBalance)
+
+      await controller.setDepositShareThreshold(1.0e18 + '') // just to prove it
+
+      await DAI.connect(bob).approve(archimedes.address, newBalance)
+      await expect(archimedes.connect(bob).depositAll(0, zeroAddress)).to.be.revertedWith('Low Share Price')
+    })
   })
+
   describe.only('setWithdrawShareThreshold', async () => {
     it('should be reverted for non admin', async () => {
       await expect(controller.connect(bob).setWithdrawShareThreshold(10)).to.be.revertedWith(
