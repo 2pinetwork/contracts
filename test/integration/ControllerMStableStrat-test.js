@@ -139,8 +139,8 @@ describe('Controller mStable Strat', () => {
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await USDC.balanceOf(bob.address)).to.within(
-      99800e6 + '', // between 0.1% and 0.2%
-      99900e6 + ''
+      99800e6 + '', // between 0.1%
+      100100e6 + ''
     )
   })
 
@@ -302,6 +302,64 @@ describe('Controller mStable Strat', () => {
       balance.add(1.0001e6), balance.add(1.01e6)
     )
   })
+
+  it('should revert if not whitelisted', async () => {
+    await waitFor(archimedes.setWhitelistEnabled(true))
+
+    await expect(archimedes.connect(bob).deposit(0, 1, zeroAddress)).to.be.revertedWith('Not whitelisted')
+  })
+
+ it('Full deposit + harvest strat + withdraw for whitelisted user', async () => {
+    await archimedes.setWhitelistEnabled(true)
+    await archimedes.setWhitelisted(bob.address, true)
+
+    const newBalance = ethers.BigNumber.from('' + 100000e6) // 100000 USDC
+    await setCustomBalanceFor(USDC.address, bob.address, newBalance)
+
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(USDC.connect(bob).approve(archimedes.address, '' + 100000e6))
+    await waitFor(archimedes.connect(bob).depositAll(0, zeroAddress))
+
+    expect(await USDC.balanceOf(controller.address)).to.be.equal(0)
+    expect(await USDC.balanceOf(strat.address)).to.be.equal(0)
+    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+
+    const balance = await strat.balanceOfPool() // more decimals
+
+    await changeExchangeRate()
+
+    await mineNTimes(100)
+
+    const treasuryBalance = await USDC.balanceOf(owner.address)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested').to.emit(strat, 'PerformanceFee')
+    expect(await USDC.balanceOf(owner.address)).to.be.above(treasuryBalance)
+
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 9500 USDC in shares
+    const toWithdraw = (
+      (await controller.totalSupply()).mul(95000e6 + '').div(
+        await controller.balance()
+      )
+    )
+
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+    expect(await USDC.balanceOf(bob.address)).to.within(
+      94900e6 + '', 95000e6 + '' // 9500 - 0.1% withdrawFee
+    )
+    expect(await USDC.balanceOf(strat.address)).to.equal(0)
+    expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+    expect(await USDC.balanceOf(bob.address)).to.within(
+      99800e6 + '', // between 0.1%
+      100100e6 + ''
+    )
+  })
+
 })
 
 describe('Controller mStable Strat with DAI', () => {
@@ -404,9 +462,9 @@ describe('Controller mStable Strat with DAI', () => {
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await DAI.balanceOf(bob.address)).to.within(
-      // between 0.2%~0.1% less
+      // between -0.2%~0.1%
       newBalance.mul(9980).div(10000),
-      newBalance.mul(9990).div(10000),
+      newBalance.mul(1010).div(10000),
     )
   })
 
@@ -458,9 +516,9 @@ describe('Controller mStable Strat with DAI', () => {
 
     await waitFor(archimedes.connect(bob).withdrawAll(0))
     expect(await DAI.balanceOf(bob.address)).to.within(
-      // between 0.1% and 0.01%
+      // between 0.1%
       newBalance.mul(9990).div(10000),
-      newBalance.mul(9999).div(10000),
+      newBalance.mul(1010).div(10000),
     )
   })
 

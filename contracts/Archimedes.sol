@@ -53,6 +53,10 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 50; // 5%
     uint16 public constant COMMISSION_RATE_PRECISION = 1000;
 
+    //whitelist
+    mapping(address => bool) public whitelisted;
+    bool public whitelistEnabled;
+
     event Deposit(uint indexed pid, address indexed user, uint amount);
     event Withdraw(uint indexed pid, address indexed user, uint amount);
     event EmergencyWithdraw(uint indexed pid, address indexed user, uint amount);
@@ -74,6 +78,11 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
 
     modifier onlyController(uint _pid) {
         require(poolInfo[_pid].controller == msg.sender, "!Controller");
+        _;
+    }
+
+    modifier onlyWhitelisted() {
+        require(!whitelistEnabled || whitelisted[msg.sender], "Not whitelisted");
         _;
     }
 
@@ -103,6 +112,19 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         require(_pid == _setPid, "Pid doesn't match");
 
         emit NewPool(_pid, address(_want), _weighing);
+    }
+
+    function setWhitelistEnabled(bool _status) external onlyAdmin nonReentrant {
+        require(whitelistEnabled != _status, "Same Value");
+
+        whitelistEnabled = _status;
+    }
+
+
+    function setWhitelisted(address _user, bool _status) external onlyAdmin nonReentrant {
+        require(whitelisted[_user] != _status, "Same Value");
+
+        whitelisted[_user] = _status;
     }
 
     // Update the given pool's rewards weighing .
@@ -190,7 +212,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Direct native deposit
-    function depositNative(uint _pid, address _referrer) external payable nonReentrant {
+    function depositNative(uint _pid, address _referrer) external payable nonReentrant onlyWhitelisted {
         uint _amount = msg.value;
         require(_amount > 0, "Insufficient deposit");
         require(address(poolInfo[_pid].want) == address(WNative), "Only Native token pool");
@@ -212,7 +234,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Deposit want token to Archimedes for PI allocation.
-    function deposit(uint _pid, uint _amount, address _referrer) public nonReentrant {
+    function deposit(uint _pid, uint _amount, address _referrer) public nonReentrant onlyWhitelisted {
         require(_amount > 0, "Insufficient deposit");
 
         // Update pool rewards
@@ -231,7 +253,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         _depositInStrategy(_pid, _amount);
     }
 
-    function depositAll(uint _pid, address _referrer) external {
+    function depositAll(uint _pid, address _referrer) external onlyWhitelisted {
         require(address(poolInfo[_pid].want) != address(WNative), "Can't deposit all Native");
         uint _balance = poolInfo[_pid].want.balanceOf(msg.sender);
 
@@ -239,7 +261,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Withdraw want token from Archimedes.
-    function withdraw(uint _pid, uint _shares) public nonReentrant {
+    function withdraw(uint _pid, uint _shares) public nonReentrant onlyWhitelisted {
         require(_shares > 0, "0 shares");
         require(_userShares(_pid) >= _shares, "withdraw: not sufficient founds");
 
@@ -273,7 +295,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
         emit Withdraw(_pid, msg.sender, _shares);
     }
 
-    function withdrawAll(uint _pid) external {
+    function withdrawAll(uint _pid) external onlyWhitelisted {
         withdraw(_pid, _userShares(_pid));
     }
 
@@ -301,7 +323,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint _pid) external nonReentrant {
+    function emergencyWithdraw(uint _pid) external nonReentrant onlyWhitelisted {
         IERC20 want = poolInfo[_pid].want;
 
         userPaidRewards[_pid][msg.sender] = 0;
