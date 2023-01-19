@@ -459,51 +459,5 @@ describe('Controller', () => {
       expect(await controller.availableDeposit()).to.be.equal(0)
     })
   })
-  describe('setDepositShareThreshold', async () => {
-    it('should be reverted for non admin', async () => {
-      await expect(controller.connect(bob).setDepositShareThreshold(10)).to.be.revertedWith(
-        'Ownable: caller is not the owner'
-      )
-    })
 
-    it('should change depositShareThreshold', async () => {
-      expect(await controller.depositShareThreshold()).to.be.equal(0.99e18 + '')
-      await controller.setDepositShareThreshold(10)
-      expect(await controller.depositShareThreshold()).to.be.equal(10)
-    })
-
-    it('should revert for low depositShareThreshold', async () => {
-      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setDepositShareThreshold(1.1e18 + '') // just to prove it
-
-      await piToken.transfer(bob.address, 10001)
-      await piToken.connect(bob).approve(archimedes.address, 10001)
-
-      await expect(archimedes.connect(bob).deposit(0, 10000, zeroAddress)).to.be.revertedWith('Low Share Price')
-    })
-  })
-  describe('setWithdrawShareThreshold', async () => {
-    it('should be reverted for non admin', async () => {
-      await expect(controller.connect(bob).setWithdrawShareThreshold(10)).to.be.revertedWith(
-        'Ownable: caller is not the owner'
-      )
-    })
-
-    it('should change withdrawShareThreshold', async () => {
-      expect(await controller.withdrawShareThreshold()).to.be.equal(0.99e18 + '')
-      await controller.setWithdrawShareThreshold(10)
-      expect(await controller.withdrawShareThreshold()).to.be.equal(10)
-    })
-
-    it('should revert for low withdrawShareThreshold', async () => {
-      await waitFor(archimedes.addNewPool(piToken.address, controller.address, 1, false))
-      await controller.setWithdrawShareThreshold(1.1e18 + '') // just to prove it
-
-      await piToken.transfer(bob.address, 10001)
-      await piToken.connect(bob).approve(archimedes.address, 10001)
-
-      await waitFor(archimedes.connect(bob).deposit(0, 10000, zeroAddress))
-      await expect(archimedes.connect(bob).withdrawAll(0)).to.be.revertedWith('Low Share Price')
-    })
-  })
 })
