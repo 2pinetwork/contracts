@@ -35,6 +35,9 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     uint public depositLimit;
     uint public userDepositLimit;
 
+    uint public depositShareThreshold;
+    uint public withdrawShareThreshold;
+
     event NewStrategy(address oldStrategy, address newStrategy);
     event NewTreasury(address oldTreasury, address newTreasury);
     event NewDepositLimit(uint oldLimit, uint newLimit);
@@ -56,6 +59,10 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         want = _want;
         archimedes = _archimedes;
         treasury = _treasury;
+
+        // 99% of share/token value
+        depositShareThreshold = (10 ** _want.decimals()) * 9900 / RATIO_PRECISION;
+        withdrawShareThreshold = (10 ** _want.decimals()) * 9900 / RATIO_PRECISION;
     }
 
     function decimals() override public view returns (uint8) {
@@ -88,6 +95,18 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         pid = _pid;
 
         return pid;
+    }
+
+    function setDepositShareThreshold(uint _t) external onlyOwner nonReentrant {
+        require(depositShareThreshold != _t, "Same value");
+
+        depositShareThreshold = _t;
+    }
+
+    function setWithdrawShareThreshold(uint _t) external onlyOwner nonReentrant {
+        require(withdrawShareThreshold != _t, "Same value");
+
+        withdrawShareThreshold = _t;
     }
 
     function setTreasury(address _treasury) external onlyOwner nonReentrant {
@@ -145,6 +164,8 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     function deposit(address _senderUser, uint _amount) external onlyArchimedes nonReentrant {
         require(!_strategyPaused(), "Strategy paused");
         require(_amount > 0, "Insufficient amount");
+        // Ensure pool is healthy at deposit
+        require(currentSharePrice() >= depositShareThreshold, "Low Share Price");
         _checkDepositLimit(_senderUser, _amount);
 
         IStrategy(strategy).beforeMovement();
@@ -169,11 +190,16 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         _mint(_senderUser, shares);
 
         _strategyDeposit();
+
+        // Ensure the final step still is healthy
+        require(currentSharePrice() >= depositShareThreshold, "Low Share Price");
     }
 
     // Withdraw partial funds, normally used with a vault withdrawal
     function withdraw(address _senderUser, uint _shares) external onlyArchimedes nonReentrant returns (uint) {
         require(_shares > 0, "Insufficient shares");
+        // Ensure pool is healthy before withdraw
+        require(currentSharePrice() >= withdrawShareThreshold, "Low Share Price");
         IStrategy(strategy).beforeMovement();
 
         // This line has to be calc before burn
@@ -207,6 +233,9 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         }
 
         if (!_strategyPaused()) { _strategyDeposit(); }
+
+        // Ensure pool still healthy
+        require(currentSharePrice() >= withdrawShareThreshold, "Low Share Price");
 
         return withdrawn;
     }
@@ -276,5 +305,12 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         if (userDepositLimit > 0) {
             require(_amount <= availableUserDeposit(_user), "Max userDepositLimit reached");
         }
+    }
+
+    function currentSharePrice() public view returns (uint) {
+        uint _totalSupply = totalSupply();
+        uint _precision = 10 ** decimals();
+
+        return _totalSupply <= 0 ? _precision : (balance() * _precision / _totalSupply);
     }
 }
