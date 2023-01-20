@@ -208,4 +208,77 @@ describe('Controller Curve Strat', () => {
       '' + 100e18
     )
   })
+
+  // itIf(hre.network.config.network_id === 10, 'Full deposit + harvest strat + withdraw (Native + Whitelist)', async () => {
+  it('Full deposit + harvest strat + withdraw (Native + Whitelist)', async () => {
+    const currentBalance = async () => {
+      return await ethers.provider.getBalance(bob.address)
+    }
+
+    await waitFor(archimedes.setWhitelistEnabled(true))
+
+    expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
+
+    const amount = ethers.BigNumber.from('' + 100e18)._hex
+
+    await expect(archimedes.connect(bob).depositNative(0, zeroAddress, { value: amount })).to.be.revertedWith('Not whitelisted')
+    await expect(bob.sendTransaction({to: archimedes.address, value: amount})).to.not.be.reverted
+
+    expect(await controller.balanceOf(bob.address)).to.be.equal(0)
+    expect(await archimedes.balanceOf(0, bob.address)).to.be.equal(0)
+    expect(await WETH.balanceOf(archimedes.address)).to.be.equal(0)
+    expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(archimedes.address)).to.be.equal('' + 100e18)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.equal(0)
+
+    await waitFor(archimedes.setWhitelisted(bob.address, true))
+    await expect(archimedes.connect(bob).depositNative(0, zeroAddress, { value: amount })).to.emit(archimedes, 'Deposit')
+
+    const afterDepositBalance = await currentBalance()
+
+    expect(await WETH.balanceOf(controller.address)).to.be.equal(0)
+    expect(await WETH.balanceOf(strat.address)).to.be.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      99.2e18 + '', // production virtual price is ~1.003.
+      100e18 + ''
+    )
+
+    const balance = await strat.balanceOfPool() // more decimals
+
+    await mineNTimes(100)
+    expect(await strat.harvest()).to.emit(strat, 'Harvested')
+
+    expect(await strat.balanceOfPool()).to.be.above(balance)
+
+    // withdraw 95 WETH in shares
+    const toWithdraw = (
+      (await controller.totalSupply()).mul(95e18 + '').div(
+        await controller.balance()
+      )
+    )
+
+    await waitFor(archimedes.connect(bob).withdraw(0, toWithdraw))
+
+    expect((await currentBalance()).sub(afterDepositBalance)).to.within(
+      94.9e18 + '',
+      95e18 + '' // 95 - 0.1% withdrawFee
+    )
+    expect(await WETH.balanceOf(strat.address)).to.equal(0)
+    expect(await ethers.provider.getBalance(strat.address)).to.be.equal(0)
+    expect(await CurveRewardsGauge.balanceOf(strat.address)).to.be.within(
+      4.6e18 + '', // 99.6 - 95
+      5e18 + ''
+    )
+
+    await waitFor(archimedes.connect(bob).withdrawAll(0))
+    expect(await WETH.balanceOf(strat.address)).to.equal(0)
+    expect((await currentBalance()).sub(afterDepositBalance)).to.within(
+      99.8e18 + '', // between 0.1%
+      100e18 + ''
+    )
+  })
 })
