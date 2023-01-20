@@ -511,7 +511,8 @@ describe('Controller mStable Strat with DAI', () => {
     expect(await DAI.balanceOf(strat.address)).to.be.equal(0)
     expect(await REWARD_TOKEN.balanceOf(strat.address)).to.be.equal(0)
   })
-  describe.only('setDepositShareThreshold', async () => {
+
+  describe('setDepositShareThreshold', async () => {
     it('should be reverted for non admin', async () => {
       await expect(controller.connect(bob).setDepositShareThreshold(10)).to.be.revertedWith(
         'Ownable: caller is not the owner'
@@ -545,7 +546,7 @@ describe('Controller mStable Strat with DAI', () => {
     })
   })
 
-  describe.only('setWithdrawShareThreshold', async () => {
+  describe('setWithdrawShareThreshold', async () => {
     it('should be reverted for non admin', async () => {
       await expect(controller.connect(bob).setWithdrawShareThreshold(10)).to.be.revertedWith(
         'Ownable: caller is not the owner'

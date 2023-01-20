@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "hardhat/console.sol";
+
 import "../interfaces/IArchimedes.sol";
 import "../interfaces/IStrategy.sol";
 
@@ -60,6 +60,7 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         archimedes = _archimedes;
         treasury = _treasury;
 
+        // 99% of share/token value
         depositShareThreshold = (10 ** _want.decimals()) * 9900 / RATIO_PRECISION;
         withdrawShareThreshold = (10 ** _want.decimals()) * 9900 / RATIO_PRECISION;
     }
@@ -116,7 +117,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         treasury = _treasury;
     }
 
-
     function setStrategy(address newStrategy) external onlyOwner nonReentrant {
         require(newStrategy != strategy, "Same strategy");
         require(newStrategy != address(0), "!ZeroAddress");
@@ -165,7 +165,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         require(!_strategyPaused(), "Strategy paused");
         require(_amount > 0, "Insufficient amount");
         // Ensure pool is healthy at deposit
-        console.log("Current share:", currentSharePrice());
         require(currentSharePrice() >= depositShareThreshold, "Low Share Price");
         _checkDepositLimit(_senderUser, _amount);
 
@@ -193,7 +192,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
         _strategyDeposit();
 
         // Ensure the final step still is healthy
-        console.log("Current Luego deposito share:", currentSharePrice());
         require(currentSharePrice() >= depositShareThreshold, "Low Share Price");
     }
 
@@ -201,7 +199,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
     function withdraw(address _senderUser, uint _shares) external onlyArchimedes nonReentrant returns (uint) {
         require(_shares > 0, "Insufficient shares");
         // Ensure pool is healthy before withdraw
-        console.log("Withdraw share price:", currentSharePrice());
         require(currentSharePrice() >= withdrawShareThreshold, "Low Share Price");
         IStrategy(strategy).beforeMovement();
 
@@ -237,7 +234,6 @@ contract Controller is ERC20, Ownable, ReentrancyGuard {
 
         if (!_strategyPaused()) { _strategyDeposit(); }
 
-        console.log("AfterWithdraw share price:", currentSharePrice());
         // Ensure pool still healthy
         require(currentSharePrice() >= withdrawShareThreshold, "Low Share Price");
 

@@ -459,5 +459,4 @@ describe('Controller', () => {
       expect(await controller.availableDeposit()).to.be.equal(0)
     })
   })
-
 })
