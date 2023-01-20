@@ -210,7 +210,7 @@ describe('Controller Curve Strat', () => {
   })
 
   // itIf(hre.network.config.network_id === 10, 'Full deposit + harvest strat + withdraw (Native + Whitelist)', async () => {
-  it.only('Full deposit + harvest strat + withdraw (Native + Whitelist)', async () => {
+  it('Full deposit + harvest strat + withdraw (Native + Whitelist)', async () => {
     const currentBalance = async () => {
       return await ethers.provider.getBalance(bob.address)
     }
