@@ -53,7 +53,7 @@ contract Archimedes is PiAdmin, ReentrancyGuard {
     uint16 public constant MAXIMUM_REFERRAL_COMMISSION_RATE = 50; // 5%
     uint16 public constant COMMISSION_RATE_PRECISION = 1000;
 
-    //whitelist
+    // Whitelisted addresses to interact with the Archimedes
     mapping(address => bool) public whitelisted;
     bool public whitelistEnabled;
 
