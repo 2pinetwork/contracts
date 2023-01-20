@@ -223,11 +223,8 @@ describe('Controller Curve Strat', () => {
 
     const amount = ethers.BigNumber.from('' + 100e18)._hex
 
-    console.log('ControllerCurveUniV3Strat-optimism-test.js:223');
     await expect(archimedes.connect(bob).depositNative(0, zeroAddress, { value: amount })).to.be.revertedWith('Not whitelisted')
-    console.log('ControllerCurveUniV3Strat-optimism-test.js:224');
     await expect(bob.sendTransaction({to: archimedes.address, value: amount})).to.not.be.reverted
-    console.log('ControllerCurveUniV3Strat-optimism-test.js:226');
 
     expect(await controller.balanceOf(bob.address)).to.be.equal(0)
     expect(await archimedes.balanceOf(0, bob.address)).to.be.equal(0)
