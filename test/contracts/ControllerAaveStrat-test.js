@@ -118,7 +118,7 @@ describe.skip('Controller Aave Strat', () => {
     })
 
     it('Right identifier', async () => {
-      expect(await strat.identifier()).to.be.equal('2Pi@AaveV2#1.0.0')
+      expect(await strat.identifier()).to.be.equal('2Pi@AaveV3#1.0.0')
     })
   })
 

@@ -654,7 +654,7 @@ describe('Archimedes', () => {
       const [strat, identifier] = await archimedes.poolStrategyInfo(0)
 
       expect(strat).to.be.equal(await controller.strategy())
-      expect(identifier).to.be.equal('2Pi@AaveV2#1.0.0')
+      expect(identifier).to.be.equal('2Pi@AaveV3#1.0.0')
     })
   })
 })

@@ -119,7 +119,7 @@ describe('Controller', () => {
     })
 
     it('should change withdraw fee', async () => {
-      const newFee = (await controller.withdrawFee()).sub(1)
+      const newFee = (await controller.withdrawFee()).add(1)
 
       await waitFor(controller.setWithdrawFee(newFee))
 
@@ -136,18 +136,20 @@ describe('Controller', () => {
 
     it('should call strategy retireStrat', async () => {
       await waitFor(piToken.transfer(strat.address, 100))
+      await waitFor(strat.setPerformanceFee(450))
 
       const otherStrat = await deploy(
         'ControllerAaveStrat',
         piToken.address,
+        controller.address,
+        global.exchange.address,
+        owner.address,
         0,
         100,
         0,
-        0,
-        controller.address,
-        global.exchange.address,
-        owner.address
+        0
       )
+
 
       // it's not deposited in the pool
       expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
@@ -255,7 +257,10 @@ describe('Controller', () => {
       )
     })
 
-    it('Should withdraw and and not redeposit paused strat', async () => {
+    it('Should withdraw and and not redeposit paused strat', async function () {
+      // This test is not needed with Aave V3 repayWithATokens
+      this.skip()
+
       await piToken.transfer(bob.address, 10000)
       await piToken.connect(bob).approve(archimedes.address, 10000)
 
@@ -274,13 +279,9 @@ describe('Controller', () => {
       // Should withdraw 100 from controller and 400 from strategy
       await waitFor(archimedes.connect(bob).withdraw(0, 5000))
 
-      const fee = 5000 * (await controller.withdrawFee()) / (await controller.RATIO_PRECISION())
-
-      expect(await piToken.balanceOf(bob.address)).to.be.equal(
-        balance.add(5000).sub(fee)
-      )
+      expect(await piToken.balanceOf(bob.address)).to.be.equal(balance.add(5000))
       expect(await piToken.balanceOf(controller.address)).to.be.equal(0)
-      expect(await piToken.balanceOf(strat.address)).to.be.equal(5000) // withdraw and not re-deposit
+      expect(await piToken.balanceOf(strat.address)).to.be.equal(0) // withdraw and not re-deposit
       expect(await piToken.balanceOf(pool.address)).to.be.equal(0)
     })
 

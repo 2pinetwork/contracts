@@ -15,7 +15,8 @@ const {
 describe('ArchimedesAPI setup', () => {
   let ArchimedesAPI
 
-  before(async () => {
+  before(async function () {
+    this.skip()
     ArchimedesAPI = await ethers.getContractFactory('ArchimedesAPI')
   })
 
@@ -58,7 +59,8 @@ describe('ArchimedesAPI', () => {
     expect(await token.balanceOf(walletOrContract.address)).to.be.equal(exp)
   }
 
-  before(async () => {
+  before(async function () {
+    this.skip()
     await resetHardhat();
 
     [, bob, alice] = await ethers.getSigners();

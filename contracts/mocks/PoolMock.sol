@@ -40,7 +40,13 @@ contract PoolMock {
         return (_aTokens, _debt);
     }
 
-    function deposit(address _asset, uint _amount, address /*_onBehalfOf*/, uint16 /*_referralCode*/) public {
+    function supply(address _asset, uint _amount, address _onBehalfOf, uint16 _referralCode) public {
+        _deposit(_asset, _amount, _onBehalfOf, _referralCode);
+    }
+    function deposit(address _asset, uint _amount, address _onBehalfOf, uint16 _referralCode) public {
+        _deposit(_asset, _amount, _onBehalfOf, _referralCode);
+    }
+    function _deposit(address _asset, uint _amount, address /*_onBehalfOf*/, uint16 /*_referralCode*/) internal {
         (uint aTokens,) = supplyAndBorrow();
 
         IDataProvider(dataProvider).setATokenBalance(msg.sender, aTokens + _amount);
@@ -114,5 +120,24 @@ contract PoolMock {
         }
 
         return (0, 0, 0, 0, 0, healthFactor);
+    }
+
+    function repayWithATokens(address _reserve, uint _amount, uint /* _interest */) public returns (uint) {
+        (uint _aTokens, uint _debt) = supplyAndBorrow();
+        if (_aTokens < _amount) _amount = _aTokens;
+
+        if (_debt <= _amount) {
+            _amount = _debt; // to transfer only needed
+            _debt = 0;
+        } else {
+            _debt -= _amount;
+        }
+
+        IDataProvider(dataProvider).setATokenBalance(msg.sender, _aTokens - _amount);
+        IDataProvider(dataProvider).setDebtTokenBalance(msg.sender, _debt);
+
+        IERC20(_reserve).transferFrom(msg.sender, address(this), _amount);
+
+        return _amount;
     }
 }

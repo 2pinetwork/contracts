@@ -6,7 +6,8 @@ contract IncentivesControllerMock {
     function claimRewards(
         address[] calldata /*_assets*/,
         uint256 /*_amount*/,
-        address /*_to*/
+        address /*_to*/,
+        address /*_reward*/
     ) public pure returns (uint) {
         return 0;
     }

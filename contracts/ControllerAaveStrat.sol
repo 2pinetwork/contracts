@@ -176,8 +176,9 @@ contract ControllerAaveStrat is ControllerStratAbs {
         _assets[1] = debtToken;
 
         // If there's no rewards, it's because the reward == want
-        address _reward = rewardTokens[0];
-        if (_reward == address(0)) { _reward = address(want); }
+        address _reward;
+        if (rewardTokens.length == 0 || rewardTokens[0] == address(0)) _reward = address(want);
+        else _reward = rewardTokens[0];
 
         // aave reward should always be the first
         IAaveIncentivesController(INCENTIVES).claimRewards(

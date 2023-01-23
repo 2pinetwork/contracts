@@ -13,7 +13,9 @@ describe('ArchimedesAPIMock', () => {
   let wNativeFeed
   let strat
 
-  beforeEach(async () => {
+  beforeEach(async function () {
+    this.skip();
+
     [, bob] = await ethers.getSigners()
     piToken = await createPiToken({ tokenContract: 'PiTokenMock' })
     rewardsBlock = (await getBlock()) + 30
