@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     - name: Checkout
       uses: actions/checkout@v3
 
@@ -20,26 +19,14 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '16'
-
-    - name: Cache directory
-      id: yarn-cache-dir-path
-      run: echo "::set-output name=dir::$(yarn cache dir)"
-
-    - name: Cache
-      uses: actions/cache@v3
-      id: yarn-cache
-      with:
-        path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-        key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-yarn-
+        cache: 'yarn'
 
     - name: Dependencies
-      run: yarn install
+      run: yarn install --forzen-lockfile
 
     - name: Accounts
       run: |
         echo "[ \"$DEPLOYER\" ]" > .accounts
 
     - name: Test
-      run: yarn full_test
+      run: yarn test
